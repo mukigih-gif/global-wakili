@@ -1,0 +1,58 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  role            Role     @default(ASSOCIATE)
+  matters         Matter[] @relation("ClientMatters")
+}
+
+enum Role {
+  ADMIN
+  PARTNER
+  ASSOCIATE
+  ACCOUNTANT
+  CLIENT
+}
+
+model Matter {
+  id              String          @id @default(uuid())
+  title           String
+  status          String          @default("OPEN")
+  clientId        String
+  client          User            @relation("ClientMatters", fields: [clientId], references: [id])
+  events          CalendarEvent[]
+  documents       Document[]
+  trustAccount    TrustAccount?
+}
+
+model TrustAccount {
+  id        String  @id @default(uuid())
+  matterId  String  @unique
+  matter    Matter  @relation(fields: [matterId], references: [id])
+  balance   Decimal @db.Decimal(20, 2)
+}
+
+model CalendarEvent {
+  id        String   @id @default(uuid())
+  matterId  String
+  matter    Matter   @relation(fields: [matterId], references: [id])
+  title     String
+  startTime DateTime
+  isPublic  Boolean  @default(false)
+}
+
+model Document {
+  id        String @id @default(uuid())
+  matterId  String
+  matter    Matter @relation(fields: [matterId], references: [id])
+  name      String
+  fileUrl   String
+}
