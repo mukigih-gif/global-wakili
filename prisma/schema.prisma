@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// --- CORE IDENTITY & MATTER MANAGEMENT ---
+
+model Client {
+  id      Int      @id @default(autoincrement())
+  name    String
+  email   String   @unique
+  phone   String?
+  kraPin  String?
+  matters Matter[]
+}
+
+model Matter {
+  id           Int         @id @default(autoincrement())
+  reference    String      @unique
+  title        String
+  matterType   String
+  stage        String
+  courtStation String?
+  progressNote String?
+  clientId     Int
+  client       Client      @relation(fields: [clientId], references: [id])
+  logs         MatterLog[]
+  bringUps     BringUp[]
+  invoices     Invoice[]
+  expenses     Expense[]
+  receipts     Receipt[]
+  timeEntries  TimeEntry[] // Relation added for costing
+
+  @@index([clientId])
+}
+
+// --- LOGGING, DIARY & TIME TRACKING ---
+
+model MatterLog {
+  id        Int      @id @default(autoincrement())
+  entry     String
+  createdAt DateTime @default(now())
+  matterId  Int
+  matter    Matter   @relation(fields: [matterId], references: [id])
+}
+
+model BringUp {
+  id       Int      @id @default(autoincrement())
+  date     DateTime
+  reason   String
+  status   String   @default("PENDING")
+  matterId Int
+  matter   Matter   @relation(fields: [matterId], references: [id])
+}
+
+model TimeEntry {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @default(now())
+  description String   
+  duration    Float    // Hours worked
+  rate        Float    // Rate per hour
+  isBillable  Boolean  @default(true)
+  status      String   @default("UNBILLED") // UNBILLED, BILLED
+
+  matterId    Int
+  matter      Matter   @relation(fields: [matterId], references: [id])
+  invoiceId   Int?
+  invoice     Invoice? @relation(fields: [invoiceId], references: [id])
+  userId      Int?     
+
+  @@index([matterId])
+  @@index([invoiceId])
+}
+
+// --- 360 FINANCE & BANKING ---
+
+model Account {
+  id           Int           @id @default(autoincrement())
+  name         String        // e.g., "Stanbic - Trust"
+  bankName     String
+  accountName  String
+  accountNo    String
+  paybillNo    String?
+  type         String        // TRUST or OFFICE
+  balance      Float         @default(0.0)
+  invoices     Invoice[]
+  expenses     Expense[]
+  transactions Transaction[]
+}
+
+model Invoice {
+  id           Int       @id @default(autoincrement())
+  invoiceNo    String    @unique
+  date         DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  dueDate      DateTime?
+  type         String    // PROFORMA or FINAL
+  status       String    @default("DRAFT") // DRAFT, ISSUED, PARTIALLY_PAID, FULLY_PAID, VOID
+  narration    String?   
+  amount       Float     
+  vat          Float     
+  total        Float     
+  pdfUrl       String?
+  etimsSig     String?   
+
+  matterId     Int
+  matter       Matter      @relation(fields: [matterId], references: [id])
+  accountId    Int       
+  account      Account     @relation(fields: [accountId], references: [id])
+  receipts     Receipt[]
+  timeEntries  TimeEntry[] // Linked for automated billing
+
+  @@index([matterId])
+  @@index([accountId])
+}
+
+model Receipt {
+  id          Int      @id @default(autoincrement())
+  receiptNo   String   @unique
+  amount      Float
+  paymentMode String   // M-PESA, BANK, CASH
+  reference   String   @unique 
+  date        DateTime @default(now())
+  
+  invoiceId   Int?
+  invoice     Invoice? @relation(fields: [invoiceId], references: [id])
+  matterId    Int
+  matter      Matter   @relation(fields: [matterId], references: [id])
+
+  @@index([invoiceId])
+  @@index([matterId])
+}
+
+model Expense {
+  id              Int      @id @default(autoincrement())
+  date            DateTime @default(now())
+  category        String   
+  type            String   // DISBURSEMENT or OFFICE
+  amount          Float
+  supplierETimsNo String?
+  matterId        Int?
+  matter          Matter?  @relation(fields: [matterId], references: [id])
+  accountId       Int
+  account         Account  @relation(fields: [accountId], references: [id])
+
+  @@index([matterId])
+  @@index([accountId])
+}
+
+model Transaction {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @default(now())
+  amount      Float
+  description String
+  accountId   Int
+  account     Account  @relation(fields: [accountId], references: [id])
+
+  @@index([accountId])
+}

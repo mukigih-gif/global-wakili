@@ -1,0 +1,33 @@
+{
+  "name": "global-wakili",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Global Wakili is a next-generation legal management system tailored for the Kenyan market.",
+  "main": "server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node server.js",
+    "seed": "node prisma/seed.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mukigih-gif/global-wakili.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/mukigih-gif/global-wakili/issues"
+  },
+  "homepage": "https://github.com/mukigih-gif/global-wakili#readme",
+  "dependencies": {
+    "@prisma/client": "^6.4.0",
+    "@react-pdf/renderer": "^4.3.2",
+    "axios": "^1.13.6",
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "express": "^5.2.1",
+    "helmet": "^8.1.0",
+    "prisma": "^6.4.0"
+  }
+}
