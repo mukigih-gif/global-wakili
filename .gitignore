@@ -10,4 +10,9 @@ backend/prisma/dev.db-journal
 
 # Frontend specific
 frontend/.env
-frontend/build/
+frontend/build/node_modules/ 
+.env 
+backend/.env 
+dev.db 
+backend/prisma/dev.db 
+backend/prisma/dev.db-journal 
