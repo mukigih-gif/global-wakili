@@ -132,3 +132,12 @@ model Task {
   priority    String   @default("NORMAL") 
   isCompleted Boolean  @default(false)
 }
+
+model Expense {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @default(now())
+  category    String   // e.g., "Office Rent", "Internet", "Software License"
+  amount      Float
+  description String?
+  isRecurring Boolean  @default(false)
+}
