@@ -1,0 +1,134 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// 1. CORE: Client Onboarding Model
+model Client {
+  id            Int      @id @default(autoincrement())
+  name          String   // Company Name or Individual Full Name
+  clientType    String   @default("INDIVIDUAL") // "CORPORATE" or "INDIVIDUAL"
+  contactPerson String?  // Specific person to talk to
+  email         String   @unique
+  phone         String?
+  address       String?
+  kycStatus     String   @default("PENDING") // PENDING, VERIFIED, REJECTED
+  matters       Matter[]
+  createdAt     DateTime @default(now())
+}
+
+// 2. CORE: Matter Model
+model Matter {
+  id            Int            @id @default(autoincrement())
+  title         String
+  clientId      Int            
+  client        Client         @relation(fields: [clientId], references: [id])
+  opposingParty String?        
+  billingType   String         @default("FIXED") 
+  customRate    Float?         // Negotiated rate for this specific matter
+  caseNumber    String?        @unique
+  status        String         @default("ACTIVE") 
+  stage         String         @default("INTAKE") 
+  category      String         @default("LITIGATION") 
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  transactions  Transaction[]
+  documents     Document[]      
+  hearings      CourtHearing[]  
+  timeEntries   TimeEntry[]
+  messages      Message[]      // Linked communication
+}
+
+// 3. CORE: User/Advocate Model
+model User {
+  id           Int         @id @default(autoincrement())
+  name         String
+  email        String      @unique
+  password     String?     // Added for authentication
+  role         String      @default("ASSOCIATE") 
+  status       String      @default("ONBOARDING") // ONBOARDING, ACTIVE, INACTIVE
+  defaultRate  Float       @default(0.0)          
+  timeEntries  TimeEntry[]
+}
+
+// 4. BILLING: Time Tracking Model
+model TimeEntry {
+  id            Int      @id @default(autoincrement())
+  description   String
+  startTime     DateTime? 
+  duration      Float    @default(0.0) 
+  entryType     String   @default("MANUAL") 
+  isBilled      Boolean  @default(false)
+  appliedRate   Float    
+  totalValue    Float    
+  
+  advocateId    Int      
+  advocate      User     @relation(fields: [advocateId], references: [id])
+  matterId      Int
+  matter        Matter   @relation(fields: [matterId], references: [id])
+  date          DateTime @default(now())
+}
+
+// 5. FINANCE: Transactions & DRNs
+model Transaction {
+  id          Int      @id @default(autoincrement())
+  date        DateTime @default(now())
+  description String
+  amount      Float
+  type        String   // CREDIT or DEBIT
+  accountType String   // TRUST or OFFICE
+  status      String   @default("COMPLETED") 
+  category    String?  
+  matterId    Int?
+  matter      Matter?  @relation(fields: [matterId], references: [id])
+}
+
+// 6. COMMUNICATION: Client Portal Message Board
+model Message {
+  id        Int      @id @default(autoincrement())
+  content   String
+  sender    String   // "ADVOCATE" or "CLIENT"
+  matterId  Int
+  matter    Matter   @relation(fields: [matterId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+// 7. SUPPORTING: Documents, Hearings, Accounts, & Tasks
+model Document {
+  id            Int      @id @default(autoincrement())
+  fileName      String
+  fileUrl       String
+  efilingStatus String   @default("PENDING") 
+  matterId      Int
+  matter        Matter   @relation(fields: [matterId], references: [id])
+  createdAt     DateTime @default(now())
+}
+
+model CourtHearing {
+  id          Int      @id @default(autoincrement())
+  hearingDate DateTime
+  location    String   
+  description String?
+  matterId    Int
+  matter      Matter   @relation(fields: [matterId], references: [id])
+  createdAt   DateTime @default(now())
+}
+
+model Account {
+  id       Int      @id @default(autoincrement())
+  type     String   @unique 
+  balance  Float    @default(0.0)
+}
+
+model Task {
+  id          Int      @id @default(autoincrement())
+  title       String
+  dueDate     DateTime
+  priority    String   @default("NORMAL") 
+  isCompleted Boolean  @default(false)
+}
