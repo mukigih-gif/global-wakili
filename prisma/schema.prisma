@@ -1,0 +1,88 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+// -----------------------------------------------------------------
+// 1. CLIENT PORTAL & DOCUMENT MANAGEMENT
+// -----------------------------------------------------------------
+model ClientPortalAccount {
+  id             String   @id @default(uuid())
+  clientId       String   @unique
+  client         Client   @relation(fields: [clientId], references: [id])
+  username       String   @unique
+  passwordHash   String   // AES-256 Encrypted
+  lastLogin      DateTime?
+  isActive       Boolean  @default(true)
+  sharedDocs     Document[] // Only docs explicitly shared with portal
+}
+
+model Message {
+  id             String   @id @default(uuid())
+  matterId       String
+  senderId       String
+  receiverId     String
+  content        String   // Encrypted at rest
+  isRead         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+}
+
+// -----------------------------------------------------------------
+// 2. HUMAN RESOURCES & PAYROLL (Kenyan Specific)
+// -----------------------------------------------------------------
+model EmployeeProfile {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id])
+  idNumber        String   // National ID
+  nssfNumber      String?
+  nhifNumber      String?
+  housingLevyId   String?
+  basicSalary     Decimal  @db.Decimal(18, 2)
+  bankAccount     String?
+  bankCode        String?
+  payrollEntries  PayrollEntry[]
+  leaveBalances   LeaveBalance[]
+}
+
+model PayrollEntry {
+  id              String   @id @default(uuid())
+  employeeId      String
+  employee        EmployeeProfile @relation(fields: [employeeId], references: [id])
+  month           Int      // 1-12
+  year            Int
+  grossPay        Decimal  @db.Decimal(18, 2)
+  payeTax         Decimal  @db.Decimal(18, 2) // Automated KRA Calculation
+  nssfDeduction   Decimal  @db.Decimal(18, 2)
+  nhifDeduction   Decimal  @db.Decimal(18, 2)
+  housingLevy     Decimal  @db.Decimal(18, 2)
+  netPay          Decimal  @db.Decimal(18, 2)
+  isDisbursed     Boolean  @default(false)
+}
+
+// -----------------------------------------------------------------
+// 3. FULL ACCOUNTING & GENERAL LEDGER (IFRS Compliant)
+// -----------------------------------------------------------------
+model ChartOfAccounts {
+  id              String   @id @default(uuid())
+  firmId          String
+  accountCode     String   // e.g., 1000 (Assets), 2000 (Liabilities)
+  accountName     String   // e.g., "Accounts Receivable", "VAT Payable"
+  accountType     String   // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  ledgerEntries   GeneralLedger[]
+}
+
+model GeneralLedger {
+  id              String   @id @default(uuid())
+  accountId       String
+  account         ChartOfAccounts @relation(fields: [accountId], references: [id])
+  debit           Decimal  @default(0) @db.Decimal(18, 2)
+  credit          Decimal  @default(0) @db.Decimal(18, 2)
+  transactionDate DateTime @default(now())
+  description     String
+  referenceType   String   // INVOICE, PAYROLL, TRUST_TRANSFER
+  referenceId     String   // Links to the actual transaction ID
+}
