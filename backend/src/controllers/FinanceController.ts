@@ -1,118 +1,134 @@
+import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { Decimal } from '@prisma/client/runtime/library';
+import { InvoicingService } from '../services/InvoicingService';
+import { EtimsService } from '../services/EtimsService';
+
 const prisma = new PrismaClient();
 
-/**
- * 1. INITIATE DRN (Koki's Request)
- */
-export const initiateDRN = async (req: any, res: any) => {
-  const { matterId, amount, description, category } = req.body;
-  
-  // Logic: Court/Filing fees come from TRUST, others from OFFICE
-  const trustCategories = ['COURT_FEES', 'FILING_FEES', 'STAMP_DUTY'];
-  const accountType = trustCategories.includes(category) ? 'TRUST' : 'OFFICE';
+export class FinanceController {
+  /**
+   * 1. INITIATE DISBURSEMENT REQUEST (DR)
+   * Triggered by: Staff/Advocate (Requesting User)
+   * Purpose: Requesting funds for Matter-related expenses (Court fees, etc.)
+   */
+  static async initiateDisbursement(req: any, res: Response) {
+    const { matterId, amount, description, category } = req.body;
+    const requestingUserId = req.user.id;
 
-  try {
-    const drn = await prisma.transaction.create({
-      data: {
-        amount: parseFloat(amount),
-        description: `DRN: ${description}`,
-        type: 'DEBIT',
-        accountType: accountType,
-        matterId: parseInt(matterId),
-        status: 'PENDING_APPROVAL',
-        category: category 
-      }
-    });
-    res.json({ success: true, data: drn });
-  } catch (error) {
-    res.status(500).json({ error: "Failed to initiate DRN" });
-  }
-};
+    // Logic: Map categories to Trust vs Office ledgers
+    const trustCategories = ['COURT_FEES', 'FILING_FEES', 'STAMP_DUTY'];
+    const accountType = trustCategories.includes(category) ? 'TRUST' : 'OFFICE';
 
-/**
- * 2. GET ALL PENDING APPROVALS (Stanley's View)
- */
-export const getPendingApprovals = async (req: any, res: any) => {
-  try {
-    const pending = await prisma.transaction.findMany({
-      where: { status: 'PENDING_APPROVAL' },
-      include: { matter: true },
-      orderBy: { date: 'desc' }
-    });
-    res.json(pending);
-  } catch (error) {
-    res.status(500).json({ error: "Failed to fetch approvals" });
-  }
-};
-
-/**
- * 3. PROCESS APPROVAL/REJECTION (Stanley's Action)
- */
-export const processApproval = async (req: any, res: any) => {
-  const { id } = req.params;
-  const { action } = req.body; // 'APPROVE' or 'REJECT'
-
-  try {
-    if (action === 'APPROVE') {
-      const transaction = await prisma.transaction.findUnique({ 
-        where: { id: parseInt(id) } 
+    try {
+      const disbursementRequest = await prisma.transaction.create({
+        data: {
+          amount: new Decimal(amount),
+          description: `DR: ${description}`,
+          type: 'DEBIT',
+          accountType: accountType,
+          matterId: matterId,
+          userId: requestingUserId,
+          status: 'PENDING_APPROVAL', // Awaiting Reviewer/Partner action
+          category: category 
+        }
       });
-      
-      if (!transaction) return res.status(404).json({ error: "Transaction not found" });
-
-      // THE FINANCIAL HANDSHAKE: Atomic update of status and balance
-      await prisma.$transaction([
-        prisma.transaction.update({
-          where: { id: parseInt(id) },
-          data: { status: 'APPROVED' }
-        }),
-        prisma.account.update({
-          where: { type: transaction.accountType },
-          data: { balance: { decrement: transaction.amount } }
-        })
-      ]);
-    } else {
-      await prisma.transaction.update({
-        where: { id: parseInt(id) },
-        data: { status: 'REJECTED' }
-      });
+      res.json({ success: true, data: disbursementRequest });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to initiate disbursement request." });
     }
-    res.json({ success: true });
-  } catch (error) {
-    res.status(500).json({ error: "Processing failed. Check account balances." });
   }
-};
 
-/**
- * 4. GET MATTER LEDGER (Reconciliation View)
- */
-export const getMatterLedger = async (req: any, res: any) => {
-  const { matterId } = req.params;
+  /**
+   * 2. PROCESS APPROVAL/REJECTION
+   * Triggered by: Partner/Approving User
+   * Action: Finalizes the transaction and updates balances.
+   */
+  static async processApproval(req: any, res: Response) {
+    const { id } = req.params;
+    const { action } = req.body; // 'APPROVE' or 'REJECT'
+    const approvingUserId = req.user.id;
 
-  try {
-    const transactions = await prisma.transaction.findMany({
-      where: { matterId: parseInt(matterId) },
-      orderBy: { date: 'asc' }
-    });
+    try {
+      const transaction = await prisma.transaction.findUnique({ 
+        where: { id },
+        include: { matter: true }
+      });
 
-    const totalCredits = transactions
-      .filter(t => t.type === 'CREDIT' && t.status === 'COMPLETED')
-      .reduce((sum, t) => sum + t.amount, 0);
+      if (!transaction) return res.status(404).json({ error: "Transaction not found." });
 
-    const totalDebits = transactions
-      .filter(t => t.type === 'DEBIT' && t.status === 'APPROVED')
-      .reduce((sum, t) => sum + t.amount, 0);
-
-    res.json({
-      matterId,
-      history: transactions,
-      summary: {
-        totalDeposited: totalCredits,
-        totalSpent: totalDebits,
-        availableTrust: totalCredits - totalDebits 
+      if (action === 'APPROVE') {
+        // ATOMIC HANDSHAKE: Update status, log approver, and decrement balance
+        await prisma.$transaction([
+          prisma.transaction.update({
+            where: { id },
+            data: { 
+              status: 'APPROVED',
+              processedById: approvingUserId 
+            }
+          }),
+          prisma.matter.update({
+            where: { id: transaction.matterId },
+            data: { 
+              trustBalance: transaction.accountType === 'TRUST' 
+                ? { decrement: transaction.amount } 
+                : undefined 
+            }
+          })
+        ]);
+      } else {
+        await prisma.transaction.update({
+          where: { id },
+          data: { status: 'REJECTED', processedById: approvingUserId }
+        });
       }
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Could not fetch ledger" });
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Approval processing failed. Check ledger state." });
+    }
   }
-};
+
+  /**
+   * 3. FISCALIZE INVOICE (eTIMS DRN Logic)
+   * Triggered by: System/Approving User
+   * Purpose: Uses the Branch Device Record Number (DRN) to sign the invoice with KRA.
+   */
+  static async fiscalizeInvoice(req: any, res: Response) {
+    const { invoiceId } = req.params;
+    
+    // Fetch the specific Branch DRN for the current user's location
+    const branch = await prisma.branch.findFirst({
+      where: { users: { some: { id: req.user.id } } }
+    });
+
+    if (!branch?.etimsDrn) {
+      return res.status(400).json({ error: "Branch Device Record Number (DRN) missing." });
+    }
+
+    try {
+      // 1. Generate/Fetch Invoice details
+      const invoice = await prisma.invoice.findUnique({ where: { id: invoiceId } });
+      
+      // 2. The DRN Handshake with KRA
+      const kraResponse = await EtimsService.fiscalize({
+        drn: branch.etimsDrn,
+        vscuSerial: branch.vscuSerial,
+        amount: invoice?.total
+      });
+
+      // 3. Finalize Invoice with KRA Control Data
+      const updatedInvoice = await prisma.invoice.update({
+        where: { id: invoiceId },
+        data: {
+          kraControlNumber: kraResponse.controlNumber,
+          etimsSignature: kraResponse.signature,
+          status: 'ISSUED'
+        }
+      });
+
+      res.json({ success: true, data: updatedInvoice });
+    } catch (error) {
+      res.status(500).json({ error: "KRA Fiscalization failed." });
+    }
+  }
+}

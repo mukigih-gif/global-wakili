@@ -1,13 +1,43 @@
-import express from 'express';
-import { processClientDeposit, getClientDashboard } from '../controllers/portalController.js';
-// import { authenticateClient } from '../middleware/auth.js'; // If you have auth ready
+// src/routes/portalRoutes.ts
+import { Router } from 'express';
+import { PortalController } from '../controllers/PortalController';
+import { StatementService } from '../services/StatementService';
+import { authenticateClient } from '../middleware/auth'; // Ensure this exists
 
-const router = express.Router();
+const router = Router();
 
-// Route for the client to top up their matter deposit
-router.post('/deposit', processClientDeposit);
+/**
+ * PUBLIC ROUTES
+ * Safaricom needs to reach this without a JWT.
+ */
+router.post('/mpesa-callback', PortalController.mpesaCallback);
 
-// Route for the dashboard data
-router.get('/dashboard', getClientDashboard);
+
+/**
+ * PROTECTED CLIENT ROUTES
+ * Requires JWT via authenticateClient middleware
+ */
+router.use(authenticateClient);
+
+// 1. Dashboard & Core Views
+router.get('/dashboard', PortalController.getClientDashboard);
+router.get('/matters', PortalController.getClientMatters);
+
+// 2. Financial Actions
+router.post('/pay-invoice', PortalController.makePaymentSTK);
+
+// 3. Document & Statement Generation
+router.get('/statement/:matterId', async (req: any, res) => {
+  try {
+    // Extract clientId from the decoded JWT (via authenticateClient)
+    const clientId = req.user.clientId; 
+    const { matterId } = req.params;
+    
+    await StatementService.generateMatterStatement(matterId, clientId, res);
+  } catch (err: any) {
+    console.error("[STATEMENT_ROUTE_ERROR]:", err.message);
+    res.status(500).json({ error: "Failed to stream PDF statement." });
+  }
+});
 
 export default router;

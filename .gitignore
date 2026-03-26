@@ -1,18 +1,28 @@
-# General
+# Dependency Directories
 node_modules/
-.DS_Store
+**/node_modules/
+
+# Environment Variables (CRITICAL)
+.env
+*.env
+.env.*
+!.env.example
+
+# Prisma Artifacts
+# We don't push the generated client; it's generated fresh on every machine
+generated/
+**/generated/
+
+# Build & Logs
 dist/
+build/
+*.log
+.DS_Store
 
-# Backend specific
-backend/.env
-backend/prisma/dev.db
-backend/prisma/dev.db-journal
+# Local Database (If using SQLite for local dev)
+*.db
+*.db-journal
 
-# Frontend specific
-frontend/.env
-frontend/build/node_modules/ 
-.env 
-backend/.env 
-dev.db 
-backend/prisma/dev.db 
-backend/prisma/dev.db-journal 
+# IDE & Editor files
+.vscode/
+.idea/

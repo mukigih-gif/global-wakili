@@ -1,0 +1,29 @@
+{
+  "PARTNER": {
+    "matters": ["READ", "WRITE", "DELETE", "UPDATE_STATUS"],
+    "finance": ["READ", "WRITE", "APPROVE_INVOICE", "FINANCE_FULL"],
+    "reports": ["FULL_ACCESS", "KRA_REPORTS"],
+    "system": ["MANAGE_USERS", "VIEW_COMMAND_CENTER"]
+  },
+  "ADVOCATE": {
+    "matters": ["READ", "WRITE", "UPLOAD_DOCS"],
+    "finance": ["READ"],
+    "reports": ["READ_CLIENT_SUMMARY"],
+    "actions": ["LOG_TIME"]
+  },
+  "ACCOUNTANT": {
+    "matters": ["READ"],
+    "finance": ["READ", "CREATE_INVOICE", "MARK_PAID"],
+    "reports": ["KRA_REPORTS", "FINANCE_READ"]
+  },
+  "CLERK": {
+    "matters": ["READ", "UPLOAD_DOCS", "UPDATE_STATUS"],
+    "finance": ["NONE"],
+    "reports": ["NONE"]
+  },
+  "SECRETARY": {
+    "matters": ["READ"],
+    "finance": ["CREATE_INVOICE"],
+    "reports": ["READ_CLIENT_SUMMARY"]
+  }
+}
