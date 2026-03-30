@@ -1,28 +1,16 @@
-# Dependency Directories
+# Dependencies
 node_modules/
-**/node_modules/
+.pnpm-store/
+.pnpm-debug.log
 
-# Environment Variables (CRITICAL)
+# Prisma
+.prisma/
+packages/database/node_modules/
+
+# Environment
 .env
-*.env
-.env.*
-!.env.example
+.env.local
 
-# Prisma Artifacts
-# We don't push the generated client; it's generated fresh on every machine
-generated/
-**/generated/
-
-# Build & Logs
+# Build outputs
 dist/
 build/
-*.log
-.DS_Store
-
-# Local Database (If using SQLite for local dev)
-*.db
-*.db-journal
-
-# IDE & Editor files
-.vscode/
-.idea/

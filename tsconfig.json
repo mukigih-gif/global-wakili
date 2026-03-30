@@ -1,8 +1,15 @@
 {
   "compilerOptions": {
-    "rootDir": "./",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext"
-  },
-  "include": ["**/*.ts"]
+    "baseUrl": ".",
+    "paths": {
+      "@wakili/core/*": ["packages/core/*"],
+      "@wakili/common/*": ["packages/common/*"],
+      "@wakili/database": ["packages/database/src/prisma.ts"]
+    },
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "target": "ES2022",
+    "module": "CommonJS",
+    "moduleResolution": "node"
+  }
 }

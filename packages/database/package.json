@@ -1,0 +1,13 @@
+{
+  "name": "@wakili/database",
+  "version": "1.0.0",
+  "main": "src/prisma.ts",
+  "dependencies": {
+    "@prisma/client": "^7.6.0",
+    "@prisma/adapter-neon": "^7.6.0",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "prisma": "^7.6.0"
+  }
+}
