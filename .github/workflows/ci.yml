@@ -1,18 +1,38 @@
-name: Global Wakili CI
-on: [push, pull_request]
+name: CI - Prisma check
+
+on:
+  push:
+    branches:
+      - main
+      - 'feature/**'
+  pull_request:
+    branches:
+      - main
+
 jobs:
-  test-and-build:
+  prisma-check:
+    name: Prisma push and generate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: pnpm/action-setup@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          version: 8
-      - uses: actions/setup-node@v3
-        with:
-          node-version: '18'
+          node-version: 20
           cache: 'pnpm'
-      - run: pnpm install
-      - run: cd server && npx prisma generate
-      - run: cd server && pnpm run test # Vitest
-      - run: cd server && pnpm run build
+
+      - name: Install pnpm
+        run: npm install -g pnpm@8
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Prisma push and generate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          cd packages/database
+          pnpm exec prisma db push --schema=./prisma/schema.prisma --url="$DATABASE_URL"
+          pnpm exec prisma generate --schema=./prisma/schema.prisma

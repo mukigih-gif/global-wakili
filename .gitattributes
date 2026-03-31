@@ -1,0 +1,6 @@
+# enforce LF for source files
+*.js text eol=lf
+*.cjs text eol=lf
+*.ts text eol=lf
+*.prisma text eol=lf
+*.env text eol=lf
