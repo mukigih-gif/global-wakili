@@ -1,15 +1,19 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@wakili/core/*": ["packages/core/*"],
-      "@wakili/common/*": ["packages/common/*"],
-      "@wakili/database": ["packages/database/src/prisma.ts"]
-    },
-    "esModuleInterop": true,
-    "skipLibCheck": true,
     "target": "ES2022",
     "module": "CommonJS",
-    "moduleResolution": "node"
-  }
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "baseUrl": ".",
+    "paths": {
+      "@wakili/*": ["packages/*/src"]
+    },
+    "resolveJsonModule": true,
+    "declaration": true,
+    "sourceMap": true
+  },
+  "exclude": ["node_modules", "dist"]
 }

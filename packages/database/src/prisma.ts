@@ -1,32 +1,41 @@
+// packages/database/src/prisma.ts
+import path from 'path';
+import dotenv from 'dotenv';
 import { PrismaClient } from '@prisma/client';
-import { Pool } from 'pg';
-import { PrismaNeon } from '@prisma/adapter-neon';
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-const adapter = new PrismaNeon(pool);
+// UPDATE: Point to the root directory (three levels up from src/prisma.ts)
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
-// In Prisma 7, we pass the adapter directly
-export const prisma = new PrismaClient({ adapter });
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) throw new Error('DATABASE_URL is required');
 
-// Optional helpers for graceful lifecycle management
+const useNeon = process.env.USE_NEON === 'true' || process.env.NODE_ENV === 'production';
+
+let prisma: PrismaClient;
+
+if (useNeon) {
+  const { PrismaNeon } = require('@prisma/adapter-neon');
+  const adapter = new PrismaNeon({ connectionString });
+  prisma = new PrismaClient({ adapter });
+} else {
+  prisma = new PrismaClient();
+}
+
 export async function connectPrisma() {
-  try {
-    await prisma.$connect();
-    logger.info('Prisma connected');
-  } catch (err) {
-    logger.error({ err }, 'Prisma connection failed');
-    throw err;
-  }
+  await prisma.$connect();
 }
 
 export async function disconnectPrisma() {
   try {
     await prisma.$disconnect();
-    await pool.end();
-    logger.info('Prisma and PG pool disconnected');
-  } catch (err) {
-    logger.error({ err }, 'Error during Prisma disconnect');
+  } catch {
+    // ignore
   }
 }
+
+export const getTenantClient = (tenantId: string) => {
+  const { tenantExtension } = require('./tenant-extension');
+  return prisma.$extends(tenantExtension(tenantId));
+};
 
 export default prisma;
