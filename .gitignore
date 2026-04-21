@@ -14,3 +14,4 @@ packages/database/node_modules/
 # Build outputs
 dist/
 build/
+startup-error.log
