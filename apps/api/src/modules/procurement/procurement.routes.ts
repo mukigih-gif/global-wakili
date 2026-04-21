@@ -1,8 +1,12 @@
-import { Router } from 'express';
+// apps/api/src/modules/procurement/procurement.routes.ts
+
+import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
+
 import { validate } from '../../middleware/validate';
 import { requirePermissions } from '../../middleware/rbac';
 import { PERMISSIONS } from '../../config/permissions';
+
 import {
   approveVendorBill,
   createVendor,
@@ -16,6 +20,7 @@ import {
   submitVendorBill,
   updateVendor,
 } from './procurement.controller';
+
 import {
   vendorBillInputSchema,
   vendorInputSchema,
@@ -38,6 +43,17 @@ const vendorPaymentBodySchema = z.object({
 const agingQuerySchema = z.object({
   asOf: z.string().datetime().optional(),
   format: z.enum(['json', 'csv']).optional(),
+});
+
+router.get('/health', (req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    module: 'procurement',
+    status: 'mounted',
+    service: 'global-wakili-api',
+    requestId: req.id,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 router.get(
@@ -111,5 +127,17 @@ router.post(
   validate({ body: vendorPaymentBodySchema }),
   payVendorBill,
 );
+
+router.use((req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    module: 'procurement',
+    error: 'Procurement route not found',
+    code: 'PROCUREMENT_ROUTE_NOT_FOUND',
+    path: req.originalUrl,
+    requestId: req.id,
+    timestamp: new Date().toISOString(),
+  });
+});
 
 export default router;

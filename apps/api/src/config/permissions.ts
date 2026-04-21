@@ -23,7 +23,29 @@ export const PERMISSIONS = {
     exportReport: define('finance', 'export_report', 'Export finance reports'),
   },
 
-  trust: {
+  billing: {
+    viewInvoice: define('billing', 'view_invoice', 'View billing invoices'),
+    createInvoice: define('billing', 'create_invoice', 'Create billing invoices'),
+    updateInvoice: define('billing', 'update_invoice', 'Update billing invoices'),
+    cancelInvoice: define('billing', 'cancel_invoice', 'Cancel billing invoices'),
+    createProforma: define('billing', 'create_proforma', 'Create proforma invoices'),
+    convertProforma: define('billing', 'convert_proforma', 'Convert proforma invoices to invoices'),
+    createCreditNote: define('billing', 'create_credit_note', 'Create credit notes'),
+    approveCreditNote: define('billing', 'approve_credit_note', 'Approve credit notes'),
+    manageRetainer: define('billing', 'manage_retainer', 'Manage retainers'),
+    viewDashboard: define('billing', 'view_dashboard', 'View billing dashboard'),
+    sendReminder: define('billing', 'send_reminder', 'Send billing payment reminders'),
+    exportBilling: define('billing', 'export_billing', 'Export billing data'),
+    syncEtims: define('billing', 'sync_etims', 'Manually sync invoices to KRA eTIMS'),
+    bypassVat: define('billing', 'bypass_vat', 'Allow privileged VAT treatment override'),
+    overrideWht: define('billing', 'override_wht', 'Override withholding tax treatment'),
+    voidFiscalInvoice: define(
+      'billing',
+      'void_fiscal_invoice',
+      'Void fiscalized invoices through controlled credit-note workflow',),
+  },
+ 
+ trust: {
     createTransaction: define('trust', 'create_transaction', 'Create trust transactions'),
     transferToOffice: define('trust', 'transfer_to_office', 'Transfer trust funds to office'),
     postInterest: define('trust', 'post_interest', 'Post trust interest'),

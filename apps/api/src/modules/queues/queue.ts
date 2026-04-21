@@ -1,93 +1,165 @@
-import { Queue, JobsOptions, QueueOptions } from 'bullmq';
+// apps/api/src/modules/queues/queue.ts
+
+import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
-import { env } from '../../config/env';
 
-export type QueueJobName =
-  | 'etims.submit.invoice'
-  | 'etims.sync.status'
-  | 'bank.sync.account'
-  | 'reminder.dispatch'
-  | 'report.export.generate';
+type QueueJobPayload = Record<string, unknown>;
 
-export const QUEUE_NAMES = {
-  integration: 'global-wakili:integration',
-  reminder: 'global-wakili:reminder',
-  reporting: 'global-wakili:reporting',
-} as const;
-
-type QueueRegistryKey = keyof typeof QUEUE_NAMES;
-
-const DEFAULT_JOB_OPTIONS: JobsOptions = {
-  removeOnComplete: 1000,
-  removeOnFail: 5000,
-  attempts: 5,
-  backoff: {
-    type: 'exponential',
-    delay: 2000,
-  },
+type QueueJobResult = {
+  id: string | number;
+  name: string;
+  data: QueueJobPayload;
 };
 
-const connection = env.REDIS_URL
-  ? new IORedis(env.REDIS_URL, {
-      maxRetriesPerRequest: null,
-      enableReadyCheck: true,
-      lazyConnect: false,
-      retryStrategy: (times) => Math.min(times * 250, 5000),
-    })
-  : new IORedis({
-      host: '127.0.0.1',
-      port: 6379,
-      maxRetriesPerRequest: null,
-      enableReadyCheck: true,
-      lazyConnect: false,
-      retryStrategy: (times) => Math.min(times * 250, 5000),
+type QueueLike = {
+  add: (
+    name: string,
+    data: QueueJobPayload,
+    options?: Record<string, unknown>,
+  ) => Promise<QueueJobResult>;
+  close?: () => Promise<void>;
+};
+
+let reminderQueue: QueueLike | null = null;
+let redisConnection: IORedis | null = null;
+
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
+
+function shouldUseRedisQueue(): boolean {
+  if (process.env.REDIS_QUEUE_ENABLED === 'false') return false;
+  if (process.env.REDIS_ENABLED === 'false') return false;
+  if (process.env.REDIS_URL) return true;
+  return isProduction();
+}
+
+function createNoopQueue(queueName: string): QueueLike {
+  return {
+    async add(name: string, data: QueueJobPayload): Promise<QueueJobResult> {
+      const id = `noop-${queueName}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+
+      if (!isProduction()) {
+        console.warn('QUEUE_DISABLED_NON_PRODUCTION', {
+          queue: queueName,
+          job: name,
+          id,
+          reason:
+            'Redis queue is disabled or unavailable. Job accepted by local no-op queue.',
+        });
+      }
+
+      return {
+        id,
+        name,
+        data,
+      };
+    },
+
+    async close(): Promise<void> {
+      return undefined;
+    },
+  };
+}
+
+function createRedisConnection(): IORedis {
+  const connection = process.env.REDIS_URL
+    ? new IORedis(process.env.REDIS_URL, {
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+        lazyConnect: false,
+        retryStrategy: (times) => Math.min(times * 250, 5_000),
+      })
+    : new IORedis({
+        host: '127.0.0.1',
+        port: 6379,
+        maxRetriesPerRequest: null,
+        enableReadyCheck: false,
+        lazyConnect: false,
+        retryStrategy: (times) => Math.min(times * 250, 5_000),
+      });
+
+  connection.on('error', (error) => {
+    if (isProduction()) {
+      console.error('QUEUE_REDIS_ERROR', error);
+      return;
+    }
+
+    console.warn('QUEUE_REDIS_UNAVAILABLE_NON_PRODUCTION', {
+      message: error.message,
     });
+  });
 
-const queueOptions: QueueOptions = {
-  connection,
-  defaultJobOptions: DEFAULT_JOB_OPTIONS,
-};
+  connection.on('ready', () => {
+    console.info('QUEUE_REDIS_READY');
+  });
 
-const queues: Record<QueueRegistryKey, Queue | null> = {
-  integration: null,
-  reminder: null,
-  reporting: null,
-};
+  connection.on('end', () => {
+    if (!isProduction()) {
+      console.warn('QUEUE_REDIS_CONNECTION_CLOSED');
+    }
+  });
 
-function createQueue(name: string): Queue {
-  return new Queue(name, queueOptions);
-}
-
-export function getIntegrationQueue(): Queue {
-  if (!queues.integration) {
-    queues.integration = createQueue(QUEUE_NAMES.integration);
-  }
-  return queues.integration;
-}
-
-export function getReminderQueue(): Queue {
-  if (!queues.reminder) {
-    queues.reminder = createQueue(QUEUE_NAMES.reminder);
-  }
-  return queues.reminder;
-}
-
-export function getReportingQueue(): Queue {
-  if (!queues.reporting) {
-    queues.reporting = createQueue(QUEUE_NAMES.reporting);
-  }
-  return queues.reporting;
-}
-
-export function getQueueConnection(): IORedis {
   return connection;
 }
 
+function createBullQueue(queueName: string): QueueLike {
+  redisConnection = redisConnection ?? createRedisConnection();
+
+  return new Queue(queueName, {
+    connection: redisConnection,
+    defaultJobOptions: {
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 2_000,
+      },
+      removeOnComplete: {
+        age: 60 * 60 * 24,
+        count: 1_000,
+      },
+      removeOnFail: {
+        age: 60 * 60 * 24 * 7,
+        count: 2_000,
+      },
+    },
+  }) as unknown as QueueLike;
+}
+
+export function getReminderQueue(): QueueLike {
+  if (reminderQueue) return reminderQueue;
+
+  if (!shouldUseRedisQueue()) {
+    reminderQueue = createNoopQueue('reminders');
+    return reminderQueue;
+  }
+
+  try {
+    reminderQueue = createBullQueue('reminders');
+    return reminderQueue;
+  } catch (error) {
+    if (isProduction()) {
+      throw error;
+    }
+
+    console.warn('QUEUE_FALLBACK_TO_NOOP_NON_PRODUCTION', {
+      error: error instanceof Error ? error.message : error,
+    });
+
+    reminderQueue = createNoopQueue('reminders');
+    return reminderQueue;
+  }
+}
+
 export async function closeQueues(): Promise<void> {
-  await Promise.all(
-    Object.values(queues)
-      .filter((queue): queue is Queue => Boolean(queue))
-      .map((queue) => queue.close()),
-  );
-  await connection.quit();
+  if (reminderQueue?.close) {
+    await reminderQueue.close();
+  }
+
+  if (redisConnection) {
+    await redisConnection.quit().catch(() => redisConnection?.disconnect());
+  }
+
+  reminderQueue = null;
+  redisConnection = null;
 }

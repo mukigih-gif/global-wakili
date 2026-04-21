@@ -1,7 +1,10 @@
+// apps/api/src/modules/integrations/notifications/NotificationService.ts
+
 import type { Request } from 'express';
+
 import { getReminderQueue } from '../../queues/queue';
-import { EmailService, type EmailRecipient } from './EmailService';
-import { SMSService, type SMSRecipient } from './SMSService';
+import { EmailService } from './EmailService';
+import { SMSService } from './SMSService';
 import { NotificationTemplateRegistry } from './NotificationTemplateRegistry';
 import { NotificationPreferenceService } from './NotificationPreferenceService';
 import { NotificationRecipientResolver } from './NotificationRecipientResolver';
@@ -42,7 +45,7 @@ export type NotificationSendInput = {
   tenantId: string;
   category?: NotificationCategory;
   priority?: NotificationPriority;
-  channels: NotificationChannel[];
+  channels?: NotificationChannel[];
   recipients: NotificationRecipient[];
   template: NotificationTemplatePayload;
   entityType?: string | null;
@@ -80,6 +83,18 @@ type ResolvedRecipient = NotificationRecipient & {
 
 const DEBOUNCE_WINDOW_MS = 5 * 60 * 1000;
 
+const DB_NOTIFICATION_CHANNEL = {
+  email: 'EMAIL',
+  sms: 'SMS',
+  portal: 'SYSTEM',
+} as const;
+
+const DEFAULT_FALLBACK_TEMPLATE = {
+  category: 'system_alert' as NotificationCategory,
+  priority: 'normal' as NotificationPriority,
+  channels: ['portal'] as NotificationChannel[],
+};
+
 function interpolateTemplate(
   template: string | null | undefined,
   variables?: Record<string, unknown>,
@@ -90,6 +105,24 @@ function interpolateTemplate(
     const value = variables?.[key];
     return value === undefined || value === null ? '' : String(value);
   });
+}
+
+function ensureTenantId(tenantId: string): void {
+  if (!tenantId?.trim()) {
+    throw Object.assign(new Error('Tenant ID is required for notification dispatch'), {
+      statusCode: 400,
+      code: 'NOTIFICATION_TENANT_REQUIRED',
+    });
+  }
+}
+
+function ensureTemplate(template: NotificationTemplatePayload): void {
+  if (!template?.templateKey?.trim()) {
+    throw Object.assign(new Error('Notification template key is required'), {
+      statusCode: 400,
+      code: 'NOTIFICATION_TEMPLATE_REQUIRED',
+    });
+  }
 }
 
 function ensureChannels(channels: NotificationChannel[]): void {
@@ -110,33 +143,112 @@ function ensureRecipients(recipients: NotificationRecipient[]): void {
   }
 }
 
+function uniqueChannels(channels: NotificationChannel[]): NotificationChannel[] {
+  const allowed = new Set<NotificationChannel>(['email', 'sms', 'portal']);
+  const normalized: NotificationChannel[] = [];
+
+  for (const channel of channels) {
+    if (allowed.has(channel) && !normalized.includes(channel)) {
+      normalized.push(channel);
+    }
+  }
+
+  return normalized;
+}
+
 function getSmsLengthWarning(message: string | null | undefined): string | null {
   if (!message) return null;
+
   return message.length > 160
     ? `SMS content exceeds 160 characters (${message.length}) and may incur multi-segment billing.`
     : null;
 }
 
-function mergeTemplateWithRegistry(inputTemplate: NotificationTemplatePayload) {
-  const registryTemplate = NotificationTemplateRegistry.get(inputTemplate.templateKey as any);
+function safeMetadata(metadata?: Record<string, unknown>): Record<string, unknown> | null {
+  if (!metadata) return null;
 
-  return {
-    category: registryTemplate.category,
-    priority: registryTemplate.defaultPriority,
-    channels: registryTemplate.channels,
-    template: {
-      templateKey: inputTemplate.templateKey,
-      subject: inputTemplate.subject ?? registryTemplate.subject ?? null,
-      textBody: inputTemplate.textBody ?? registryTemplate.textBody ?? null,
-      htmlBody: inputTemplate.htmlBody ?? registryTemplate.htmlBody ?? null,
-      smsBody: inputTemplate.smsBody ?? registryTemplate.smsBody ?? null,
-      variables: inputTemplate.variables ?? {},
-    },
-  };
+  return JSON.parse(
+    JSON.stringify(metadata, (_key, value) => {
+      if (typeof value === 'bigint') return value.toString();
+      if (value instanceof Date) return value.toISOString();
+      if (typeof value === 'function') return undefined;
+      return value;
+    }),
+  );
+}
+
+function mergeTemplateWithRegistry(inputTemplate: NotificationTemplatePayload) {
+  ensureTemplate(inputTemplate);
+
+  try {
+    const registryTemplate = NotificationTemplateRegistry.get(inputTemplate.templateKey as any);
+
+    if (!registryTemplate) {
+      throw new Error(`Template ${inputTemplate.templateKey} not found`);
+    }
+
+    const registryChannels = uniqueChannels(registryTemplate.channels ?? []);
+
+    return {
+      category: registryTemplate.category ?? DEFAULT_FALLBACK_TEMPLATE.category,
+      priority: registryTemplate.defaultPriority ?? DEFAULT_FALLBACK_TEMPLATE.priority,
+      channels: registryChannels.length ? registryChannels : DEFAULT_FALLBACK_TEMPLATE.channels,
+      template: {
+        templateKey: inputTemplate.templateKey,
+        subject: inputTemplate.subject ?? registryTemplate.subject ?? null,
+        textBody: inputTemplate.textBody ?? registryTemplate.textBody ?? null,
+        htmlBody: inputTemplate.htmlBody ?? registryTemplate.htmlBody ?? null,
+        smsBody: inputTemplate.smsBody ?? registryTemplate.smsBody ?? null,
+        variables: inputTemplate.variables ?? {},
+      },
+    };
+  } catch {
+    return {
+      category: DEFAULT_FALLBACK_TEMPLATE.category,
+      priority: DEFAULT_FALLBACK_TEMPLATE.priority,
+      channels: DEFAULT_FALLBACK_TEMPLATE.channels,
+      template: {
+        templateKey: inputTemplate.templateKey,
+        subject: inputTemplate.subject ?? 'Global Wakili Notification',
+        textBody:
+          inputTemplate.textBody ??
+          inputTemplate.smsBody ??
+          'You have a new Global Wakili notification.',
+        htmlBody:
+          inputTemplate.htmlBody ??
+          inputTemplate.textBody ??
+          inputTemplate.smsBody ??
+          'You have a new Global Wakili notification.',
+        smsBody:
+          inputTemplate.smsBody ??
+          inputTemplate.textBody ??
+          'You have a new Global Wakili notification.',
+        variables: inputTemplate.variables ?? {},
+      },
+    };
+  }
+}
+
+function buildDebounceKey(input: {
+  templateKey: string;
+  entityType?: string | null;
+  entityId?: string | null;
+  recipients: ResolvedRecipient[];
+}): string {
+  return `${input.templateKey}:${input.entityType ?? 'general'}:${input.entityId ?? 'none'}:${input.recipients
+    .map((recipient) => recipient.recipientId || recipient.email || recipient.phoneNumber || 'unknown')
+    .sort()
+    .join('|')}`;
+}
+
+function getRequestId(req?: Request, fallback?: string | null): string | null {
+  return fallback ?? req?.id ?? null;
 }
 
 export class NotificationService {
   static async getTenantBranding(db: any, tenantId: string): Promise<TenantBranding> {
+    ensureTenantId(tenantId);
+
     const tenant = await db.tenant.findFirst({
       where: { id: tenantId },
       select: {
@@ -165,6 +277,8 @@ export class NotificationService {
       debounceKey: string;
     },
   ): Promise<boolean> {
+    ensureTenantId(tenantId);
+
     const since = new Date(Date.now() - DEBOUNCE_WINDOW_MS);
 
     const existing = await db.notification.findFirst({
@@ -183,47 +297,52 @@ export class NotificationService {
     return Boolean(existing);
   }
 
-  static async enqueue(
-    req: Request,
-    input: NotificationSendInput,
-  ) {
-    ensureChannels(input.channels);
+  static async enqueue(req: Request, input: NotificationSendInput) {
+    ensureTenantId(input.tenantId);
     ensureRecipients(input.recipients);
 
+    const merged = mergeTemplateWithRegistry(input.template);
+    const channels = uniqueChannels(input.channels?.length ? input.channels : merged.channels);
+
+    ensureChannels(channels);
+
     const queue = getReminderQueue();
+
+    const firstRecipient = input.recipients[0];
+    const message =
+      interpolateTemplate(merged.template.textBody, merged.template.variables) ||
+      interpolateTemplate(merged.template.smsBody, merged.template.variables) ||
+      interpolateTemplate(merged.template.htmlBody, merged.template.variables) ||
+      '';
 
     const job = await queue.add('reminder.dispatch', {
       tenantId: input.tenantId,
       reminderType: input.template.templateKey,
-      channel: input.channels[0],
+      channel: channels[0],
       recipient:
-        input.recipients[0]?.recipientId ||
-        input.recipients[0]?.email ||
-        input.recipients[0]?.phoneNumber ||
+        firstRecipient?.recipientId ||
+        firstRecipient?.email ||
+        firstRecipient?.phoneNumber ||
         'unknown',
-      subject: input.template.subject ?? undefined,
-      message:
-        input.template.textBody ||
-        input.template.smsBody ||
-        input.template.htmlBody ||
-        '',
-      requestId: input.requestId ?? req.id,
+      subject: interpolateTemplate(merged.template.subject, merged.template.variables) ?? undefined,
+      message,
+      requestId: getRequestId(req, input.requestId),
       metadata: {
-        category: input.category,
-        priority: input.priority,
-        channels: input.channels,
+        category: input.category ?? merged.category,
+        priority: input.priority ?? merged.priority,
+        channels,
         recipients: input.recipients,
-        template: input.template,
+        template: merged.template,
         entityType: input.entityType ?? null,
         entityId: input.entityId ?? null,
         debounceKey: input.debounceKey ?? null,
-        metadata: input.metadata ?? null,
+        metadata: safeMetadata(input.metadata),
       },
     });
 
     await NotificationAuditService.logQueued(req, {
       templateKey: input.template.templateKey,
-      channels: input.channels,
+      channels,
       entityType: input.entityType ?? null,
       entityId: input.entityId ?? null,
       queueJobId: job.id,
@@ -240,26 +359,30 @@ export class NotificationService {
     input: NotificationSendInput,
     req?: Request,
   ) {
-    ensureChannels(input.channels);
+    ensureTenantId(input.tenantId);
     ensureRecipients(input.recipients);
 
     const merged = mergeTemplateWithRegistry(input.template);
 
-    const effectiveCategory: NotificationCategory =
-      input.category ?? merged.category;
+    const effectiveCategory: NotificationCategory = input.category ?? merged.category;
+    const effectivePriority: NotificationPriority = input.priority ?? merged.priority;
 
-    const effectivePriority: NotificationPriority =
-      input.priority ?? merged.priority;
+    const requestedChannels = uniqueChannels(
+      input.channels?.length ? input.channels : merged.channels,
+    );
 
-    const requestedChannels: NotificationChannel[] =
-      input.channels.length ? input.channels : merged.channels;
+    ensureChannels(requestedChannels);
 
     const resolvedRecipientsBase: NotificationRecipient[] = [];
 
     for (const recipient of input.recipients) {
       if (recipient.recipientId && (!recipient.email || !recipient.phoneNumber || !recipient.name)) {
         try {
-          const resolved = await NotificationRecipientResolver.resolveUser(db, recipient.recipientId);
+          const resolved = await NotificationRecipientResolver.resolveUser(
+            db,
+            recipient.recipientId,
+          );
+
           resolvedRecipientsBase.push({
             recipientId: recipient.recipientId,
             email: recipient.email ?? resolved.email,
@@ -287,7 +410,7 @@ export class NotificationService {
       if (allowedChannels.length) {
         filteredRecipients.push({
           ...recipient,
-          allowedChannels,
+          allowedChannels: uniqueChannels(allowedChannels),
         });
       }
     }
@@ -301,15 +424,37 @@ export class NotificationService {
 
     const debounceKey =
       input.debounceKey ||
-      `${input.template.templateKey}:${input.entityType ?? 'general'}:${input.entityId ?? 'none'}:${filteredRecipients
-        .map((r) => r.recipientId || r.email || r.phoneNumber || 'unknown')
-        .sort()
-        .join('|')}`;
+      buildDebounceKey({
+        templateKey: input.template.templateKey,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        recipients: filteredRecipients,
+      });
 
     const shouldSuppress = await this.shouldSuppressDuplicate(db, input.tenantId, {
       templateKey: input.template.templateKey,
       debounceKey,
     });
+
+    const interpolatedSubject = interpolateTemplate(
+      merged.template.subject,
+      merged.template.variables,
+    );
+
+    const interpolatedTextBody = interpolateTemplate(
+      merged.template.textBody,
+      merged.template.variables,
+    );
+
+    const interpolatedHtmlBody = interpolateTemplate(
+      merged.template.htmlBody,
+      merged.template.variables,
+    );
+
+    const interpolatedSmsBody = interpolateTemplate(
+      merged.template.smsBody,
+      merged.template.variables,
+    );
 
     if (shouldSuppress) {
       for (const recipient of filteredRecipients) {
@@ -317,14 +462,12 @@ export class NotificationService {
           data: {
             tenantId: input.tenantId,
             userId: recipient.recipientId ?? undefined,
-            channel: 'portal',
-            systemTitle: interpolateTemplate(merged.template.subject, merged.template.variables),
-            systemMessage:
-              interpolateTemplate(merged.template.textBody, merged.template.variables) ??
-              interpolateTemplate(merged.template.htmlBody, merged.template.variables),
-            emailSubject: interpolateTemplate(merged.template.subject, merged.template.variables),
-            emailBody: interpolateTemplate(merged.template.htmlBody, merged.template.variables),
-            smsContent: interpolateTemplate(merged.template.smsBody, merged.template.variables),
+            channel: DB_NOTIFICATION_CHANNEL.portal,
+            systemTitle: interpolatedSubject,
+            systemMessage: interpolatedTextBody ?? interpolatedHtmlBody,
+            emailSubject: interpolatedSubject,
+            emailBody: interpolatedHtmlBody,
+            smsContent: interpolatedSmsBody,
             status: 'SUPPRESSED',
             sentAt: null,
             deliveredAt: null,
@@ -337,7 +480,7 @@ export class NotificationService {
             debounceKey,
             provider: null,
             providerMessageId: null,
-            metadata: input.metadata ?? null,
+            metadata: safeMetadata(input.metadata),
           },
         });
       }
@@ -360,9 +503,7 @@ export class NotificationService {
     const branding = await this.getTenantBranding(db, input.tenantId);
     const results: DispatchResult[] = [];
 
-    const smsWarning = getSmsLengthWarning(
-      interpolateTemplate(merged.template.smsBody, merged.template.variables),
-    );
+    const smsWarning = getSmsLengthWarning(interpolatedSmsBody);
 
     if (smsWarning) {
       console.warn('[SMS_LENGTH_WARNING]', {
@@ -386,21 +527,21 @@ export class NotificationService {
               name: recipient.name ?? null,
             },
           ],
-          subject: interpolateTemplate(merged.template.subject, merged.template.variables) ?? '',
-          textBody: interpolateTemplate(merged.template.textBody, merged.template.variables),
-          htmlBody: interpolateTemplate(merged.template.htmlBody, merged.template.variables),
-          metadata: input.metadata,
+          subject: interpolatedSubject ?? '',
+          textBody: interpolatedTextBody,
+          htmlBody: interpolatedHtmlBody,
+          metadata: safeMetadata(input.metadata) ?? undefined,
         });
 
         await db.notification.create({
           data: {
             tenantId: input.tenantId,
             userId: recipient.recipientId ?? undefined,
-            channel: 'EMAIL',
-            systemTitle: interpolateTemplate(merged.template.subject, merged.template.variables),
-            systemMessage: interpolateTemplate(merged.template.textBody, merged.template.variables),
-            emailSubject: interpolateTemplate(merged.template.subject, merged.template.variables),
-            emailBody: interpolateTemplate(merged.template.htmlBody, merged.template.variables),
+            channel: DB_NOTIFICATION_CHANNEL.email,
+            systemTitle: interpolatedSubject,
+            systemMessage: interpolatedTextBody,
+            emailSubject: interpolatedSubject,
+            emailBody: interpolatedHtmlBody,
             smsContent: null,
             status: emailResult.accepted ? 'SENT' : 'FAILED',
             sentAt: emailResult.accepted ? new Date() : null,
@@ -413,7 +554,7 @@ export class NotificationService {
             debounceKey,
             provider: emailResult.provider,
             providerMessageId: emailResult.providerMessageId,
-            metadata: input.metadata ?? null,
+            metadata: safeMetadata(input.metadata),
           },
         });
 
@@ -435,20 +576,20 @@ export class NotificationService {
               name: recipient.name ?? null,
             },
           ],
-          message: interpolateTemplate(merged.template.smsBody, merged.template.variables) ?? '',
-          metadata: input.metadata,
+          message: interpolatedSmsBody ?? '',
+          metadata: safeMetadata(input.metadata) ?? undefined,
         });
 
         await db.notification.create({
           data: {
             tenantId: input.tenantId,
             userId: recipient.recipientId ?? undefined,
-            channel: 'SMS',
-            systemTitle: interpolateTemplate(merged.template.subject, merged.template.variables),
-            systemMessage: interpolateTemplate(merged.template.textBody, merged.template.variables),
+            channel: DB_NOTIFICATION_CHANNEL.sms,
+            systemTitle: interpolatedSubject,
+            systemMessage: interpolatedTextBody,
             emailSubject: null,
             emailBody: null,
-            smsContent: interpolateTemplate(merged.template.smsBody, merged.template.variables),
+            smsContent: interpolatedSmsBody,
             status: smsResult.accepted ? 'SENT' : 'FAILED',
             sentAt: smsResult.accepted ? new Date() : null,
             failedAt: smsResult.accepted ? null : new Date(),
@@ -460,7 +601,7 @@ export class NotificationService {
             debounceKey,
             provider: smsResult.provider,
             providerMessageId: smsResult.providerMessageIds.join(','),
-            metadata: input.metadata ?? null,
+            metadata: safeMetadata(input.metadata),
           },
         });
 
@@ -477,11 +618,9 @@ export class NotificationService {
           data: {
             tenantId: input.tenantId,
             userId: recipient.recipientId,
-            channel: 'SYSTEM',
-            systemTitle: interpolateTemplate(merged.template.subject, merged.template.variables),
-            systemMessage:
-              interpolateTemplate(merged.template.textBody, merged.template.variables) ??
-              interpolateTemplate(merged.template.htmlBody, merged.template.variables),
+            channel: DB_NOTIFICATION_CHANNEL.portal,
+            systemTitle: interpolatedSubject,
+            systemMessage: interpolatedTextBody ?? interpolatedHtmlBody,
             emailSubject: null,
             emailBody: null,
             smsContent: null,
@@ -496,9 +635,9 @@ export class NotificationService {
             provider: null,
             providerMessageId: null,
             metadata: {
-              ...(input.metadata ?? {}),
+              ...(safeMetadata(input.metadata) ?? {}),
               portal: {
-                htmlBody: interpolateTemplate(merged.template.htmlBody, merged.template.variables),
+                htmlBody: interpolatedHtmlBody,
               },
             },
           },
@@ -518,7 +657,8 @@ export class NotificationService {
         templateKey: input.template.templateKey,
         channels: requestedChannels,
         recipientRef: filteredRecipients.map(
-          (r) => r.recipientId || r.email || r.phoneNumber || 'unknown',
+          (recipient) =>
+            recipient.recipientId || recipient.email || recipient.phoneNumber || 'unknown',
         ),
         entityType: input.entityType ?? null,
         entityId: input.entityId ?? null,
@@ -530,4 +670,58 @@ export class NotificationService {
       results,
     };
   }
+
+  static async send(db: any, input: NotificationSendInput, req?: Request) {
+    return this.dispatch(db, input, req);
+  }
+
+  static async sendPortal(
+    db: any,
+    input: Omit<NotificationSendInput, 'channels'>,
+    req?: Request,
+  ) {
+    return this.dispatch(
+      db,
+      {
+        ...input,
+        channels: ['portal'],
+      },
+      req,
+    );
+  }
+
+  static async sendEmail(
+    db: any,
+    input: Omit<NotificationSendInput, 'channels'>,
+    req?: Request,
+  ) {
+    return this.dispatch(
+      db,
+      {
+        ...input,
+        channels: ['email'],
+      },
+      req,
+    );
+  }
+
+  static async sendCritical(
+    db: any,
+    input: Omit<NotificationSendInput, 'channels' | 'priority'>,
+    req?: Request,
+  ) {
+    return this.dispatch(
+      db,
+      {
+        ...input,
+        priority: 'critical',
+        channels: ['email', 'portal'],
+      },
+      req,
+    );
+  }
 }
+
+export const notificationService = NotificationService;
+
+export default NotificationService;

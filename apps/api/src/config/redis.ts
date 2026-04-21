@@ -1,4 +1,6 @@
-import Redis, { type RedisOptions } from 'ioredis';
+// apps/api/src/config/redis.ts
+
+import Redis from 'ioredis';
 import { env } from './env';
 
 declare global {
@@ -6,102 +8,110 @@ declare global {
   var __globalWakiliRedis__: Redis | undefined;
 }
 
-const isProduction = env.NODE_ENV === 'production';
-const isTest = env.NODE_ENV === 'test';
-
-const redisDisabled =
-  process.env.REDIS_DISABLED === 'true' ||
-  process.env.DISABLE_REDIS === 'true' ||
-  isTest;
-
 let isRedisConnected = false;
-let hasLoggedRedisUnavailable = false;
+let hasLoggedDevRedisFailure = false;
 
-function buildRedisOptions(): RedisOptions {
-  return {
-    lazyConnect: true,
-    enableOfflineQueue: false,
-    maxRetriesPerRequest: isProduction ? 5 : 1,
-    connectTimeout: isProduction ? 10_000 : 2_000,
-    commandTimeout: isProduction ? 10_000 : 2_000,
-    retryStrategy: (times) => {
-      if (!isProduction && times > 1) {
-        return null;
-      }
+function isProduction(): boolean {
+  return env.NODE_ENV === 'production';
+}
 
-      return Math.min(times * 250, 2_000);
-    },
-  };
+function isRedisEnabled(): boolean {
+  if (process.env.REDIS_ENABLED === 'false') return false;
+  return true;
 }
 
 function createRedisClient(): Redis {
-  const options = buildRedisOptions();
+  const commonOptions = {
+    lazyConnect: true,
+    enableOfflineQueue: false,
+    maxRetriesPerRequest: 3,
+    retryStrategy(times: number) {
+      if (!isProduction() && times > 3) {
+        if (!hasLoggedDevRedisFailure) {
+          console.warn(
+            'Redis connection failed. Continuing in cache-less mode for non-production.',
+          );
+          hasLoggedDevRedisFailure = true;
+        }
+
+        return null;
+      }
+
+      return Math.min(times * 100, 2_000);
+    },
+    reconnectOnError(error: Error) {
+      return error.message.includes('READONLY');
+    },
+  } as const;
 
   const client = env.REDIS_URL
-    ? new Redis(env.REDIS_URL, options)
+    ? new Redis(env.REDIS_URL, commonOptions)
     : new Redis({
-        host: '127.0.0.1',
-        port: 6379,
-        ...options,
+        host: process.env.REDIS_HOST || '127.0.0.1',
+        port: Number(process.env.REDIS_PORT || 6379),
+        ...commonOptions,
       });
 
   client.on('connect', () => {
-    if (!isProduction) {
-      console.info('✔ Redis connected');
+    if (!isProduction()) {
+      console.info('Redis connection established.');
     }
   });
 
   client.on('ready', () => {
     isRedisConnected = true;
 
-    if (!isProduction) {
-      console.info('✔ Redis ready');
-    }
-  });
-
-  client.on('reconnecting', () => {
-    if (isProduction) {
-      console.warn('Redis reconnecting');
+    if (!isProduction()) {
+      console.info('Redis ready.');
     }
   });
 
   client.on('end', () => {
     isRedisConnected = false;
 
-    if (isProduction) {
-      console.warn('Redis connection closed');
+    if (!isProduction()) {
+      console.warn('Redis connection closed.');
+    }
+  });
+
+  client.on('reconnecting', () => {
+    if (isProduction()) {
+      console.warn('Redis reconnecting.');
     }
   });
 
   client.on('error', (error) => {
     isRedisConnected = false;
 
-    if (isProduction) {
-      console.error('Redis error', error);
+    if (isProduction()) {
+      console.error('Redis error:', error);
       return;
     }
 
-    if (!hasLoggedRedisUnavailable) {
-      hasLoggedRedisUnavailable = true;
+    if (!hasLoggedDevRedisFailure) {
       console.warn(
         'Redis unavailable in non-production mode. Continuing without Redis-backed cache/session features.',
       );
+      hasLoggedDevRedisFailure = true;
     }
   });
 
   return client;
 }
 
-export const redis = global.__globalWakiliRedis__ ?? createRedisClient();
+export const redis: Redis | null =
+  isRedisEnabled()
+    ? global.__globalWakiliRedis__ ?? createRedisClient()
+    : null;
 
-if (!isProduction) {
+if (!isProduction() && redis) {
   global.__globalWakiliRedis__ = redis;
 }
 
 export async function connectRedis(): Promise<void> {
-  if (redisDisabled) {
-    if (!isProduction) {
-      console.warn('Redis disabled by environment/test mode. Skipping Redis connection.');
+  if (!redis) {
+    if (!isProduction()) {
+      console.warn('Redis disabled by REDIS_ENABLED=false.');
     }
 
     return;
@@ -118,67 +128,41 @@ export async function connectRedis(): Promise<void> {
   } catch (error) {
     isRedisConnected = false;
 
-    if (isProduction) {
-      console.error('Redis initial connect failed', error);
+    if (isProduction()) {
       throw error;
     }
 
-    if (!hasLoggedRedisUnavailable) {
-      hasLoggedRedisUnavailable = true;
+    if (!hasLoggedDevRedisFailure) {
       console.warn(
-        'Redis initial connect failed in non-production mode. API will continue without Redis.',
+        'Redis initial connect failed. Continuing in cache-less mode for non-production.',
       );
-    }
-
-    try {
-      redis.disconnect(false);
-    } catch {
-      // Ignore cleanup failure in local/dev fallback mode.
+      hasLoggedDevRedisFailure = true;
     }
   }
 }
 
 export async function disconnectRedis(): Promise<void> {
-  if (redisDisabled) {
-    return;
-  }
-
-  if (!isRedisConnected && redis.status === 'end') {
-    return;
-  }
+  if (!redis) return;
 
   try {
-    if (redis.status === 'ready' || redis.status === 'connect' || redis.status === 'connecting') {
+    if (redis.status === 'ready' || redis.status === 'connect') {
       await redis.quit();
     } else {
-      redis.disconnect(false);
+      redis.disconnect();
     }
   } catch {
-    redis.disconnect(false);
+    redis.disconnect();
   } finally {
     isRedisConnected = false;
   }
 }
 
 export function isRedisReady(): boolean {
-  return !redisDisabled && redis.status === 'ready';
+  return Boolean(redis && redis.status === 'ready');
 }
 
-export function isRedisEnabled(): boolean {
-  return !redisDisabled;
-}
-
-export async function pingRedis(): Promise<boolean> {
-  if (!isRedisReady()) {
-    return false;
-  }
-
-  try {
-    const result = await redis.ping();
-    return result === 'PONG';
-  } catch {
-    return false;
-  }
+export function getRedisClient(): Redis | null {
+  return redis;
 }
 
 export default redis;

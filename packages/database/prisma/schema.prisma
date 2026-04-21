@@ -67,6 +67,7 @@ model Tenant {
   featureFlags                 FeatureFlag[]
   fieldEncryptions             FieldEncryption[]
   invoices                     Invoice[]
+  invoiceSequences             InvoiceSequence[]
   paymentReceipts              PaymentReceipt[]
   creditNotes                  CreditNote[]
   complianceReports            ComplianceReport[]
@@ -154,6 +155,8 @@ model Tenant {
   disbursementNotes            DisbursementRequestNote[]
   leaveBalances                LeaveBalance[]
   purchaseOrderReceiptLines    PurchaseOrderReceiptLine[]
+  withholdingTaxCertificates   WithholdingTaxCertificate[]
+  paymentRefunds               PaymentRefund[]
 
   @@index([subscriptionStatus])
   @@index([createdAt])
@@ -324,109 +327,116 @@ model MfaSecret {
 }
 
 model User {
-  id                            String                        @id @default(cuid())
-  email                         String
-  name                          String
-  accountNumber                 String?
-  admissionNumber               String?                       @unique
-  employeeProfile               EmployeeProfile?
-  bankName                      String?
-  basicSalary                   Decimal                       @default(0) @db.Decimal(18, 2)
-  branchId                      String?
-  createdAt                     DateTime                      @default(now())
-  defaultRate                   Decimal                       @default(0) @db.Decimal(18, 2)
-  deletedAt                     DateTime?
-  department                    String?
-  emailNotifications            Boolean                       @default(true)
-  failedLoginAttempts           Int                           @default(0)
-  googleId                      String?                       @unique
-  idNumber                      String?                       @unique
-  taxableAllowances             Decimal                       @default(0) @db.Decimal(12, 2)
-  nonTaxableAllowances          Decimal                       @default(0) @db.Decimal(12, 2)
-  isLocked                      Boolean                       @default(false)
-  kraPin                        String?                       @unique
-  language                      String                        @default("en-KE")
-  lastActivityAt                DateTime                      @default(now())
-  lastLoginAt                   DateTime?
-  lockReason                    String?
-  lockedUntil                   DateTime?
-  shifNumber                    String?                       @unique
-  nssfNumber                    String?
-  oauth2Providers               String[]                      @default([])
-  passwordChangedAt             DateTime?
-  passwordExpiresAt             DateTime?
-  passwordHash                  String?
-  pcExpiryDate                  DateTime?
-  phone                         String?
-  smsNotifications              Boolean                       @default(false)
-  status                        UserStatus                    @default(ACTIVE)
-  systemRole                    SystemRole                    @default(NONE)
-  tenantId                      String?
-  tenantRole                    TenantRole                    @default(ADVOCATE)
-  theme                         String                        @default("light")
-  updatedAt                     DateTime                      @default(now()) @updatedAt
-  approvals                     Approval[]                    @relation("ApprovalUser")
-  attendance                    Attendance[]
-  auditLogs                     AuditLog[]                    @relation("AuditUser")
-  createdEvents                 CalendarEvent[]               @relation("EventCreator")
-  createdPaymentReceipts        PaymentReceipt[]              @relation("PaymentReceiptCreatedBy")
-  createdCreditNotes            CreditNote[]                  @relation("CreditNoteCreatedBy")
-  createdComplianceReports      ComplianceReport[]            @relation("ComplianceReportCreatedBy")
-  commissions                   CommissionPayout[]
-  approvedCommissions           CommissionPayout[]            @relation("CommissionApprovedBy")
-  consentRecords                ConsentRecord[]               @relation("ConsentUser")
-  devices                       Device[]
-  uploadedDocuments             Document[]                    @relation("UploadedBy")
-  employeeDocuments             EmployeeDocument[]
-  goals                         EmployeeGoal[]
-  performance                   EmployeePerformance[]
-  managedEmployees              EmployeeProfile[]             @relation("EmployeeReportingManager")
-  expenseEntries                ExpenseEntry[]
-  leaveRequests                 LeaveRequest[]
-  approvedLeaves                LeaveRequest[]                @relation("LeaveApprovedBy")
-  matters                       Matter[]                      @relation("LeadAdvocate")
-  originatorMatters             MatterOriginator[]            @relation("OriginatorUser")
-  taskAssignments               MatterTask[]                  @relation("AssignedTo")
-  mfaSecret                     MfaSecret?
-  notifications                 Notification[]
-  ownershipRecords              OwnershipRecord[]             @relation("OwnerUser")
-  payrollRecords                PayrollRecord[]
-  postedJournalEntries          JournalEntry[]                @relation("JournalPostedBy")
-  closedAccountingPeriods       AccountingPeriod[]            @relation("PeriodClosedBy")
-  importedBankStatements        BankStatement[]               @relation("BankStatementImportedBy")
-  rateLimitLogs                 RateLimitLog[]
-  receptionLogsReceived         ReceptionLog[]                @relation("ReceptionReceivedBy")
-  sessions                      Session[]
-  timeEntries                   TimeEntry[]
-  branch                        Branch?                       @relation(fields: [branchId], references: [id])
-  tenant                        Tenant?                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  attendedEvents                CalendarEvent[]               @relation("EventAttendees")
-  permissions                   Permission[]                  @relation("UserPermissions")
-  roles                         Role[]                        @relation("UserRoles")
-  generatedPayrollBatches       PayrollBatch[]                @relation("PayrollBatchGeneratedBy")
-  approvedPayrollBatches        PayrollBatch[]                @relation("PayrollBatchApprovedBy")
-  verifiedEmployeeDocuments     EmployeeDocument[]            @relation("EmployeeDocumentVerifiedBy")
-  reviewedEmployeePerformances  EmployeePerformance[]         @relation("EmployeePerformanceReviewedBy")
-  payslips                      Payslip[]
-  timerSessions                 TimerSession[]
-  clientKycVerified             ClientKycProfile[]
-  createdContracts              Contract[]
-  contractVersionsCreated       ContractVersion[]
-  createdTasks                  MatterTask[]                  @relation("TaskCreator")
-  taskComments                  TaskComment[]
-  portalClients                 Client[]                      @relation("ClientPortalUser")
-  clientComplianceChecksCreated ClientComplianceCheck[]       @relation("ClientComplianceCheckCreatedBy")
-  calendarRemindersCreated      CalendarReminder[]            @relation("CalendarReminderCreatedBy")
-  calendarRemindersReceived     CalendarReminder[]            @relation("CalendarReminderRecipient")
-  calendarSubscriptions         CalendarSubscription[]        @relation("CalendarSubscriptionOwner")
-  externalCalendarAccounts      ExternalCalendarAccount[]     @relation("ExternalCalendarAccountOwner")
-  rateCardsCreated              RateCard[]                    @relation("RateCardCreatedBy")
-  writeOffsCreated              WriteOff[]                    @relation("WriteOffCreatedBy")
-  writeOffsApproved             WriteOff[]                    @relation("WriteOffApprovedBy")
-  courtHearingsCreated          CourtHearing[]                @relation("CourtHearingCreatedBy")
-  profitabilitySnapshotsCreated MatterProfitabilitySnapshot[] @relation("ProfitabilitySnapshotCreatedBy")
-  tenantMemberships             TenantMembership[]
-  disbursementRequestNotes      DisbursementRequestNote[]
+  id                                  String                        @id @default(cuid())
+  email                               String
+  name                                String
+  accountNumber                       String?
+  admissionNumber                     String?                       @unique
+  employeeProfile                     EmployeeProfile?
+  bankName                            String?
+  basicSalary                         Decimal                       @default(0) @db.Decimal(18, 2)
+  branchId                            String?
+  createdAt                           DateTime                      @default(now())
+  defaultRate                         Decimal                       @default(0) @db.Decimal(18, 2)
+  deletedAt                           DateTime?
+  department                          String?
+  emailNotifications                  Boolean                       @default(true)
+  failedLoginAttempts                 Int                           @default(0)
+  googleId                            String?                       @unique
+  idNumber                            String?                       @unique
+  taxableAllowances                   Decimal                       @default(0) @db.Decimal(12, 2)
+  nonTaxableAllowances                Decimal                       @default(0) @db.Decimal(12, 2)
+  isLocked                            Boolean                       @default(false)
+  kraPin                              String?                       @unique
+  language                            String                        @default("en-KE")
+  lastActivityAt                      DateTime                      @default(now())
+  lastLoginAt                         DateTime?
+  lockReason                          String?
+  lockedUntil                         DateTime?
+  shifNumber                          String?                       @unique
+  nssfNumber                          String?
+  oauth2Providers                     String[]                      @default([])
+  passwordChangedAt                   DateTime?
+  passwordExpiresAt                   DateTime?
+  passwordHash                        String?
+  pcExpiryDate                        DateTime?
+  phone                               String?
+  smsNotifications                    Boolean                       @default(false)
+  status                              UserStatus                    @default(ACTIVE)
+  systemRole                          SystemRole                    @default(NONE)
+  tenantId                            String?
+  tenantRole                          TenantRole                    @default(ADVOCATE)
+  theme                               String                        @default("light")
+  updatedAt                           DateTime                      @default(now()) @updatedAt
+  approvals                           Approval[]                    @relation("ApprovalUser")
+  attendance                          Attendance[]
+  auditLogs                           AuditLog[]                    @relation("AuditUser")
+  createdEvents                       CalendarEvent[]               @relation("EventCreator")
+  createdPaymentReceipts              PaymentReceipt[]              @relation("PaymentReceiptCreatedBy")
+  createdCreditNotes                  CreditNote[]                  @relation("CreditNoteCreatedBy")
+  createdComplianceReports            ComplianceReport[]            @relation("ComplianceReportCreatedBy")
+  commissions                         CommissionPayout[]
+  approvedCommissions                 CommissionPayout[]            @relation("CommissionApprovedBy")
+  consentRecords                      ConsentRecord[]               @relation("ConsentUser")
+  devices                             Device[]
+  uploadedDocuments                   Document[]                    @relation("UploadedBy")
+  employeeDocuments                   EmployeeDocument[]
+  goals                               EmployeeGoal[]
+  performance                         EmployeePerformance[]
+  managedEmployees                    EmployeeProfile[]             @relation("EmployeeReportingManager")
+  expenseEntries                      ExpenseEntry[]
+  leaveRequests                       LeaveRequest[]
+  approvedLeaves                      LeaveRequest[]                @relation("LeaveApprovedBy")
+  matters                             Matter[]                      @relation("LeadAdvocate")
+  originatorMatters                   MatterOriginator[]            @relation("OriginatorUser")
+  taskAssignments                     MatterTask[]                  @relation("AssignedTo")
+  mfaSecret                           MfaSecret?
+  notifications                       Notification[]
+  ownershipRecords                    OwnershipRecord[]             @relation("OwnerUser")
+  cancelledInvoices                   Invoice[]                     @relation("InvoiceCancelledBy")
+  payrollRecords                      PayrollRecord[]
+  postedJournalEntries                JournalEntry[]                @relation("JournalPostedBy")
+  closedAccountingPeriods             AccountingPeriod[]            @relation("PeriodClosedBy")
+  importedBankStatements              BankStatement[]               @relation("BankStatementImportedBy")
+  rateLimitLogs                       RateLimitLog[]
+  receptionLogsReceived               ReceptionLog[]                @relation("ReceptionReceivedBy")
+  sessions                            Session[]
+  timeEntries                         TimeEntry[]
+  branch                              Branch?                       @relation(fields: [branchId], references: [id])
+  tenant                              Tenant?                       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  attendedEvents                      CalendarEvent[]               @relation("EventAttendees")
+  permissions                         Permission[]                  @relation("UserPermissions")
+  roles                               Role[]                        @relation("UserRoles")
+  generatedPayrollBatches             PayrollBatch[]                @relation("PayrollBatchGeneratedBy")
+  approvedPayrollBatches              PayrollBatch[]                @relation("PayrollBatchApprovedBy")
+  verifiedEmployeeDocuments           EmployeeDocument[]            @relation("EmployeeDocumentVerifiedBy")
+  reviewedEmployeePerformances        EmployeePerformance[]         @relation("EmployeePerformanceReviewedBy")
+  payslips                            Payslip[]
+  timerSessions                       TimerSession[]
+  clientKycVerified                   ClientKycProfile[]
+  createdContracts                    Contract[]
+  contractVersionsCreated             ContractVersion[]
+  createdTasks                        MatterTask[]                  @relation("TaskCreator")
+  taskComments                        TaskComment[]
+  portalClients                       Client[]                      @relation("ClientPortalUser")
+  clientComplianceChecksCreated       ClientComplianceCheck[]       @relation("ClientComplianceCheckCreatedBy")
+  calendarRemindersCreated            CalendarReminder[]            @relation("CalendarReminderCreatedBy")
+  calendarRemindersReceived           CalendarReminder[]            @relation("CalendarReminderRecipient")
+  calendarSubscriptions               CalendarSubscription[]        @relation("CalendarSubscriptionOwner")
+  externalCalendarAccounts            ExternalCalendarAccount[]     @relation("ExternalCalendarAccountOwner")
+  rateCardsCreated                    RateCard[]                    @relation("RateCardCreatedBy")
+  writeOffsCreated                    WriteOff[]                    @relation("WriteOffCreatedBy")
+  writeOffsApproved                   WriteOff[]                    @relation("WriteOffApprovedBy")
+  courtHearingsCreated                CourtHearing[]                @relation("CourtHearingCreatedBy")
+  profitabilitySnapshotsCreated       MatterProfitabilitySnapshot[] @relation("ProfitabilitySnapshotCreatedBy")
+  tenantMemberships                   TenantMembership[]
+  disbursementRequestNotes            DisbursementRequestNote[]
+  receivedWithholdingTaxCertificates  WithholdingTaxCertificate[]   @relation("WhtCertificateReceivedBy")
+  cancelledWithholdingTaxCertificates WithholdingTaxCertificate[]   @relation("WhtCertificateCancelledBy")
+  requestedPaymentRefunds             PaymentRefund[]               @relation("PaymentRefundRequestedBy")
+  approvedPaymentRefunds              PaymentRefund[]               @relation("PaymentRefundApprovedBy")
+  rejectedPaymentRefunds              PaymentRefund[]               @relation("PaymentRefundRejectedBy")
+  paidPaymentRefunds                  PaymentRefund[]               @relation("PaymentRefundPaidBy")
 
   @@index([tenantId])
   @@index([email])
@@ -999,62 +1009,64 @@ model ExpenseEntry {
 }
 
 model Matter {
-  id                        String                        @id @default(cuid())
-  tenantId                  String
-  branchId                  String
-  title                     String
-  status                    MatterStatus                  @default(ACTIVE)
-  category                  String
-  description               String?
-  trustBalance              Decimal                       @default(0) @db.Decimal(18, 2)
-  wipValue                  Decimal                       @default(0) @db.Decimal(18, 2)
-  riskLevel                 String                        @default("LOW")
-  clientId                  String
-  leadAdvocateId            String
-  openedDate                DateTime                      @default(now())
-  closedDate                DateTime?
-  archivedDate              DateTime?
-  statuteOfLimitationsDate  DateTime?
-  createdAt                 DateTime                      @default(now())
-  updatedAt                 DateTime                      @default(now()) @updatedAt
-  deletedAt                 DateTime?
-  calendarEvents            CalendarEvent[]
-  clientTrustLedgers        ClientTrustLedger[]           @relation("MatterTrustTransactions")
-  contracts                 Contract[]
-  disbursements             Disbursement[]
-  documents                 Document[]
-  evidenceItems             EvidenceItem[]
-  expenseEntries            ExpenseEntry[]
-  invoices                  Invoice[]
-  paymentReceipts           PaymentReceipt[]
-  creditNotes               CreditNote[]
-  journalEntries            JournalEntry[]
-  journalLines              JournalLine[]
-  tenant                    Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  branch                    Branch                        @relation(fields: [branchId], references: [id], onDelete: Cascade)
-  client                    Client                        @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  leadAdvocate              User                          @relation("LeadAdvocate", fields: [leadAdvocateId], references: [id])
-  liens                     MatterLien[]
-  originator                MatterOriginator?
-  parties                   MatterParty[]
-  tasks                     MatterTask[]
-  receptionLogs             ReceptionLog[]
-  statute                   StatuteOfLimitations?
-  timeEntries               TimeEntry[]
-  trustTransactions         TrustTransaction[]
-  unbilledWip               UnbilledWip?
-  calendarSubscriptions     CalendarSubscription[]
-  rateCards                 RateCard[]
-  writeOffs                 WriteOff[]
-  courtHearings             CourtHearing[]
-  profitabilitySnapshots    MatterProfitabilitySnapshot[]
-  recurringExpenseTemplates RecurringExpenseTemplate[]
-  purchaseOrders            PurchaseOrder[]
-  disbursementNotes         DisbursementRequestNote[]
-  commissionPayouts         CommissionPayout[]
-  rfqs                      RequestForQuotation[]
-  vendorBills               VendorBill[]
-  timerSessions             TimerSession[]
+  id                         String                        @id @default(cuid())
+  tenantId                   String
+  branchId                   String
+  title                      String
+  status                     MatterStatus                  @default(ACTIVE)
+  category                   String
+  description                String?
+  trustBalance               Decimal                       @default(0) @db.Decimal(18, 2)
+  wipValue                   Decimal                       @default(0) @db.Decimal(18, 2)
+  riskLevel                  String                        @default("LOW")
+  clientId                   String
+  leadAdvocateId             String
+  openedDate                 DateTime                      @default(now())
+  closedDate                 DateTime?
+  archivedDate               DateTime?
+  statuteOfLimitationsDate   DateTime?
+  createdAt                  DateTime                      @default(now())
+  updatedAt                  DateTime                      @default(now()) @updatedAt
+  deletedAt                  DateTime?
+  calendarEvents             CalendarEvent[]
+  clientTrustLedgers         ClientTrustLedger[]           @relation("MatterTrustTransactions")
+  contracts                  Contract[]
+  disbursements              Disbursement[]
+  documents                  Document[]
+  evidenceItems              EvidenceItem[]
+  expenseEntries             ExpenseEntry[]
+  invoices                   Invoice[]
+  paymentReceipts            PaymentReceipt[]
+  paymentRefunds             PaymentRefund[]
+  creditNotes                CreditNote[]
+  journalEntries             JournalEntry[]
+  journalLines               JournalLine[]
+  tenant                     Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch                     Branch                        @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  client                     Client                        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  leadAdvocate               User                          @relation("LeadAdvocate", fields: [leadAdvocateId], references: [id])
+  liens                      MatterLien[]
+  originator                 MatterOriginator?
+  parties                    MatterParty[]
+  tasks                      MatterTask[]
+  receptionLogs              ReceptionLog[]
+  statute                    StatuteOfLimitations?
+  timeEntries                TimeEntry[]
+  trustTransactions          TrustTransaction[]
+  unbilledWip                UnbilledWip?
+  calendarSubscriptions      CalendarSubscription[]
+  rateCards                  RateCard[]
+  writeOffs                  WriteOff[]
+  courtHearings              CourtHearing[]
+  profitabilitySnapshots     MatterProfitabilitySnapshot[]
+  recurringExpenseTemplates  RecurringExpenseTemplate[]
+  purchaseOrders             PurchaseOrder[]
+  disbursementNotes          DisbursementRequestNote[]
+  commissionPayouts          CommissionPayout[]
+  rfqs                       RequestForQuotation[]
+  vendorBills                VendorBill[]
+  timerSessions              TimerSession[]
+  withholdingTaxCertificates WithholdingTaxCertificate[]
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -1477,50 +1489,108 @@ model UnbilledWip {
 }
 
 model Invoice {
-  id                   String                     @id @default(cuid())
+  id                   String        @id @default(cuid())
+  invoiceNumber        String        @unique
   tenantId             String
-  kraControlNumber     String?                    @unique
-  etimsReference       String?                    @unique
-  etimsValidated       Boolean                    @default(false)
+  kraControlNumber     String?       @unique
+  etimsReference       String?       @unique
+  etimsValidated       Boolean       @default(false)
   etimsValidatedAt     DateTime?
-  etimsStatus          String? // QUEUED, SUBMITTED, ACCEPTED, REJECTED, FAILED
-  etimsReceiptNumber   String?                    @unique
+  etimsStatus          String?
+  etimsReceiptNumber   String?       @unique
   etimsRejectionReason String?
   etimsLastSyncedAt    DateTime?
-  total                Decimal                    @db.Decimal(18, 2)
-  taxAmount            Decimal                    @default(0) @db.Decimal(18, 2)
-  subTotal             Decimal                    @default(0) @db.Decimal(18, 2)
-  vatAmount            Decimal                    @default(0) @db.Decimal(18, 2)
-  paidAmount           Decimal                    @default(0) @db.Decimal(18, 2)
-  currency             String                     @default("KES")
-  exchangeRate         Decimal                    @default(1) @db.Decimal(18, 6)
-  netAmount            Decimal                    @db.Decimal(18, 2)
-  status               InvoiceStatus              @default(INVOICED)
+  fiscalSignature      String?
+  cuSerialNumber       String?
+  cuInvoiceNumber      String?
+  etimsQrCode          String?
+  total                Decimal       @db.Decimal(18, 2)
+  taxAmount            Decimal       @default(0) @db.Decimal(18, 2)
+  subTotal             Decimal       @default(0) @db.Decimal(18, 2)
+  vatAmount            Decimal       @default(0) @db.Decimal(18, 2)
+  whtAmount            Decimal       @default(0) @db.Decimal(18, 2)
+  balanceDue           Decimal       @default(0) @db.Decimal(18, 2)
+  paidAmount           Decimal       @default(0) @db.Decimal(18, 2)
+  currency             String        @default("KES")
+  exchangeRate         Decimal       @default(1) @db.Decimal(18, 6)
+  netAmount            Decimal       @db.Decimal(18, 2)
+  status               InvoiceStatus @default(INVOICED)
   matterId             String
   branchId             String?
   reconciledAt         DateTime?
   billingRunId         String?
-  issuedDate           DateTime                   @default(now())
+  issuedDate           DateTime      @default(now())
   dueDate              DateTime?
   paidDate             DateTime?
-  createdAt            DateTime                   @default(now())
-  updatedAt            DateTime                   @default(now()) @updatedAt
-  billingRun           BillingRun?                @relation(fields: [billingRunId], references: [id])
-  lines                InvoiceLine[]
-  paymentAllocations   PaymentReceiptAllocation[]
-  creditNotes          CreditNote[]
-  branch               Branch?                    @relation(fields: [branchId], references: [id])
-  matter               Matter                     @relation(fields: [matterId], references: [id], onDelete: Cascade)
-  tenant               Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  paymentReceipts      PaymentReceipt[]
-  timeEntries          TimeEntry[]
-  client               Client?                    @relation(fields: [clientId], references: [id])
-  clientId             String?
+  cancelledAt          DateTime?
+  cancelledById        String?
+  cancellationReason   String?
+  voidFiscalRecord     Boolean       @default(false)
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @default(now()) @updatedAt
+
+  billingRun              BillingRun?                 @relation(fields: [billingRunId], references: [id])
+  lines                   InvoiceLine[]
+  paymentAllocations      PaymentReceiptAllocation[]
+  creditNotes             CreditNote[]
+  branch                  Branch?                     @relation(fields: [branchId], references: [id])
+  client                  Client?                     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  matter                  Matter                      @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  tenant                  Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  cancelledBy             User?                       @relation("InvoiceCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  paymentReceipts         PaymentReceipt[]
+  timeEntries             TimeEntry[]
+  clientId                String?
+  withholdingCertificates WithholdingTaxCertificate[]
 
   @@index([tenantId])
-  @@index([tenantId, status])
-  @@index([tenantId, issuedDate])
-  @@index([tenantId, matterId])
+  @@index([status])
+  @@index([matterId])
+  @@index([etimsValidated])
+  @@index([etimsStatus])
+  @@index([issuedDate])
+  @@index([whtAmount])
+  @@index([balanceDue])
+  @@index([cancelledAt])
+  @@index([clientId])
+  @@index([tenantId, clientId])
+}
+
+model WithholdingTaxCertificate {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  invoiceId          String
+  matterId           String?
+  clientId           String?
+  certificateNumber  String
+  certificateDate    DateTime
+  amount             Decimal   @db.Decimal(18, 2)
+  payerName          String?
+  payerPin           String?
+  receivedById       String?
+  documentId         String?
+  status             String    @default("RECEIVED")
+  notes              String?
+  cancelledAt        DateTime?
+  cancelledById      String?
+  cancellationReason String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  tenant             Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoice            Invoice                    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  matter             Matter?                    @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  client             Client?                    @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  receivedBy         User?                      @relation("WhtCertificateReceivedBy", fields: [receivedById], references: [id], onDelete: SetNull)
+  cancelledBy        User?                      @relation("WhtCertificateCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  paymentAllocations PaymentReceiptAllocation[]
+
+  @@unique([tenantId, certificateNumber])
+  @@index([tenantId])
+  @@index([invoiceId])
+  @@index([matterId])
+  @@index([clientId])
+  @@index([status])
 }
 
 model BillingRun {
@@ -1825,16 +1895,18 @@ model Client {
   createdAt                 DateTime                @default(now())
   updatedAt                 DateTime                @default(now()) @updatedAt
 
-  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  branch             Branch?             @relation(fields: [branchId], references: [id])
-  contacts           ClientContact[]
-  kycProfiles        ClientKycProfile[]
-  matters            Matter[]
-  invoices           Invoice[]
-  paymentReceipts    PaymentReceipt[]
-  clientTrustLedgers ClientTrustLedger[]
-  trustTransactions  TrustTransaction[]
-  complianceReports  ComplianceReport[]
+  tenant                     Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch                     Branch?                     @relation(fields: [branchId], references: [id])
+  contacts                   ClientContact[]
+  kycProfiles                ClientKycProfile[]
+  matters                    Matter[]
+  invoices                   Invoice[]
+  paymentRefunds             PaymentRefund[]
+  paymentReceipts            PaymentReceipt[]
+  clientTrustLedgers         ClientTrustLedger[]
+  trustTransactions          TrustTransaction[]
+  complianceReports          ComplianceReport[]
+  withholdingTaxCertificates WithholdingTaxCertificate[]
 
   lastKycReviewedAt       DateTime?
   lastPepScreenedAt       DateTime?
@@ -2824,23 +2896,48 @@ model ReceptionLog {
 }
 
 model InvoiceLine {
-  id          String   @id @default(cuid())
-  tenantId    String
-  invoiceId   String
-  matterId    String?
-  clientId    String?
-  description String
-  quantity    Decimal  @default(1) @db.Decimal(18, 2)
-  unitPrice   Decimal  @default(0) @db.Decimal(18, 2)
-  subTotal    Decimal  @default(0) @db.Decimal(18, 2)
-  taxAmount   Decimal  @default(0) @db.Decimal(18, 2)
-  total       Decimal  @default(0) @db.Decimal(18, 2)
-  createdAt   DateTime @default(now())
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  id              String   @id @default(cuid())
+  tenantId        String
+  invoiceId       String
+  matterId        String?
+  clientId        String?
+  description     String
+  quantity        Decimal  @default(1) @db.Decimal(18, 2)
+  unitPrice       Decimal  @default(0) @db.Decimal(18, 2)
+  subTotal        Decimal  @default(0) @db.Decimal(18, 2)
+  taxRate         Decimal  @default(0) @db.Decimal(18, 4)
+  taxMode         String   @default("VATABLE")
+  taxInclusive    Boolean  @default(false)
+  taxAmount       Decimal  @default(0) @db.Decimal(18, 2)
+  isWhtApplicable Boolean  @default(false)
+  whtRate         Decimal  @default(0) @db.Decimal(18, 4)
+  whtAmount       Decimal  @default(0) @db.Decimal(18, 2)
+  sourceType      String?
+  sourceId        String?
+  total           Decimal  @default(0) @db.Decimal(18, 2)
+  createdAt       DateTime @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([invoiceId])
+  @@index([sourceType, sourceId])
+}
+
+model InvoiceSequence {
+  id        String   @id @default(cuid())
+  tenantId  String
+  prefix    String
+  year      Int
+  nextValue Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, prefix, year])
+  @@index([tenantId])
 }
 
 model RequestForQuotation {
@@ -2903,19 +3000,67 @@ model RequestForQuotationSupplier {
 }
 
 model PaymentReceiptAllocation {
-  id               String         @id @default(cuid())
-  tenantId         String
-  paymentReceiptId String
-  invoiceId        String
-  amountApplied    Decimal        @db.Decimal(18, 2)
-  createdAt        DateTime       @default(now())
-  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  paymentReceipt   PaymentReceipt @relation(fields: [paymentReceiptId], references: [id], onDelete: Cascade)
-  invoice          Invoice        @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  id                          String                     @id @default(cuid())
+  tenantId                    String
+  paymentReceiptId            String
+  invoiceId                   String
+  allocationType              String                     @default("CASH")
+  withholdingTaxCertificateId String?
+  amountApplied               Decimal                    @db.Decimal(18, 2)
+  createdAt                   DateTime                   @default(now())
+  tenant                      Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  paymentReceipt              PaymentReceipt             @relation(fields: [paymentReceiptId], references: [id], onDelete: Cascade)
+  invoice                     Invoice                    @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  withholdingTaxCertificate   WithholdingTaxCertificate? @relation(fields: [withholdingTaxCertificateId], references: [id], onDelete: SetNull)
+  paymentRefunds              PaymentRefund[]
 
   @@index([tenantId])
   @@index([paymentReceiptId])
   @@index([invoiceId])
+  @@index([allocationType])
+  @@index([withholdingTaxCertificateId])
+}
+
+model PaymentRefund {
+  id               String         @id @default(cuid())
+  tenantId         String
+  paymentReceiptId String
+  clientId         String?
+  matterId         String?
+  amount           Decimal        @db.Decimal(18, 2)
+  currency         String         @default("KES")
+  exchangeRate     Decimal        @default(1) @db.Decimal(18, 6)
+  reason           String
+  status           String         @default("PENDING_APPROVAL")
+  requestedById    String?
+  approvedById     String?
+  rejectedById     String?
+  paidById         String?
+  approvedAt       DateTime?
+  rejectedAt       DateTime?
+  paidAt           DateTime?
+  bankReference    String?
+  rejectionReason  String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  paymentReceipt   PaymentReceipt @relation(fields: [paymentReceiptId], references: [id], onDelete: Cascade)
+
+  tenant                     Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  client                     Client?                   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  matter                     Matter?                   @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  requestedBy                User?                     @relation("PaymentRefundRequestedBy", fields: [requestedById], references: [id], onDelete: SetNull)
+  approvedBy                 User?                     @relation("PaymentRefundApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  rejectedBy                 User?                     @relation("PaymentRefundRejectedBy", fields: [rejectedById], references: [id], onDelete: SetNull)
+  paidBy                     User?                     @relation("PaymentRefundPaidBy", fields: [paidById], references: [id], onDelete: SetNull)
+  paymentReceiptAllocation   PaymentReceiptAllocation? @relation(fields: [paymentReceiptAllocationId], references: [id])
+  paymentReceiptAllocationId String?
+
+  @@index([tenantId])
+  @@index([paymentReceiptId])
+  @@index([clientId])
+  @@index([matterId])
+  @@index([status])
+  @@index([createdAt])
 }
 
 model VendorBill {
@@ -3014,30 +3159,33 @@ model VendorPayment {
 }
 
 model PaymentReceipt {
-  id            String                     @id @default(cuid())
-  tenantId      String
-  receiptNumber String                     @unique
-  clientId      String?
-  matterId      String?
-  invoiceId     String?
-  amount        Decimal                    @db.Decimal(18, 2)
-  currency      String                     @default("KES")
-  exchangeRate  Decimal                    @default(1) @db.Decimal(18, 6)
-  method        PaymentMethod
-  reference     String?
-  description   String?
-  status        PaymentReceiptStatus       @default(RECEIVED)
-  receivedAt    DateTime                   @default(now())
-  createdById   String?
-  createdAt     DateTime                   @default(now())
-  updatedAt     DateTime                   @updatedAt
-  tenant        Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  client        Client?                    @relation(fields: [clientId], references: [id])
-  matter        Matter?                    @relation(fields: [matterId], references: [id])
-  invoice       Invoice?                   @relation(fields: [invoiceId], references: [id])
-  createdBy     User?                      @relation("PaymentReceiptCreatedBy", fields: [createdById], references: [id])
-  allocations   PaymentReceiptAllocation[]
+  id                String                     @id @default(cuid())
+  tenantId          String
+  receiptNumber     String                     @unique
+  clientId          String?
+  matterId          String?
+  invoiceId         String?
+  amount            Decimal                    @db.Decimal(18, 2)
+  currency          String                     @default("KES")
+  exchangeRate      Decimal                    @default(1) @db.Decimal(18, 6)
+  method            PaymentMethod
+  unallocatedAmount Decimal                    @default(0) @db.Decimal(18, 2)
+  reference         String?
+  description       String?
+  status            PaymentReceiptStatus       @default(RECEIVED)
+  receivedAt        DateTime                   @default(now())
+  createdById       String?
+  createdAt         DateTime                   @default(now())
+  updatedAt         DateTime                   @updatedAt
+  tenant            Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  client            Client?                    @relation(fields: [clientId], references: [id])
+  matter            Matter?                    @relation(fields: [matterId], references: [id])
+  invoice           Invoice?                   @relation(fields: [invoiceId], references: [id])
+  createdBy         User?                      @relation("PaymentReceiptCreatedBy", fields: [createdById], references: [id])
+  allocations       PaymentReceiptAllocation[]
+  paymentRefunds    PaymentRefund[]
 
+  @@index([unallocatedAmount])
   @@index([tenantId])
   @@index([clientId])
   @@index([matterId])
@@ -4124,6 +4272,7 @@ enum AccountSubtype {
   DISBURSEMENT_ASSET
   GENERAL_EXPENSE
   RETAINER_LIABILITY
+  CLIENT_DEPOSITS
   SUSPENSE
 }
 
