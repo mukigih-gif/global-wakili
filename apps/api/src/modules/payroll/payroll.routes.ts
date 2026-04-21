@@ -2,6 +2,52 @@
 
 import { Router, type Request, type Response } from 'express';
 
+import { validate } from '../../middleware/validate';
+
+import {
+  createPayrollBatchSchema,
+  createPayrollRecordSchema,
+  payrollApprovalSchema,
+  payrollBatchIdParamSchema,
+  payrollBatchListQuerySchema,
+  payrollCalculationSchema,
+  payrollRecordListQuerySchema,
+} from './payroll.validators';
+
+import {
+  PAYROLL_PERMISSIONS,
+  requirePayrollPermission,
+} from './payroll-permission.map';
+
+import {
+  approvePayrollBatch,
+  calculatePayroll,
+  cancelPayrollBatch,
+  cancelPayrollRecord,
+  createPayrollBatch,
+  createPayrollBatchAndRecords,
+  createPayrollRecord,
+  createStatutoryFiling,
+  generateP9Report,
+  generateP10Report,
+  generatePayslip,
+  generateStatutorySummary,
+  getPayrollBatchById,
+  getPayrollDashboard,
+  getPayrollRecordById,
+  getPayslipById,
+  listPayrollBatches,
+  listPayrollRecords,
+  listPayslips,
+  markStatutoryFiled,
+  postPayrollBatch,
+  publishPayslip,
+  recalculatePayrollRecord,
+  rejectPayrollBatch,
+  revokePayslip,
+  submitPayrollBatch,
+} from './payroll.controller';
+
 const router = Router();
 
 router.get('/health', (req: Request, res: Response) => {
@@ -10,37 +56,191 @@ router.get('/health', (req: Request, res: Response) => {
     module: 'payroll',
     status: 'mounted',
     service: 'global-wakili-api',
-    lifecycle: 'pending-final-module-generation',
+    lifecycle: 'production-payroll-routes-mounted',
     requestId: req.id,
     timestamp: new Date().toISOString(),
   });
 });
 
-router.get('/', (req: Request, res: Response) => {
-  res.status(200).json({
-    success: true,
-    module: 'payroll',
-    status: 'available',
-    message:
-      'Payroll route is mounted. Full payroll workflows are pending final module generation.',
-    pendingFiles: [
-      'PayrollService.ts',
-      'PayrollBatchService.ts',
-      'PayrollApprovalService.ts',
-      'PayslipService.ts',
-      'StatutoryService.ts',
-      'LeaveService.ts',
-      'BenefitsService.ts',
-      'CommissionService.ts',
-      'P9ReportService.ts',
-      'P10ReportService.ts',
-      'payroll.controller.ts',
-      'payroll.dashboard.ts',
-    ],
-    requestId: req.id,
-    timestamp: new Date().toISOString(),
-  });
-});
+router.get(
+  '/dashboard',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.viewDashboard),
+  getPayrollDashboard,
+);
+
+router.post(
+  '/calculate',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.createRecord),
+  validate({ body: payrollCalculationSchema }),
+  calculatePayroll,
+);
+
+router.get(
+  '/batches',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.viewBatch),
+  validate({ query: payrollBatchListQuerySchema }),
+  listPayrollBatches,
+);
+
+router.post(
+  '/batches',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.createBatch),
+  validate({ body: createPayrollBatchSchema }),
+  createPayrollBatch,
+);
+
+router.post(
+  '/batches/with-records',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.createBatch),
+  validate({ body: createPayrollBatchSchema }),
+  createPayrollBatchAndRecords,
+);
+
+router.get(
+  '/batches/:payrollBatchId',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.viewBatch),
+  validate({ params: payrollBatchIdParamSchema }),
+  getPayrollBatchById,
+);
+
+router.post(
+  '/batches/:payrollBatchId/submit',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.submitBatch),
+  validate({
+    params: payrollBatchIdParamSchema,
+    body: payrollApprovalSchema.partial(),
+  }),
+  submitPayrollBatch,
+);
+
+router.post(
+  '/batches/:payrollBatchId/approve',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.approveBatch),
+  validate({
+    params: payrollBatchIdParamSchema,
+    body: payrollApprovalSchema.partial(),
+  }),
+  approvePayrollBatch,
+);
+
+router.post(
+  '/batches/:payrollBatchId/reject',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.rejectBatch),
+  validate({
+    params: payrollBatchIdParamSchema,
+    body: payrollApprovalSchema,
+  }),
+  rejectPayrollBatch,
+);
+
+router.post(
+  '/batches/:payrollBatchId/cancel',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.cancelBatch),
+  validate({
+    params: payrollBatchIdParamSchema,
+    body: payrollApprovalSchema.pick({ reason: true }),
+  }),
+  cancelPayrollBatch,
+);
+
+router.post(
+  '/batches/:payrollBatchId/post',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.postBatch),
+  validate({ params: payrollBatchIdParamSchema }),
+  postPayrollBatch,
+);
+
+router.get(
+  '/records',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.viewRecord),
+  validate({ query: payrollRecordListQuerySchema }),
+  listPayrollRecords,
+);
+
+router.post(
+  '/records',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.createRecord),
+  validate({ body: createPayrollRecordSchema }),
+  createPayrollRecord,
+);
+
+router.get(
+  '/records/:payrollRecordId',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.viewRecord),
+  getPayrollRecordById,
+);
+
+router.post(
+  '/records/:payrollRecordId/recalculate',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.recalculateRecord),
+  recalculatePayrollRecord,
+);
+
+router.post(
+  '/records/:payrollRecordId/cancel',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.cancelRecord),
+  cancelPayrollRecord,
+);
+
+router.post(
+  '/records/:payrollRecordId/payslip',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.generatePayslip),
+  generatePayslip,
+);
+
+router.get(
+  '/payslips',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.viewPayslip),
+  listPayslips,
+);
+
+router.get(
+  '/payslips/:payslipId',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.viewPayslip),
+  getPayslipById,
+);
+
+router.post(
+  '/payslips/:payslipId/publish',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.publishPayslip),
+  publishPayslip,
+);
+
+router.post(
+  '/payslips/:payslipId/revoke',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.revokePayslip),
+  revokePayslip,
+);
+
+router.get(
+  '/statutory/summary',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.viewStatutory),
+  generateStatutorySummary,
+);
+
+router.post(
+  '/statutory/filings',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.createStatutoryFiling),
+  createStatutoryFiling,
+);
+
+router.post(
+  '/statutory/filings/:filingId/filed',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.markStatutoryFiled),
+  markStatutoryFiled,
+);
+
+router.get(
+  '/reports/p9/:employeeId',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.viewReports),
+  generateP9Report,
+);
+
+router.get(
+  '/reports/p10',
+  requirePayrollPermission(PAYROLL_PERMISSIONS.viewReports),
+  generateP10Report,
+);
 
 router.use((req: Request, res: Response) => {
   res.status(404).json({
