@@ -4,6 +4,14 @@ export * from './document.types';
 export * from './document.validators';
 
 export * from './DocumentStorageService';
+export * from './DocumentMalwareScanService';
+export * from './DocumentAccessPolicyService';
+export * from './DocumentCapabilityService';
+export * from './DocumentShareService';
+export * from './DocumentESignatureService';
+export * from './DocumentApprovalBridgeService';
+export * from './DocumentIntelligenceService';
+
 export * from './DocumentService';
 export * from './DocumentVersionService';
 export * from './DocumentAccessService';

@@ -1,3 +1,6 @@
+// apps/api/src/modules/document/document.controller.ts
+
+import { DocumentCapabilityService } from './DocumentCapabilityService';
 import type { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/async-handler';
 import { DocumentService } from './DocumentService';
@@ -49,13 +52,38 @@ export const uploadDocument = asyncHandler(async (req: Request, res: Response) =
     matterId: result.document.matterId ?? null,
     action: 'UPLOADED',
     requestId: req.id,
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'] ?? null,
     metadata: {
       version: result.document.version,
       fileHash: result.document.fileHash,
+      malwareScan: (result.document.metadata as any)?.malwareScan ?? null,
     },
   });
 
   res.status(201).json(result);
+});
+
+export const getDocumentCapabilities = asyncHandler(async (req: Request, res: Response) => {
+  const result = DocumentCapabilityService.getSummary();
+
+  await DocumentAuditService.logAction(req.db, {
+    tenantId: req.tenantId!,
+    userId: req.user?.sub ?? null,
+    action: 'CAPABILITY_VIEWED',
+    requestId: req.id,
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'] ?? null,
+    metadata: {
+      active: result.active,
+      failClosed: result.failClosed,
+      pendingProvider: result.pendingProvider,
+      pendingSchema: result.pendingSchema,
+      pendingCrossModule: result.pendingCrossModule,
+    },
+  });
+
+  res.status(200).json(result);
 });
 
 export const getDocumentDetails = asyncHandler(async (req: Request, res: Response) => {
@@ -79,6 +107,8 @@ export const getDocumentDetails = asyncHandler(async (req: Request, res: Respons
     matterId: access.document.matterId ?? null,
     action: 'VIEWED',
     requestId: req.id,
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'] ?? null,
     fileHash: access.document.fileHash,
     version: access.document.version,
   });
@@ -107,10 +137,13 @@ export const getDocumentDownloadLink = asyncHandler(async (req: Request, res: Re
     matterId: access.document.matterId ?? null,
     action: 'SIGNED_URL_ISSUED',
     requestId: req.id,
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'] ?? null,
     fileHash: access.document.fileHash,
     version: access.document.version,
     metadata: {
       disposition: req.query.disposition === 'inline' ? 'inline' : 'attachment',
+      expiresAt: link.expiresAt,
     },
   });
 
@@ -122,6 +155,7 @@ export const searchDocuments = asyncHandler(async (req: Request, res: Response) 
 
   const result = await DocumentSearchService.search(req.db, {
     tenantId: req.tenantId!,
+    userId: req.user!.sub,
     query,
     page: req.query.page ? Number(req.query.page) : undefined,
     limit: req.query.limit ? Number(req.query.limit) : undefined,
@@ -145,7 +179,7 @@ export const searchDocuments = asyncHandler(async (req: Request, res: Response) 
           ? String(req.query.isConfidential) === 'true'
           : null,
       tags: req.query.tags
-        ? String(req.query.tags).split(',').map((v) => v.trim())
+        ? String(req.query.tags).split(',').map((value) => value.trim())
         : null,
     },
   });
@@ -155,6 +189,8 @@ export const searchDocuments = asyncHandler(async (req: Request, res: Response) 
     userId: req.user?.sub ?? null,
     action: 'SEARCHED',
     requestId: req.id,
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'] ?? null,
     metadata: {
       query,
       resultCount: result.meta.total,
@@ -165,9 +201,10 @@ export const searchDocuments = asyncHandler(async (req: Request, res: Response) 
 });
 
 export const getDocumentDashboard = asyncHandler(async (req: Request, res: Response) => {
-  const dashboard = await DocumentDashboardService.getDashboard(req.db, {
-    tenantId: req.tenantId!,
-    matterId: req.query.matterId ? String(req.query.matterId) : null,
+ const dashboard = await DocumentDashboardService.getDashboard(req.db, {
+  tenantId: req.tenantId!,
+  userId: req.user!.sub,
+  matterId: req.query.matterId ? String(req.query.matterId) : null,
     from: req.query.from ? String(req.query.from) : null,
     to: req.query.to ? String(req.query.to) : null,
     expiryWindowDays: req.query.expiryWindowDays
@@ -201,9 +238,43 @@ export const archiveDocument = asyncHandler(async (req: Request, res: Response) 
     matterId: access.document.matterId ?? null,
     action: 'ARCHIVED',
     requestId: req.id,
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'] ?? null,
     fileHash: access.document.fileHash,
     version: access.document.version,
   });
 
   res.status(200).json(updated);
+});
+
+export const restoreDocument = asyncHandler(async (req: Request, res: Response) => {
+  const access = await DocumentAccessService.verifyAccess(req.db, {
+    tenantId: req.tenantId!,
+    userId: req.user!.sub,
+    documentId: req.params.documentId,
+    requiredAction: 'restore',
+  });
+
+  const restored = await DocumentService.restoreDocument(req.db, {
+    tenantId: req.tenantId!,
+    documentId: req.params.documentId,
+  });
+
+  await DocumentAuditService.logAction(req.db, {
+    tenantId: req.tenantId!,
+    userId: req.user?.sub ?? null,
+    documentId: req.params.documentId,
+    matterId: access.document.matterId ?? null,
+    action: 'RESTORED',
+    requestId: req.id,
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'] ?? null,
+    fileHash: access.document.fileHash,
+    version: access.document.version,
+    metadata: {
+      reason: req.body?.reason ?? null,
+    },
+  });
+
+  res.status(200).json(restored);
 });

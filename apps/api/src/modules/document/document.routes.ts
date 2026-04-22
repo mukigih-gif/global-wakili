@@ -1,4 +1,6 @@
-import { Router } from 'express';
+// apps/api/src/modules/document/document.routes.ts
+
+import { Router, type Request, type Response } from 'express';
 import multer from 'multer';
 import { z } from 'zod';
 import { requirePermissions } from '../../middleware/rbac';
@@ -10,9 +12,15 @@ import {
   getDocumentDownloadLink,
   searchDocuments,
   getDocumentDashboard,
+  getDocumentCapabilities,
   archiveDocument,
+  restoreDocument,
 } from './document.controller';
-import { documentUploadSchema } from './document.validators';
+import {
+  archiveDocumentSchema,
+  documentUploadSchema,
+  restoreDocumentSchema,
+} from './document.validators';
 
 const router = Router();
 
@@ -49,6 +57,21 @@ const downloadQuerySchema = z.object({
 
 const dashboardQuerySchema = z.object({
   matterId: z.string().trim().optional(),
+  from: z.string().datetime().optional(),
+  to: z.string().datetime().optional(),
+  expiryWindowDays: z.coerce.number().int().min(1).max(365).optional(),
+  disposalRetentionYears: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+router.get('/health', (req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    module: 'document',
+    status: 'mounted',
+    service: 'global-wakili-api',
+    requestId: req.id,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 router.post(
@@ -74,6 +97,12 @@ router.get(
 );
 
 router.get(
+  '/capabilities',
+  requirePermissions(PERMISSIONS.document.viewDashboard),
+  getDocumentCapabilities,
+);
+
+router.get(
   '/:documentId',
   requirePermissions(PERMISSIONS.document.viewDocument),
   getDocumentDetails,
@@ -89,7 +118,15 @@ router.get(
 router.delete(
   '/:documentId',
   requirePermissions(PERMISSIONS.document.archiveDocument),
+  validate({ body: archiveDocumentSchema }),
   archiveDocument,
+);
+
+router.post(
+  '/:documentId/restore',
+  requirePermissions(PERMISSIONS.document.restoreDocument),
+  validate({ body: restoreDocumentSchema }),
+  restoreDocument,
 );
 
 export default router;

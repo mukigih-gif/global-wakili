@@ -1,3 +1,5 @@
+// apps/api/src/modules/document/DocumentAuditService.ts
+
 export type DocumentAuditAction =
   | 'UPLOADED'
   | 'VIEWED'
@@ -7,7 +9,12 @@ export type DocumentAuditAction =
   | 'ACCESS_DENIED'
   | 'ARCHIVED'
   | 'RESTORED'
-  | 'VERSION_CREATED';
+  | 'VERSION_CREATED'
+  | 'SHARE_REQUESTED'
+  | 'SIGNATURE_REQUESTED'
+  | 'APPROVAL_REQUESTED'
+  | 'INTELLIGENCE_REQUESTED'
+  | 'CAPABILITY_VIEWED';
 
 export class DocumentAuditService {
   static async logAction(
@@ -26,6 +33,13 @@ export class DocumentAuditService {
       metadata?: Record<string, unknown> | null;
     },
   ) {
+    if (!params.tenantId?.trim()) {
+      throw Object.assign(new Error('Tenant ID is required for document audit'), {
+        statusCode: 400,
+        code: 'DOCUMENT_AUDIT_TENANT_REQUIRED',
+      });
+    }
+
     return db.auditLog.create({
       data: {
         tenantId: params.tenantId,

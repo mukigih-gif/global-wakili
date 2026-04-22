@@ -1,5 +1,8 @@
+// apps/api/src/modules/document/DocumentVersionService.ts
+
 import { DocumentStorageService } from './DocumentStorageService';
 import type {
+  DocumentMetadata,
   TenantDocumentDbClient,
   VersionChainCreationPayload,
 } from './document.types';
@@ -15,25 +18,62 @@ function normalizeTitle(fileName: string, explicitTitle?: string | null): string
 
 function normalizeExpiryDate(value?: Date | string | null): Date | null {
   if (!value) return null;
+
   const parsed = value instanceof Date ? value : new Date(value);
+
   if (Number.isNaN(parsed.getTime())) {
     throw Object.assign(new Error('Invalid expiry date'), {
       statusCode: 422,
       code: 'INVALID_DOCUMENT_EXPIRY_DATE',
     });
   }
+
   return parsed;
+}
+
+function normalizeMetadata(
+  metadata: DocumentMetadata | null | undefined,
+  fileName: string,
+): DocumentMetadata {
+  const normalized: DocumentMetadata = {
+    ...(metadata ?? {}),
+    originalName:
+      typeof metadata?.originalName === 'string' && metadata.originalName.trim()
+        ? metadata.originalName.trim()
+        : fileName.trim(),
+    tags: sanitizeDocumentTags(metadata?.tags),
+    isConfidential: metadata?.isConfidential === true,
+    isRestricted: metadata?.isRestricted === true,
+    category: metadata?.category ?? 'OTHER',
+    sourceEditor: metadata?.sourceEditor ?? 'UPLOAD',
+  };
+
+  return normalized;
 }
 
 export class DocumentVersionService {
   /**
    * Creates a new Document row as the next version in the chain.
    * The previous version is linked using previousId.
+   *
+   * Security guarantees:
+   * - tenantId is required
+   * - uploader must be active within the tenant
+   * - matter ownership is tenant-scoped
+   * - metadata is preserved for confidentiality / ethical wall enforcement
+   * - storage upload is cleaned up if DB persistence fails
    */
   static async createChainedVersion(
     db: TenantDocumentDbClient,
     payload: VersionChainCreationPayload,
   ) {
+    if (!payload.tenantId?.trim()) {
+      throw Object.assign(new Error('Tenant ID is required'), {
+        statusCode: 400,
+        code: 'DOCUMENT_TENANT_REQUIRED',
+      });
+    }
+
     if (!payload.fileName?.trim()) {
       throw Object.assign(new Error('File name is required'), {
         statusCode: 422,
@@ -101,6 +141,7 @@ export class DocumentVersionService {
 
     const title = normalizeTitle(payload.fileName, payload.title);
     const expiryDate = normalizeExpiryDate(payload.expiryDate);
+    const metadata = normalizeMetadata(payload.metadata, payload.fileName);
 
     const latestDoc = await db.document.findFirst({
       where: {
@@ -144,6 +185,7 @@ export class DocumentVersionService {
           previousId: latestDoc?.id ?? null,
           version: latestDoc ? latestDoc.version + 1 : 1,
           status: payload.status ?? 'ACTIVE',
+          metadata,
         },
       });
 
@@ -189,10 +231,13 @@ export class DocumentVersionService {
     },
   ) {
     if (!db.document.findMany) {
-      throw Object.assign(new Error('Document history listing is not supported by this DB client contract'), {
-        statusCode: 500,
-        code: 'DOCUMENT_HISTORY_NOT_SUPPORTED',
-      });
+      throw Object.assign(
+        new Error('Document history listing is not supported by this DB client contract'),
+        {
+          statusCode: 500,
+          code: 'DOCUMENT_HISTORY_NOT_SUPPORTED',
+        },
+      );
     }
 
     return db.document.findMany({

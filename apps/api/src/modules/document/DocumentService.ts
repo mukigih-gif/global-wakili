@@ -1,5 +1,8 @@
+// apps/api/src/modules/document/DocumentService.ts
+
 import { DocumentStorageService } from './DocumentStorageService';
 import { DocumentVersionService } from './DocumentVersionService';
+import { DocumentMalwareScanService } from './DocumentMalwareScanService';
 import type {
   FileUploadPayload,
   TenantDocumentDbClient,
@@ -22,6 +25,13 @@ export class DocumentService {
     db: TenantDocumentDbClient,
     payload: FileUploadPayload,
   ) {
+    if (!payload.tenantId?.trim()) {
+      throw Object.assign(new Error('Tenant ID is required'), {
+        statusCode: 400,
+        code: 'DOCUMENT_TENANT_REQUIRED',
+      });
+    }
+
     if (!payload.fileName?.trim()) {
       throw Object.assign(new Error('File name is required'), {
         statusCode: 422,
@@ -52,6 +62,16 @@ export class DocumentService {
         code: 'DOCUMENT_FILE_SIZE_MISMATCH',
       });
     }
+
+    const scanResult = await DocumentMalwareScanService.scanBuffer({
+      tenantId: payload.tenantId,
+      uploadedBy: payload.uploadedBy,
+      fileName: payload.fileName,
+      mimeType: payload.mimeType,
+      buffer: payload.buffer,
+    });
+
+    DocumentMalwareScanService.assertClean(scanResult);
 
     const [matter, uploader] = await Promise.all([
       payload.matterId
@@ -101,39 +121,77 @@ export class DocumentService {
       fileSize: payload.fileSize,
       buffer: payload.buffer,
       status: payload.status ?? 'ACTIVE',
-      metadata: payload.metadata ?? null,
-      changeSummary: payload.metadata?.sourceEditor === 'UPLOAD'
-        ? 'Upload'
-        : 'New version',
+      metadata: {
+        ...(payload.metadata ?? {}),
+        malwareScan: {
+          verdict: scanResult.verdict,
+          provider: scanResult.provider,
+          scannedAt: scanResult.scannedAt.toISOString(),
+          fileHash: scanResult.fileHash,
+          reason: scanResult.reason ?? null,
+        },
+      },
+      changeSummary:
+        payload.metadata?.sourceEditor === 'UPLOAD'
+          ? 'Upload'
+          : 'New version',
     });
   }
 
-  static async getDocumentDetails(
+    static async getDocumentDetails(
     db: TenantDocumentDbClient,
     tenantId: string,
     documentId: string,
   ) {
-    return db.document.findFirst({
+    const document = await db.document.findFirst({
       where: {
         id: documentId,
         tenantId,
         deletedAt: null,
       },
-      include: {
+      select: {
+        id: true,
+        tenantId: true,
+        matterId: true,
+        title: true,
+        description: true,
+        expiryDate: true,
+        mimeType: true,
+        fileSize: true,
+        fileHash: true,
+        uploadedBy: true,
+        previousId: true,
+        version: true,
+        status: true,
+        metadata: true,
+        createdAt: true,
+        updatedAt: true,
+        deletedAt: true,
         matter: {
           select: {
+            id: true,
             title: true,
             matterCode: true,
           },
         },
         uploader: {
           select: {
+            id: true,
             name: true,
             email: true,
           },
         },
       },
     });
+
+    if (!document) {
+      throw Object.assign(new Error('Document not found'), {
+        statusCode: 404,
+        code: 'DOCUMENT_NOT_FOUND',
+      });
+    }
+
+    return document;
   }
 
   static async getLatestDocumentByTitle(
@@ -179,6 +237,64 @@ export class DocumentService {
       data: {
         deletedAt: new Date(),
         status: 'ARCHIVED',
+      },
+    });
+  }
+
+  static async restoreDocument(
+    db: TenantDocumentDbClient,
+    params: {
+      tenantId: string;
+      documentId: string;
+    },
+  ) {
+    if (!params.tenantId?.trim()) {
+      throw Object.assign(new Error('Tenant ID is required'), {
+        statusCode: 400,
+        code: 'DOCUMENT_TENANT_REQUIRED',
+      });
+    }
+
+    if (!params.documentId?.trim()) {
+      throw Object.assign(new Error('Document ID is required'), {
+        statusCode: 422,
+        code: 'DOCUMENT_ID_REQUIRED',
+      });
+    }
+
+    const document = await db.document.findFirst({
+      where: {
+        tenantId: params.tenantId,
+        id: params.documentId,
+      },
+      select: {
+        id: true,
+        deletedAt: true,
+        status: true,
+      },
+    });
+
+    if (!document) {
+      throw Object.assign(new Error('Document not found'), {
+        statusCode: 404,
+        code: 'DOCUMENT_NOT_FOUND',
+      });
+    }
+
+    if (!document.deletedAt && document.status !== 'ARCHIVED' && document.status !== 'DELETED') {
+      throw Object.assign(new Error('Document is not archived'), {
+        statusCode: 409,
+        code: 'DOCUMENT_NOT_ARCHIVED',
+      });
+    }
+
+    return db.document.update({
+      where: {
+        id: params.documentId,
+      },
+      data: {
+        deletedAt: null,
+        status: 'ACTIVE',
       },
     });
   }

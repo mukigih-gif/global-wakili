@@ -1,3 +1,5 @@
+// apps/api/src/modules/document/DocumentSearchService.ts
+
 import { sanitizeDocumentTags } from './document.validators';
 
 export interface DocumentSearchFilters {
@@ -22,42 +24,130 @@ function normalizeDate(value?: Date | string | null): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
+function buildAccessScope(userId?: string | null): Record<string, unknown> | null {
+  if (!userId?.trim()) {
+    return {
+      AND: [
+        {
+          NOT: {
+            metadata: {
+              path: ['isRestricted'],
+              equals: true,
+            },
+          },
+        },
+        {
+          NOT: {
+            metadata: {
+              path: ['isConfidential'],
+              equals: true,
+            },
+          },
+        },
+        {
+          OR: [
+            { matterId: null },
+            {
+              matter: {
+                is: {
+                  NOT: {
+                    metadata: {
+                      path: ['isRestricted'],
+                      equals: true,
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  return {
+    OR: [
+      { uploadedBy: userId },
+      {
+        matter: {
+          is: {
+            partnerId: userId,
+          },
+        },
+      },
+      {
+        matter: {
+          is: {
+            assignedLawyerId: userId,
+          },
+        },
+      },
+      {
+        AND: [
+          {
+            NOT: {
+              metadata: {
+                path: ['isRestricted'],
+                equals: true,
+              },
+            },
+          },
+          {
+            NOT: {
+              metadata: {
+                path: ['isConfidential'],
+                equals: true,
+              },
+            },
+          },
+          {
+            OR: [
+              { matterId: null },
+              {
+                matter: {
+                  is: {
+                    NOT: {
+                      metadata: {
+                        path: ['isRestricted'],
+                        equals: true,
+                      },
+                    },
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+}
+
 export class DocumentSearchService {
   /**
-   * Searches all main document fields.
+   * Searches document fields under tenant scope and user access scope.
    *
-   * Direct fields:
-   * - title
-   * - description
-   * - mimeType
-   * - fileHash
-   * - fileUrl
-   * - status
-   * - uploadedBy
-   * - version
-   *
-   * Related fields:
-   * - matter.title
-   * - matter.matterCode
-   * - uploader.name
-   * - uploader.email
-   *
-   * Metadata filters:
-   * - category
-   * - tags
-   * - isRestricted
-   * - isConfidential
+   * This intentionally avoids returning restricted/confidential documents to users
+   * who are not uploader, partner, or assigned lawyer on the linked matter.
    */
   static async search(
     db: any,
     params: {
       tenantId: string;
+      userId?: string | null;
       query?: string | null;
       filters?: DocumentSearchFilters | null;
       page?: number;
       limit?: number;
     },
   ) {
+    if (!params.tenantId?.trim()) {
+      throw Object.assign(new Error('Tenant ID is required for document search'), {
+        statusCode: 400,
+        code: 'DOCUMENT_SEARCH_TENANT_REQUIRED',
+      });
+    }
+
     const page = params.page && params.page > 0 ? params.page : 1;
     const limit = params.limit && params.limit > 0 ? Math.min(params.limit, 100) : 50;
     const skip = (page - 1) * limit;
@@ -78,15 +168,20 @@ export class DocumentSearchService {
 
     const andClauses: Record<string, unknown>[] = [];
 
+    const accessScope = buildAccessScope(params.userId);
+    if (accessScope) {
+      andClauses.push(accessScope);
+    }
+
     if (query) {
       const parsedVersion = Number(query);
+
       andClauses.push({
         OR: [
           { title: { contains: query, mode: 'insensitive' } },
           { description: { contains: query, mode: 'insensitive' } },
           { mimeType: { contains: query, mode: 'insensitive' } },
           { fileHash: { contains: query, mode: 'insensitive' } },
-          { fileUrl: { contains: query, mode: 'insensitive' } },
           { status: { equals: query } },
           { uploadedBy: { equals: query } },
           ...(Number.isInteger(parsedVersion) ? [{ version: { equals: parsedVersion } }] : []),

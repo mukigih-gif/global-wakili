@@ -1,9 +1,6 @@
-import { Prisma } from '@global-wakili/database';
+// apps/api/src/modules/document/document.dashboard.ts
 
-function toDecimal(value: Prisma.Decimal | string | number | null | undefined): Prisma.Decimal {
-  if (value === null || value === undefined) return new Prisma.Decimal(0);
-  return new Prisma.Decimal(value);
-}
+import { DocumentAccessPolicyService } from './DocumentAccessPolicyService';
 
 function normalizeDate(value?: Date | string | null): Date | null {
   if (!value) return null;
@@ -11,18 +8,51 @@ function normalizeDate(value?: Date | string | null): Date | null {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-function buildDateWindow(params: {
-  from?: Date | string | null;
-  to?: Date | string | null;
-}) {
-  const from = normalizeDate(params.from);
-  const to = normalizeDate(params.to);
+function toNumber(value: unknown): number {
+  if (value === null || value === undefined) return 0;
+  return Number(value) || 0;
+}
 
-  if (!from && !to) return undefined;
+function getDocumentCategory(metadata: unknown): string {
+  const meta = (metadata ?? {}) as Record<string, unknown>;
+  return typeof meta.category === 'string' ? meta.category : 'OTHER';
+}
 
+function getDocumentTags(metadata: unknown): string[] {
+  const meta = (metadata ?? {}) as Record<string, unknown>;
+  return Array.isArray(meta.tags)
+    ? meta.tags.filter((tag): tag is string => typeof tag === 'string')
+    : [];
+}
+
+function isConfidential(metadata: unknown): boolean {
+  return ((metadata ?? {}) as Record<string, unknown>).isConfidential === true;
+}
+
+function isRestricted(metadata: unknown): boolean {
+  return ((metadata ?? {}) as Record<string, unknown>).isRestricted === true;
+}
+
+function compactDocument(document: any) {
   return {
-    ...(from ? { gte: from } : {}),
-    ...(to ? { lte: to } : {}),
+    id: document.id,
+    title: document.title,
+    matterId: document.matterId ?? null,
+    matter: document.matter ?? null,
+    uploadedBy: document.uploadedBy ?? null,
+    uploader: document.uploader ?? null,
+    mimeType: document.mimeType ?? null,
+    fileSize: document.fileSize ?? null,
+    status: document.status ?? null,
+    version: document.version ?? null,
+    expiryDate: document.expiryDate ?? null,
+    createdAt: document.createdAt ?? null,
+    metadata: {
+      category: getDocumentCategory(document.metadata),
+      tags: getDocumentTags(document.metadata),
+      isConfidential: isConfidential(document.metadata),
+      isRestricted: isRestricted(document.metadata),
+    },
   };
 }
 
@@ -31,393 +61,246 @@ export class DocumentDashboardService {
     db: any,
     params: {
       tenantId: string;
+      userId?: string | null;
       matterId?: string | null;
       from?: Date | string | null;
       to?: Date | string | null;
       expiryWindowDays?: number;
       disposalRetentionYears?: number;
+      includeRestricted?: boolean;
     },
   ) {
+    if (!params.tenantId?.trim()) {
+      throw Object.assign(new Error('Tenant ID is required for document dashboard'), {
+        statusCode: 400,
+        code: 'DOCUMENT_DASHBOARD_TENANT_REQUIRED',
+      });
+    }
+
+    const now = new Date();
+    const from = normalizeDate(params.from);
+    const to = normalizeDate(params.to);
     const expiryWindowDays = params.expiryWindowDays ?? 30;
     const disposalRetentionYears = params.disposalRetentionYears ?? 7;
 
-    const createdAtWindow = buildDateWindow({
-      from: params.from ?? null,
-      to: params.to ?? null,
-    });
+    const expiryWindowEnd = new Date(now);
+    expiryWindowEnd.setDate(expiryWindowEnd.getDate() + expiryWindowDays);
 
-    const baseWhere: Record<string, unknown> = {
-      tenantId: params.tenantId,
-      ...(params.matterId ? { matterId: params.matterId } : {}),
-      ...(createdAtWindow ? { createdAt: createdAtWindow } : {}),
-    };
-
-    const activeWhere = {
-      ...baseWhere,
-      deletedAt: null,
-    };
-
-    const now = new Date();
-    const expiryThreshold = new Date(now.getTime() + expiryWindowDays * 24 * 60 * 60 * 1000);
-    const disposalThreshold = new Date();
+    const disposalThreshold = new Date(now);
     disposalThreshold.setFullYear(disposalThreshold.getFullYear() - disposalRetentionYears);
 
+    const dateRangeAnd =
+      from || to
+        ? [
+            {
+              createdAt: {
+                ...(from ? { gte: from } : {}),
+                ...(to ? { lte: to } : {}),
+              },
+            },
+          ]
+        : [];
+
+    const activeWhere = DocumentAccessPolicyService.buildDocumentWhere({
+      tenantId: params.tenantId,
+      userId: params.userId,
+      matterId: params.matterId ?? null,
+      includeRestricted: params.includeRestricted,
+      deletedAtMode: 'active',
+      extraAnd: dateRangeAnd,
+    });
+
+    const archivedWhere = DocumentAccessPolicyService.buildDocumentWhere({
+      tenantId: params.tenantId,
+      userId: params.userId,
+      matterId: params.matterId ?? null,
+      includeRestricted: params.includeRestricted,
+      deletedAtMode: 'archived',
+      extraAnd: dateRangeAnd,
+    });
+
+    const expiringWhere = DocumentAccessPolicyService.buildDocumentWhere({
+      tenantId: params.tenantId,
+      userId: params.userId,
+      matterId: params.matterId ?? null,
+      includeRestricted: params.includeRestricted,
+      deletedAtMode: 'active',
+      extraAnd: [
+        ...dateRangeAnd,
+        {
+          expiryDate: {
+            gte: now,
+            lte: expiryWindowEnd,
+          },
+        },
+      ],
+    });
+
+    const expiredWhere = DocumentAccessPolicyService.buildDocumentWhere({
+      tenantId: params.tenantId,
+      userId: params.userId,
+      matterId: params.matterId ?? null,
+      includeRestricted: params.includeRestricted,
+      deletedAtMode: 'active',
+      extraAnd: [
+        ...dateRangeAnd,
+        {
+          expiryDate: {
+            lt: now,
+          },
+        },
+      ],
+    });
+
+    const disposalEligibleWhere = DocumentAccessPolicyService.buildDocumentWhere({
+      tenantId: params.tenantId,
+      userId: params.userId,
+      matterId: params.matterId ?? null,
+      includeRestricted: params.includeRestricted,
+      deletedAtMode: 'archived',
+      extraAnd: [
+        {
+          deletedAt: {
+            lte: disposalThreshold,
+          },
+        },
+      ],
+    });
+
     const [
-      totalActiveCount,
-      totalArchivedCount,
-      allCountsByStatus,
-      totalSizeAgg,
-      activeDocumentsForBreakdown,
+      totalActiveDocuments,
+      totalArchivedDocuments,
+      totalActiveStorage,
       expiringDocuments,
       expiredDocuments,
       disposalEligibleDocuments,
-      retentionReviewQueue,
       recentDocuments,
-      recentEvidenceDocuments,
-      contractAgg,
-      recentContractVersions,
-      uploadsByUserRaw,
-      auditSummaryRaw,
-      matterSummary,
+      activeDocumentsForBreakdown,
+      uploadGroups,
     ] = await Promise.all([
-      db.document.count({
-        where: activeWhere,
-      }),
-
-      db.document.count({
-        where: {
-          ...baseWhere,
-          status: 'ARCHIVED',
-        },
-      }),
-
-      db.document.groupBy({
-        by: ['status'],
-        where: baseWhere,
-        _count: {
-          id: true,
-        },
-      }),
-
+      db.document.count({ where: activeWhere }),
+      db.document.count({ where: archivedWhere }),
       db.document.aggregate({
         where: activeWhere,
         _sum: {
           fileSize: true,
         },
       }),
-
+      db.document.findMany({
+        where: expiringWhere,
+        orderBy: [{ expiryDate: 'asc' }, { createdAt: 'desc' }],
+        take: 20,
+        include: {
+          matter: {
+            select: {
+              id: true,
+              title: true,
+              matterCode: true,
+            },
+          },
+          uploader: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      }),
+      db.document.findMany({
+        where: expiredWhere,
+        orderBy: [{ expiryDate: 'asc' }, { createdAt: 'desc' }],
+        take: 20,
+        include: {
+          matter: {
+            select: {
+              id: true,
+              title: true,
+              matterCode: true,
+            },
+          },
+          uploader: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      }),
+      db.document.findMany({
+        where: disposalEligibleWhere,
+        orderBy: [{ deletedAt: 'asc' }],
+        take: 20,
+        include: {
+          matter: {
+            select: {
+              id: true,
+              title: true,
+              matterCode: true,
+            },
+          },
+          uploader: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      }),
       db.document.findMany({
         where: activeWhere,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 20,
+        include: {
+          matter: {
+            select: {
+              id: true,
+              title: true,
+              matterCode: true,
+            },
+          },
+          uploader: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+        },
+      }),
+      db.document.findMany({
+        where: activeWhere,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: 1000,
         select: {
           id: true,
-          status: true,
+          mimeType: true,
           fileSize: true,
+          status: true,
+          version: true,
           metadata: true,
         },
       }),
-
-      db.document.findMany({
-        where: {
-          ...activeWhere,
-          expiryDate: {
-            gte: now,
-            lte: expiryThreshold,
-          },
-        },
-        include: {
-          matter: {
-            select: {
-              id: true,
-              title: true,
-              matterCode: true,
-            },
-          },
-          uploader: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: [{ expiryDate: 'asc' }, { createdAt: 'desc' }],
-        take: 20,
-      }),
-
-      db.document.findMany({
-        where: {
-          ...activeWhere,
-          expiryDate: {
-            lt: now,
-          },
-        },
-        include: {
-          matter: {
-            select: {
-              id: true,
-              title: true,
-              matterCode: true,
-            },
-          },
-          uploader: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: [{ expiryDate: 'asc' }, { createdAt: 'desc' }],
-        take: 20,
-      }),
-
-      db.document.findMany({
-        where: {
-          ...baseWhere,
-          status: 'ARCHIVED',
-          deletedAt: {
-            lte: disposalThreshold,
-          },
-        },
-        include: {
-          matter: {
-            select: {
-              id: true,
-              title: true,
-              matterCode: true,
-            },
-          },
-          uploader: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: [{ deletedAt: 'asc' }, { updatedAt: 'asc' }],
-        take: 20,
-      }),
-
-      db.document.findMany({
-        where: {
-          ...baseWhere,
-          status: 'ARCHIVED',
-          OR: [
-            { deletedAt: null },
-            {
-              deletedAt: {
-                gt: disposalThreshold,
-              },
-            },
-          ],
-        },
-        include: {
-          matter: {
-            select: {
-              id: true,
-              title: true,
-              matterCode: true,
-            },
-          },
-          uploader: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: [{ updatedAt: 'asc' }, { createdAt: 'asc' }],
-        take: 20,
-      }),
-
-      db.document.findMany({
-        where: activeWhere,
-        include: {
-          matter: {
-            select: {
-              id: true,
-              title: true,
-              matterCode: true,
-            },
-          },
-          uploader: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: 15,
-      }),
-
-      db.document.findMany({
-        where: {
-          ...activeWhere,
-          metadata: {
-            path: ['category'],
-            equals: 'EVIDENCE',
-          },
-        },
-        include: {
-          matter: {
-            select: {
-              id: true,
-              title: true,
-              matterCode: true,
-            },
-          },
-          uploader: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-        take: 10,
-      }),
-
-      db.contract.aggregate({
-        where: {
-          tenantId: params.tenantId,
-          ...(params.matterId ? { matterId: params.matterId } : {}),
-          ...(createdAtWindow ? { createdAt: createdAtWindow } : {}),
-        },
-        _count: {
-          id: true,
-        },
-      }),
-
-      db.contractVersion.findMany({
-        where: {
-          tenantId: params.tenantId,
-          ...(params.matterId
-            ? {
-                contract: {
-                  matterId: params.matterId,
-                },
-              }
-            : {}),
-          ...(createdAtWindow ? { createdAt: createdAtWindow } : {}),
-        },
-        include: {
-          contract: {
-            select: {
-              id: true,
-              contractNumber: true,
-              title: true,
-              matterId: true,
-              matter: {
-                select: {
-                  id: true,
-                  title: true,
-                  matterCode: true,
-                },
-              },
-            },
-          },
-          createdBy: {
-            select: {
-              id: true,
-              name: true,
-              email: true,
-            },
-          },
-        },
-        orderBy: [{ createdAt: 'desc' }, { versionNumber: 'desc' }],
-        take: 10,
-      }),
-
       db.document.groupBy({
         by: ['uploadedBy'],
         where: activeWhere,
         _count: {
           id: true,
         },
-        _sum: {
-          fileSize: true,
+        orderBy: {
+          _count: {
+            id: 'desc',
+          },
         },
+        take: 10,
       }),
-
-      db.auditLog.findMany({
-        where: {
-          tenantId: params.tenantId,
-          entityType: 'DOCUMENT',
-          ...(createdAtWindow ? { createdAt: createdAtWindow } : {}),
-        },
-        select: {
-          id: true,
-          action: true,
-          createdAt: true,
-          userId: true,
-          metadata: true,
-        },
-        orderBy: [{ createdAt: 'desc' }],
-        take: 200,
-      }),
-
-      params.matterId
-        ? db.matter.findFirst({
-            where: {
-              tenantId: params.tenantId,
-              id: params.matterId,
-            },
-            select: {
-              id: true,
-              title: true,
-              matterCode: true,
-              status: true,
-              client: {
-                select: {
-                  id: true,
-                  name: true,
-                  clientCode: true,
-                },
-              },
-            },
-          })
-        : Promise.resolve(null),
     ]);
 
-    const totalSizeBytes = toDecimal(totalSizeAgg._sum.fileSize);
-
-    const statusBreakdown = allCountsByStatus.reduce((acc: Record<string, number>, row: any) => {
-      acc[row.status] = row._count.id;
-      return acc;
-    }, {});
-
-    let confidentialCount = 0;
-    let restrictedCount = 0;
-    const categoryBreakdown: Record<string, number> = {};
-    const versionBreakdown: Record<string, number> = {};
-
-    for (const doc of activeDocumentsForBreakdown) {
-      const meta = (doc.metadata ?? {}) as Record<string, any>;
-      const category = String(meta.category ?? 'OTHER').toUpperCase();
-      const isConfidential = meta.isConfidential === true;
-      const isRestricted = meta.isRestricted === true;
-
-      categoryBreakdown[category] = (categoryBreakdown[category] ?? 0) + 1;
-
-      if (isConfidential) confidentialCount += 1;
-      if (isRestricted) restrictedCount += 1;
-
-      const versionBucket =
-        typeof doc.status === 'string'
-          ? String(doc.status).toUpperCase()
-          : 'UNKNOWN';
-      versionBreakdown[versionBucket] = (versionBreakdown[versionBucket] ?? 0) + 1;
-    }
-
-    const evidenceCount = categoryBreakdown.EVIDENCE ?? 0;
-    const contractCount = contractAgg._count.id;
-
-    const uploaderIds = uploadsByUserRaw.map((row: any) => row.uploadedBy).filter(Boolean);
+    const uploaderIds = uploadGroups
+      .map((group: any) => group.uploadedBy)
+      .filter(Boolean);
 
     const uploadUsers = uploaderIds.length
       ? await db.user.findMany({
@@ -437,93 +320,95 @@ export class DocumentDashboardService {
 
     const uploadUserMap = new Map(uploadUsers.map((user: any) => [user.id, user]));
 
-    const uploadsByUser = uploadsByUserRaw
-      .map((row: any) => ({
-        uploadedBy: row.uploadedBy,
-        user: uploadUserMap.get(row.uploadedBy) ?? null,
-        documentCount: row._count.id,
-        totalSizeBytes: toDecimal(row._sum.fileSize),
-      }))
-      .sort((a: any, b: any) => b.documentCount - a.documentCount)
-      .slice(0, 10);
+    const categoryBreakdown: Record<string, number> = {};
+    const mimeTypeBreakdown: Record<string, number> = {};
+    const statusBreakdown: Record<string, number> = {};
+    const versionBreakdown: Record<string, number> = {};
+    let confidentialCount = 0;
+    let restrictedCount = 0;
 
-    const auditActionBreakdown = auditSummaryRaw.reduce(
-      (acc: Record<string, number>, row: any) => {
-        acc[row.action] = (acc[row.action] ?? 0) + 1;
-        return acc;
-      },
-      {},
-    );
+    for (const document of activeDocumentsForBreakdown) {
+      const category = getDocumentCategory(document.metadata);
+      const mimeType = document.mimeType ?? 'unknown';
+      const status = document.status ?? 'UNKNOWN';
+      const versionBucket =
+        Number(document.version ?? 1) > 1 ? 'VERSIONED' : 'FIRST_VERSION';
 
-    const recentAuditActivity = auditSummaryRaw.slice(0, 20);
+      categoryBreakdown[category] = (categoryBreakdown[category] ?? 0) + 1;
+      mimeTypeBreakdown[mimeType] = (mimeTypeBreakdown[mimeType] ?? 0) + 1;
+      statusBreakdown[status] = (statusBreakdown[status] ?? 0) + 1;
+      versionBreakdown[versionBucket] = (versionBreakdown[versionBucket] ?? 0) + 1;
+
+      if (isConfidential(document.metadata)) confidentialCount += 1;
+      if (isRestricted(document.metadata)) restrictedCount += 1;
+    }
+
+    const accessibleDocIdsForAudit = recentDocuments
+      .map((document: any) => document.id)
+      .filter(Boolean);
+
+    const recentAuditActivity = accessibleDocIdsForAudit.length
+      ? await db.auditLog.findMany({
+          where: {
+            tenantId: params.tenantId,
+            entityType: 'DOCUMENT',
+            entityId: {
+              in: accessibleDocIdsForAudit,
+            },
+          },
+          orderBy: {
+            createdAt: 'desc',
+          },
+          take: 20,
+        })
+      : [];
 
     return {
-      scope: {
-        tenantId: params.tenantId,
-        matterId: params.matterId ?? null,
-        from: normalizeDate(params.from)?.toISOString() ?? null,
-        to: normalizeDate(params.to)?.toISOString() ?? null,
+      tenantId: params.tenantId,
+      matterId: params.matterId ?? null,
+      generatedAt: new Date(),
+      accessScope: {
+        userId: params.userId ?? null,
+        includeRestricted: params.includeRestricted === true,
+        note:
+          params.includeRestricted === true
+            ? 'Privileged dashboard scope requested.'
+            : 'Dashboard is filtered through document access policy.',
       },
-
-      matter: matterSummary,
-
       summary: {
-        totalActiveDocuments: totalActiveCount,
-        totalArchivedDocuments: totalArchivedCount,
-        totalSizeBytes,
+        totalActiveDocuments,
+        totalArchivedDocuments,
+        activeStorageBytes: toNumber(totalActiveStorage?._sum?.fileSize),
         confidentialCount,
         restrictedCount,
-        evidenceCount,
-        contractCount,
-      },
-
-      breakdowns: {
-        statusBreakdown,
         categoryBreakdown,
-        lifecycleBreakdown: versionBreakdown,
-        auditActionBreakdown,
+        mimeTypeBreakdown,
+        statusBreakdown,
+        versionBreakdown,
       },
-
-      expiring: {
-        windowDays: expiryWindowDays,
-        count: expiringDocuments.length,
-        documents: expiringDocuments,
+      expiry: {
+        expiryWindowDays,
+        expiringCount: expiringDocuments.length,
+        expiringDocuments: expiringDocuments.map(compactDocument),
+        expiredCount: expiredDocuments.length,
+        expiredDocuments: expiredDocuments.map(compactDocument),
       },
-
-      expired: {
-        count: expiredDocuments.length,
-        documents: expiredDocuments,
-      },
-
       retention: {
         disposalRetentionYears,
         disposalEligibleCount: disposalEligibleDocuments.length,
-        disposalEligibleDocuments,
-        retentionReviewCount: retentionReviewQueue.length,
-        retentionReviewQueue,
+        disposalEligibleDocuments: disposalEligibleDocuments.map(compactDocument),
       },
-
-      contracts: {
-        totalContracts: contractCount,
-        recentVersions: recentContractVersions,
-      },
-
-      evidence: {
-        totalEvidenceDocuments: evidenceCount,
-        recentEvidenceDocuments,
-      },
-
       uploads: {
-        topUploaders: uploadsByUser,
+        topUploaders: uploadGroups.map((group: any) => ({
+          uploadedBy: group.uploadedBy,
+          user: uploadUserMap.get(group.uploadedBy) ?? null,
+          documentCount: group._count.id,
+        })),
       },
-
-      recentDocuments,
-
+      recentDocuments: recentDocuments.map(compactDocument),
       audit: {
         recentActivity: recentAuditActivity,
       },
-
-      generatedAt: new Date(),
     };
   }
 }
