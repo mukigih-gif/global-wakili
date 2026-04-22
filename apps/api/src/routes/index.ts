@@ -19,6 +19,7 @@ import dashboardRoutes from '../modules/dashboards/dashboard.routes';
 import receptionRoutes from '../modules/reception/reception.routes';
 import courtRoutes from '../modules/court/court.routes';
 import aiRoutes from '../modules/ai/ai.routes';
+import complianceRoutes from '../modules/compliance/compliance.routes';
 
 const router = Router();
 
@@ -53,6 +54,8 @@ router.use('/courts', courtRoutes);
 router.use('/filing', courtRoutes);
 router.use('/filings', courtRoutes);
 router.use('/litigation', courtRoutes);
+router.use('/compliance', complianceRoutes);
+router.use('/aml', complianceRoutes);
 router.use('/documents', documentRoutes);
 router.use('/calendar', calendarRoutes);
 router.use('/integrations', integrationRoutes);

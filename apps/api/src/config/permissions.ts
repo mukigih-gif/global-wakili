@@ -200,6 +200,19 @@ export const PERMISSIONS = {
     manageHandoff: define('reception', 'manage_handoff', 'Manage reception handoffs'),
   },
 
+  compliance: {
+    runClientReview: define('compliance', 'run_client_review', 'Run client AML/KYC compliance review'),
+    viewClientChecks: define('compliance', 'view_client_checks', 'View client compliance check history'),
+    createReport: define('compliance', 'create_report', 'Create compliance and AML reports'),
+    updateReport: define('compliance', 'update_report', 'Update compliance and AML reports'),
+    viewReport: define('compliance', 'view_report', 'View compliance and AML reports'),
+    searchReport: define('compliance', 'search_report', 'Search compliance and AML reports'),
+    submitGoaml: define('compliance', 'submit_goaml', 'Submit STR reports to goAML'),
+    syncGoaml: define('compliance', 'sync_goaml', 'Sync goAML report status'),
+    viewDashboard: define('compliance', 'view_dashboard', 'View compliance dashboard'),
+    viewCalendar: define('compliance', 'view_calendar', 'View compliance calendar'),
+  },
+
   integrations: {
     runBankSync: define('integrations', 'run_bank_sync', 'Run bank synchronization'),
     submitEtims: define('integrations', 'submit_etims', 'Submit eTIMS documents'),
