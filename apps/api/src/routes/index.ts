@@ -16,6 +16,7 @@ import calendarRoutes from '../modules/calendar/calendar.routes';
 import taskRoutes from '../modules/task/task.routes';
 import integrationRoutes from '../modules/integrations/integrations.routes';
 import dashboardRoutes from '../modules/dashboards/dashboard.routes';
+import receptionRoutes from '../modules/reception/reception.routes';
 import aiRoutes from '../modules/ai/ai.routes';
 
 const router = Router();
@@ -42,6 +43,10 @@ router.use('/clients', clientRoutes);
 router.use('/matters', matterRoutes);
 router.use('/tasks', taskRoutes);
 router.use('/task', taskRoutes);
+router.use('/reception', receptionRoutes);
+router.use('/frontdesk', receptionRoutes);
+router.use('/front-desk', receptionRoutes);
+router.use('/express', receptionRoutes);
 router.use('/documents', documentRoutes);
 router.use('/calendar', calendarRoutes);
 router.use('/integrations', integrationRoutes);

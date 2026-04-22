@@ -178,6 +178,16 @@ export const PERMISSIONS = {
     linkCalendar: define('task', 'link_calendar', 'Link tasks to calendar events'),
   },
 
+  reception: {
+    createVisitorLog: define('reception', 'create_visitor_log', 'Create visitor and walk-in logs'),
+    createCallLog: define('reception', 'create_call_log', 'Create reception call logs'),
+    receiveFile: define('reception', 'receive_file', 'Receive and log delivered files or documents'),
+    viewLog: define('reception', 'view_log', 'View reception logs'),
+    searchLog: define('reception', 'search_log', 'Search reception logs'),
+    viewDashboard: define('reception', 'view_dashboard', 'View reception dashboard'),
+    manageHandoff: define('reception', 'manage_handoff', 'Manage reception handoffs'),
+  },
+
   integrations: {
     runBankSync: define('integrations', 'run_bank_sync', 'Run bank synchronization'),
     submitEtims: define('integrations', 'submit_etims', 'Submit eTIMS documents'),
