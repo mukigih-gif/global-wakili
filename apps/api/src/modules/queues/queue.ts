@@ -21,6 +21,7 @@ type QueueLike = {
 };
 
 let reminderQueue: QueueLike | null = null;
+let integrationQueue: QueueLike | null = null;
 let redisConnection: IORedis | null = null;
 
 function isProduction(): boolean {
@@ -37,7 +38,9 @@ function shouldUseRedisQueue(): boolean {
 function createNoopQueue(queueName: string): QueueLike {
   return {
     async add(name: string, data: QueueJobPayload): Promise<QueueJobResult> {
-      const id = `noop-${queueName}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const id = `noop-${queueName}-${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2)}`;
 
       if (!isProduction()) {
         console.warn('QUEUE_DISABLED_NON_PRODUCTION', {
@@ -71,8 +74,8 @@ function createRedisConnection(): IORedis {
         retryStrategy: (times) => Math.min(times * 250, 5_000),
       })
     : new IORedis({
-        host: '127.0.0.1',
-        port: 6379,
+        host: process.env.REDIS_HOST || '127.0.0.1',
+        port: Number(process.env.REDIS_PORT || 6379),
         maxRetriesPerRequest: null,
         enableReadyCheck: false,
         lazyConnect: false,
@@ -126,29 +129,49 @@ function createBullQueue(queueName: string): QueueLike {
   }) as unknown as QueueLike;
 }
 
-export function getReminderQueue(): QueueLike {
-  if (reminderQueue) return reminderQueue;
+function getNamedQueue(
+  current: QueueLike | null,
+  queueName: string,
+  setQueue: (queue: QueueLike) => void,
+): QueueLike {
+  if (current) return current;
 
   if (!shouldUseRedisQueue()) {
-    reminderQueue = createNoopQueue('reminders');
-    return reminderQueue;
+    const noop = createNoopQueue(queueName);
+    setQueue(noop);
+    return noop;
   }
 
   try {
-    reminderQueue = createBullQueue('reminders');
-    return reminderQueue;
+    const queue = createBullQueue(queueName);
+    setQueue(queue);
+    return queue;
   } catch (error) {
     if (isProduction()) {
       throw error;
     }
 
     console.warn('QUEUE_FALLBACK_TO_NOOP_NON_PRODUCTION', {
+      queue: queueName,
       error: error instanceof Error ? error.message : error,
     });
 
-    reminderQueue = createNoopQueue('reminders');
-    return reminderQueue;
+    const noop = createNoopQueue(queueName);
+    setQueue(noop);
+    return noop;
   }
+}
+
+export function getReminderQueue(): QueueLike {
+  return getNamedQueue(reminderQueue, 'reminders', (queue) => {
+    reminderQueue = queue;
+  });
+}
+
+export function getIntegrationQueue(): QueueLike {
+  return getNamedQueue(integrationQueue, 'integrations', (queue) => {
+    integrationQueue = queue;
+  });
 }
 
 export async function closeQueues(): Promise<void> {
@@ -156,10 +179,15 @@ export async function closeQueues(): Promise<void> {
     await reminderQueue.close();
   }
 
+  if (integrationQueue?.close) {
+    await integrationQueue.close();
+  }
+
   if (redisConnection) {
     await redisConnection.quit().catch(() => redisConnection?.disconnect());
   }
 
   reminderQueue = null;
+  integrationQueue = null;
   redisConnection = null;
 }

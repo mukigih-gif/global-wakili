@@ -1,6 +1,9 @@
 // apps/api/src/modules/integrations/integrations.routes.ts
 
 import { Router, type Request, type Response } from 'express';
+import { BankService } from './banking/bank.service';
+import { NotificationTemplateRegistry } from './notifications/NotificationTemplateRegistry';
+import { INTEGRATIONS_MODULE_STATUS } from './index';
 
 const router = Router();
 
@@ -10,7 +13,7 @@ router.get('/health', (req: Request, res: Response) => {
     module: 'integrations',
     status: 'mounted',
     service: 'global-wakili-api',
-    lifecycle: 'pending-final-module-generation',
+    lifecycle: 'foundation-ready',
     requestId: req.id,
     timestamp: new Date().toISOString(),
   });
@@ -19,20 +22,48 @@ router.get('/health', (req: Request, res: Response) => {
 router.get('/', (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
+    ...INTEGRATIONS_MODULE_STATUS,
+    requestId: req.id,
+    timestamp: new Date().toISOString(),
+  });
+});
+
+router.get('/capabilities', (req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
     module: 'integrations',
-    status: 'available',
-    message:
-      'Integrations route is mounted. Full KRA eTIMS, communications, bank APIs, payment gateway webhooks, queues, and external sync workflows are pending final module generation.',
-    pendingAreas: [
-      'KRA eTIMS invoice sync',
-      'Bank API integration',
-      'M-Pesa/payment gateway webhooks',
-      'Email/SMS provider adapters',
-      'External job queue processing',
-      'Webhook signature verification',
-      'Idempotent integration event logging',
-      'Integration audit trail',
-    ],
+    capabilities: {
+      banking: {
+        status: 'foundation-ready',
+        supportedProviders: BankService.listSupportedProviders(),
+      },
+      etims: {
+        status: 'foundation-ready',
+        mode: 'service-and-queue-ready',
+      },
+      kra: {
+        status: 'foundation-ready',
+        services: ['VAT', 'WHT', 'PAYE', 'Corporate Tax', 'Tax Dashboard'],
+      },
+      goaml: {
+        status: 'foundation-ready',
+        services: ['STR/SAR submission', 'status sync'],
+      },
+      notifications: {
+        status: 'foundation-ready',
+        channels: ['email', 'sms', 'portal'],
+        templates: NotificationTemplateRegistry.list().map((template) => ({
+          key: template.key,
+          category: template.category,
+          defaultPriority: template.defaultPriority,
+          channels: template.channels,
+        })),
+      },
+      queues: {
+        status: 'minimal-adapter-ready',
+        queues: ['reminders', 'integrations'],
+      },
+    },
     requestId: req.id,
     timestamp: new Date().toISOString(),
   });
