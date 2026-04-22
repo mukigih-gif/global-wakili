@@ -19,7 +19,6 @@ export * from './kra/TaxEngineService';
 export * from './kra/VATService';
 export * from './kra/WHTService';
 
-export * from './notifications';
 
 export const INTEGRATIONS_MODULE_STATUS = {
   module: 'integrations',

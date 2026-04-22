@@ -1,4 +1,23 @@
-import type { NotificationChannel, NotificationCategory } from './NotificationService';
+type NotificationChannel = 'email' | 'sms' | 'portal';
+
+type NotificationCategory =
+  | 'system_alert'
+  | 'trust'
+  | 'billing'
+  | 'payment'
+  | 'procurement'
+  | 'payroll'
+  | 'hr'
+  | 'client'
+  | 'matter_update'
+  | 'task'
+  | 'calendar'
+  | 'court'
+  | 'reception'
+  | 'compliance'
+  | 'approval'
+  | 'reporting'
+  | 'platform';
 
 type NotificationPreference = {
   emailEnabled?: boolean;

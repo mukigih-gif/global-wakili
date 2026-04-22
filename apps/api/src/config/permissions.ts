@@ -213,6 +213,17 @@ export const PERMISSIONS = {
     viewCalendar: define('compliance', 'view_calendar', 'View compliance calendar'),
   },
 
+  notifications: {
+    sendNotification: define('notifications', 'send_notification', 'Send notifications'),
+    queueNotification: define('notifications', 'queue_notification', 'Queue notifications'),
+    viewNotification: define('notifications', 'view_notification', 'View notifications'),
+    searchNotification: define('notifications', 'search_notification', 'Search notifications'),
+    markRead: define('notifications', 'mark_read', 'Mark notifications as read'),
+    viewDashboard: define('notifications', 'view_dashboard', 'View notifications dashboard'),
+    viewReports: define('notifications', 'view_reports', 'View notification delivery reports'),
+    manageWebhooks: define('notifications', 'manage_webhooks', 'Manage notification provider webhooks'),
+  },
+
   integrations: {
     runBankSync: define('integrations', 'run_bank_sync', 'Run bank synchronization'),
     submitEtims: define('integrations', 'submit_etims', 'Submit eTIMS documents'),

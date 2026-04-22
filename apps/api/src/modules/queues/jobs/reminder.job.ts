@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
 import prisma from '../../../../config/database';
-import { NotificationService } from '../../../integrations/notifications/NotificationService';
+import { NotificationService } from '../../notifications/NotificationService';
 
 export async function handleReminderJob(
   job: Job<Record<string, unknown>, unknown, 'reminder.dispatch'>,

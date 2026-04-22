@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import { NotificationService } from '../integrations/notifications/NotificationService';
+import { NotificationService } from '../notifications/NotificationService';
 
 export class ProcurementNotificationService {
   static async notifyBillSubmitted(

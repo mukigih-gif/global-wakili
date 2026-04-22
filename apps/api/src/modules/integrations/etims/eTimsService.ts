@@ -3,7 +3,7 @@ import { Prisma } from '@global-wakili/database';
 import { ETimsClient, type ETimsInvoicePayload } from './eTimsClient';
 import { logAdminAction } from '../../../utils/audit-logger';
 import { AuditSeverity } from '../../../types/audit';
-import { NotificationService } from '../notifications/NotificationService';
+import { NotificationService } from '../../notifications/NotificationService';
 
 function toNumber(value: Prisma.Decimal | number | string | null | undefined): number {
   if (value === null || value === undefined) return 0;

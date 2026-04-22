@@ -20,6 +20,7 @@ import receptionRoutes from '../modules/reception/reception.routes';
 import courtRoutes from '../modules/court/court.routes';
 import aiRoutes from '../modules/ai/ai.routes';
 import complianceRoutes from '../modules/compliance/compliance.routes';
+import notificationRoutes from '../modules/notifications/notification.routes';
 
 const router = Router();
 
@@ -58,6 +59,8 @@ router.use('/compliance', complianceRoutes);
 router.use('/aml', complianceRoutes);
 router.use('/documents', documentRoutes);
 router.use('/calendar', calendarRoutes);
+router.use('/notifications', notificationRoutes);
+router.use('/notification', notificationRoutes);
 router.use('/integrations', integrationRoutes);
 router.use('/dashboards', dashboardRoutes);
 router.use('/ai', aiRoutes);

@@ -2,7 +2,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import { BankService } from './banking/bank.service';
-import { NotificationTemplateRegistry } from './notifications/NotificationTemplateRegistry';
+import { NotificationTemplateRegistry } from '../notifications/providers/NotificationTemplateRegistry';
 import { INTEGRATIONS_MODULE_STATUS } from './index';
 
 const router = Router();
