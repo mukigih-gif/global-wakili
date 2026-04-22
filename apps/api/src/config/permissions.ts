@@ -163,6 +163,21 @@ export const PERMISSIONS = {
     viewDashboard: define('calendar', 'view_dashboard', 'View calendar dashboard'),
   },
 
+  task: {
+    createTask: define('task', 'create_task', 'Create tasks'),
+    updateTask: define('task', 'update_task', 'Update tasks'),
+    viewTask: define('task', 'view_task', 'View tasks'),
+    searchTask: define('task', 'search_task', 'Search tasks'),
+    assignTask: define('task', 'assign_task', 'Assign tasks'),
+    completeTask: define('task', 'complete_task', 'Complete tasks'),
+    cancelTask: define('task', 'cancel_task', 'Cancel tasks'),
+    deleteTask: define('task', 'delete_task', 'Delete tasks'),
+    commentTask: define('task', 'comment_task', 'Add task comments and notes'),
+    viewDashboard: define('task', 'view_dashboard', 'View task dashboard'),
+    manageReminders: define('task', 'manage_reminders', 'Manage task reminders'),
+    linkCalendar: define('task', 'link_calendar', 'Link tasks to calendar events'),
+  },
+
   integrations: {
     runBankSync: define('integrations', 'run_bank_sync', 'Run bank synchronization'),
     submitEtims: define('integrations', 'submit_etims', 'Submit eTIMS documents'),
