@@ -178,6 +178,18 @@ export const PERMISSIONS = {
     linkCalendar: define('task', 'link_calendar', 'Link tasks to calendar events'),
   },
 
+  court: {
+    createHearing: define('court', 'create_hearing', 'Create court hearings'),
+    updateHearing: define('court', 'update_hearing', 'Update court hearings'),
+    viewHearing: define('court', 'view_hearing', 'View court hearings'),
+    searchHearing: define('court', 'search_hearing', 'Search court hearings'),
+    manageCalendarLink: define('court', 'manage_calendar_link', 'Manage court calendar linkage'),
+    recordOutcome: define('court', 'record_outcome', 'Record court hearing outcomes'),
+    viewDashboard: define('court', 'view_dashboard', 'View court dashboard'),
+    manageFiling: define('court', 'manage_filing', 'Manage court filings'),
+    manageHandoff: define('court', 'manage_handoff', 'Manage court handoffs'),
+  },
+
   reception: {
     createVisitorLog: define('reception', 'create_visitor_log', 'Create visitor and walk-in logs'),
     createCallLog: define('reception', 'create_call_log', 'Create reception call logs'),
