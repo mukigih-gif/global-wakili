@@ -1,7 +1,19 @@
-export * from './queue';
-export * from './worker';
+// apps/api/src/modules/queues/index.ts
 
-export * from './jobs/etims.job';
-export * from './jobs/bank-sync.job';
-export * from './jobs/reminder.job';
-export * from './jobs/report-export.job';
+export * from './queue';
+
+export * from './queue.types';
+export * from './queue.validators';
+
+export * from './QueuePermissionMap';
+export * from './QueueAuditService';
+export * from './QueueCapabilityService';
+export * from './QueueRegistryService';
+export * from './QueuePersistenceService';
+export * from './QueueDispatchService';
+export * from './QueueDashboardService';
+export * from './QueueReportService';
+
+export * from './queue.controller';
+
+export { default as queueRoutes } from './queue.routes';

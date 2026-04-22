@@ -23,6 +23,17 @@ export const PERMISSIONS = {
     exportReport: define('finance', 'export_report', 'Export finance reports'),
   },
 
+  queues: {
+    createJob: define('queues', 'create_job', 'Create queue jobs'),
+    enqueueJob: define('queues', 'enqueue_job', 'Enqueue queue jobs'),
+    viewJob: define('queues', 'view_job', 'View queue jobs'),
+    searchJobs: define('queues', 'search_jobs', 'Search queue jobs'),
+    manageJobs: define('queues', 'manage_jobs', 'Manage queue job state'),
+    retryJob: define('queues', 'retry_job', 'Retry queue jobs'),
+    viewDashboard: define('queues', 'view_dashboard', 'View queue dashboard'),
+    viewReports: define('queues', 'view_reports', 'View queue reports'),
+  },
+
   billing: {
     viewInvoice: define('billing', 'view_invoice', 'View billing invoices'),
     createInvoice: define('billing', 'create_invoice', 'Create billing invoices'),

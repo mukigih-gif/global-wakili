@@ -21,6 +21,7 @@ import courtRoutes from '../modules/court/court.routes';
 import aiRoutes from '../modules/ai/ai.routes';
 import complianceRoutes from '../modules/compliance/compliance.routes';
 import notificationRoutes from '../modules/notifications/notification.routes';
+import queueRoutes from '../modules/queues/queue.routes';
 
 const router = Router();
 
@@ -61,6 +62,9 @@ router.use('/documents', documentRoutes);
 router.use('/calendar', calendarRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/notification', notificationRoutes);
+router.use('/queues', queueRoutes);
+router.use('/queue', queueRoutes);
+router.use('/jobs', queueRoutes);
 router.use('/integrations', integrationRoutes);
 router.use('/dashboards', dashboardRoutes);
 router.use('/ai', aiRoutes);
