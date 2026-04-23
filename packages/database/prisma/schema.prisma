@@ -82,7 +82,7 @@ model Tenant {
   rateLimitLogs                RateLimitLog[]
   receptionLogs                ReceptionLog[]
   roles                        Role[]
-  saasActivityLogs             SaasActivityLog[]
+  platformActivityLogs PlatformActivityLog[]
   suppliers                    Supplier[]
   encryptionKeys               TenantEncryptionKey[]
   trustAccounts                TrustAccount[]
@@ -157,6 +157,9 @@ model Tenant {
   purchaseOrderReceiptLines    PurchaseOrderReceiptLine[]
   withholdingTaxCertificates   WithholdingTaxCertificate[]
   paymentRefunds               PaymentRefund[]
+  analyticsMetrics              AnalyticsMetric[]
+  analyticsSnapshots            AnalyticsSnapshot[]
+  analyticsInsights             AnalyticsInsight[]
 
   @@index([subscriptionStatus])
   @@index([createdAt])
@@ -1795,6 +1798,94 @@ model Notification {
   @@index([status])
 }
 
+model AnalyticsMetric {
+  id               String                   @id @default(cuid())
+  tenantId         String
+  module           AnalyticsModule
+  scope            AnalyticsMetricScope     @default(TENANT)
+  metricKey        String
+  metricName       String
+  value            Decimal                  @db.Decimal(18, 4)
+  valueType        AnalyticsMetricValueType @default(NUMBER)
+  unit             String?
+  periodStart      DateTime?
+  periodEnd        DateTime?
+  sourceEntityType String?
+  sourceEntityId   String?
+  dimensions       Json?
+  metadata         Json?
+  computedAt       DateTime                 @default(now())
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, module])
+  @@index([tenantId, scope])
+  @@index([tenantId, metricKey])
+  @@index([tenantId, periodStart, periodEnd])
+  @@index([sourceEntityType, sourceEntityId])
+  @@index([computedAt])
+}
+
+model AnalyticsSnapshot {
+  id          String                  @id @default(cuid())
+  tenantId    String
+  module      AnalyticsModule
+  snapshotKey String
+  title       String
+  description String?
+  status      AnalyticsSnapshotStatus @default(ACTIVE)
+  periodStart DateTime?
+  periodEnd   DateTime?
+  payload     Json
+  metrics     Json?
+  metadata    Json?
+  generatedAt DateTime                @default(now())
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, module])
+  @@index([tenantId, snapshotKey])
+  @@index([tenantId, status])
+  @@index([tenantId, periodStart, periodEnd])
+  @@index([generatedAt])
+}
+
+model AnalyticsInsight {
+  id             String                   @id @default(cuid())
+  tenantId       String
+  module         AnalyticsModule
+  insightKey     String
+  title          String
+  summary        String
+  severity       AnalyticsInsightSeverity @default(INFO)
+  status         AnalyticsInsightStatus   @default(OPEN)
+  entityType     String?
+  entityId       String?
+  score          Int?
+  detectedAt     DateTime                 @default(now())
+  acknowledgedAt DateTime?
+  resolvedAt     DateTime?
+  payload        Json?
+  metadata       Json?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, module])
+  @@index([tenantId, severity])
+  @@index([tenantId, status])
+  @@index([entityType, entityId])
+  @@index([detectedAt])
+}
+
 model Document {
   id          String         @id @default(cuid())
   createdAt   DateTime       @default(now())
@@ -2855,17 +2946,47 @@ model ExpenseReconciliation {
   @@index([tenantId])
 }
 
-model SaasActivityLog {
-  id          String   @id @default(cuid())
-  tenantId    String
-  action      String
-  performedBy String
-  timestamp   DateTime @default(now())
-  reason      String?
-  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+model PlatformActivityLog {
+  id            String   @id @default(cuid())
+
+  tenantId      String?
+  actorUserId   String?  @map("performedBy")
+
+  module        String   @default("PLATFORM")
+  action        String
+  entityType    String?
+  entityId      String?
+
+  severity      String   @default("INFO")
+  outcome       String   @default("SUCCESS")
+  source        String   @default("PLATFORM_ADMIN")
+
+  ipAddress     String?
+  userAgent     String?
+  requestId     String?
+  correlationId String?
+
+  message       String?  @map("reason")
+  metadata      Json?
+  beforeState   Json?
+  afterState    Json?
+
+  occurredAt    DateTime @default(now()) @map("timestamp")
+  createdAt     DateTime @default(now())
+
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
-  @@index([timestamp])
+  @@index([actorUserId])
+  @@index([module])
+  @@index([action])
+  @@index([entityType, entityId])
+  @@index([severity])
+  @@index([outcome])
+  @@index([source])
+  @@index([requestId])
+  @@index([correlationId])
+  @@index([occurredAt])
 }
 
 model ReceptionLog {
@@ -4288,3 +4409,67 @@ enum BalanceSide {
   DEBIT
   CREDIT
 }
+
+enum AnalyticsModule {
+  OVERVIEW
+  CLIENT
+  MATTER
+  BILLING
+  TRUST
+  PRODUCTIVITY
+  COURT
+  CALENDAR
+  COMPLIANCE
+  NOTIFICATIONS
+  QUEUES
+  FINANCE
+  PROCUREMENT
+  PAYROLL
+  HR
+  RECEPTION
+  PLATFORM
+}
+
+enum AnalyticsMetricScope {
+  TENANT
+  CLIENT
+  MATTER
+  USER
+  MODULE
+  ENTITY
+}
+
+enum AnalyticsMetricValueType {
+  NUMBER
+  MONEY
+  PERCENTAGE
+  COUNT
+  BOOLEAN
+  DURATION
+  RATIO
+  JSON
+}
+
+enum AnalyticsSnapshotStatus {
+  ACTIVE
+  SUPERSEDED
+  ARCHIVED
+}
+
+enum AnalyticsInsightSeverity {
+  INFO
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AnalyticsInsightStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+  DISMISSED
+}
+
+
+

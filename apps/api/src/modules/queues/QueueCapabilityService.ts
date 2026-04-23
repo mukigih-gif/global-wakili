@@ -82,7 +82,7 @@ export class QueueCapabilityService {
         risk: 'HIGH',
         requiredForCloseout: false,
         description:
-          'Platform/SaaS admin queue observability will be connected when Platform control plane is built.',
+          'Platform admin queue observability will be connected when Platform control plane is built.',
       },
       {
         key: 'queues.provider_failover',
