@@ -15,7 +15,6 @@ import documentRoutes from '../modules/document/document.routes';
 import calendarRoutes from '../modules/calendar/calendar.routes';
 import taskRoutes from '../modules/task/task.routes';
 import integrationRoutes from '../modules/integrations/integrations.routes';
-import dashboardRoutes from '../modules/dashboards/dashboard.routes';
 import receptionRoutes from '../modules/reception/reception.routes';
 import courtRoutes from '../modules/court/court.routes';
 import aiRoutes from '../modules/ai/ai.routes';
@@ -24,6 +23,7 @@ import notificationRoutes from '../modules/notifications/notification.routes';
 import queueRoutes from '../modules/queues/queue.routes';
 import analyticsRoutes from '../modules/analytics/analytics.routes';
 import approvalRoutes from '../modules/approval/approval.routes';
+import reportingRoutes from '../modules/reporting/reporting.routes';
 
 const router = Router();
 
@@ -71,7 +71,7 @@ router.use('/integrations', integrationRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/approvals', approvalRoutes);
 router.use('/approval', approvalRoutes);
-router.use('/dashboards', dashboardRoutes);
+router.use('/reporting', reportingRoutes);
 router.use('/ai', aiRoutes);
 
 export default router;
