@@ -34,6 +34,21 @@ export const PERMISSIONS = {
     viewReports: define('queues', 'view_reports', 'View queue reports'),
   },
 
+  approval: {
+    createRequest: define('approval', 'create_request', 'Create approval requests'),
+    viewRequest: define('approval', 'view_request', 'View approval requests'),
+    searchRequests: define('approval', 'search_requests', 'Search approval requests'),
+    approveRequest: define('approval', 'approve_request', 'Approve requests'),
+    rejectRequest: define('approval', 'reject_request', 'Reject requests'),
+    requestChanges: define('approval', 'request_changes', 'Request changes on approval requests'),
+    escalateRequest: define('approval', 'escalate_request', 'Escalate approval requests'),
+    delegateRequest: define('approval', 'delegate_request', 'Delegate approval requests'),
+    reassignRequest: define('approval', 'reassign_request', 'Reassign approval requests'),
+    cancelRequest: define('approval', 'cancel_request', 'Cancel approval requests'),
+    expireRequest: define('approval', 'expire_request', 'Expire overdue approval requests'),
+    viewDashboard: define('approval', 'view_dashboard', 'View approval dashboard'),
+  },
+
   billing: {
     viewInvoice: define('billing', 'view_invoice', 'View billing invoices'),
     createInvoice: define('billing', 'create_invoice', 'Create billing invoices'),

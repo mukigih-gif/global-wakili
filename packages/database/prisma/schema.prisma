@@ -371,7 +371,12 @@ model User {
   tenantRole                          TenantRole                    @default(ADVOCATE)
   theme                               String                        @default("light")
   updatedAt                           DateTime                      @default(now()) @updatedAt
-  approvals                           Approval[]                    @relation("ApprovalUser")
+  approvals                           Approval[]                    @relation("ApprovalUser")
+  delegatedApprovalsTo                Approval[]                    @relation("ApprovalDelegatedTo")
+  delegatedApprovalsFrom              Approval[]                    @relation("ApprovalDelegatedFrom")
+  escalatedApprovals                  Approval[]                    @relation("ApprovalEscalatedTo")
+  assignedApprovals                   Approval[]                    @relation("ApprovalAssignedApprover")
+  requestedApprovals                  Approval[]                    @relation("ApprovalRequester")
   attendance                          Attendance[]
   auditLogs                           AuditLog[]                    @relation("AuditUser")
   createdEvents                       CalendarEvent[]               @relation("EventCreator")
@@ -812,30 +817,65 @@ model WorkflowHistory {
 }
 
 model Approval {
-  id               String         @id @default(cuid())
-  tenantId         String
-  entityType       String
-  entityId         String
-  currentState     WorkflowState
-  nextState        WorkflowState
-  approvedBy       String?
-  status           ApprovalStatus @default(PENDING)
-  comment          String?
-  rejectionReason  String?
-  createdAt        DateTime       @default(now())
-  approvedAt       DateTime?
-  deadlineAt       DateTime?
-  escalatedAt      DateTime?
-  escalatedTo      String?
-  escalationReason String?
-  delegatedFrom    String?
-  delegatedTo      String?
-  approver         User?          @relation("ApprovalUser", fields: [approvedBy], references: [id])
-  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id                 String           @id @default(cuid())
+  tenantId           String
+
+  module             ApprovalModule   @default(OPERATIONS)
+  approvalKey        String?
+  version            Int              @default(1)
+  entityType         String
+  entityId           String
+
+  currentState       WorkflowState
+  nextState          WorkflowState
+
+  action             ApprovalAction   @default(SUBMIT)
+  level              ApprovalLevel    @default(REVIEWER)
+  priority           ApprovalPriority @default(NORMAL)
+  status             ApprovalStatus   @default(PENDING)
+
+  requestedById      String?
+  assignedApproverId String?
+  approvedBy         String?
+
+  comment            String?
+  rejectionReason    String?
+  decisionReason     String?
+
+  beforeSnapshot     Json?
+  afterSnapshot      Json?
+  metadata           Json?
+
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+  requestedAt        DateTime         @default(now())
+  approvedAt         DateTime?
+  deadlineAt         DateTime?
+  escalatedAt        DateTime?
+  escalatedTo        String?
+  escalationReason   String?
+  delegatedFrom      String?
+  delegatedTo        String?
+
+  requester          User?            @relation("ApprovalRequester", fields: [requestedById], references: [id], onDelete: SetNull)
+  assignedApprover   User?            @relation("ApprovalAssignedApprover", fields: [assignedApproverId], references: [id], onDelete: SetNull)
+  approver           User?            @relation("ApprovalUser", fields: [approvedBy], references: [id], onDelete: SetNull)
+  escalatedApprover  User?            @relation("ApprovalEscalatedTo", fields: [escalatedTo], references: [id], onDelete: SetNull)
+  delegatedFromUser  User?            @relation("ApprovalDelegatedFrom", fields: [delegatedFrom], references: [id], onDelete: SetNull)
+  delegatedToUser    User?            @relation("ApprovalDelegatedTo", fields: [delegatedTo], references: [id], onDelete: SetNull)
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
-  @@index([status])
+  @@index([tenantId, module])
+  @@index([tenantId, entityType, entityId])
+  @@index([tenantId, entityType, entityId, version])
+  @@index([tenantId, status, level])
+  @@index([tenantId, module, status])
+  @@index([assignedApproverId, status])
+  @@index([requestedById])
+  @@index([approvedBy])
   @@index([deadlineAt])
+  @@index([createdAt])
 }
 
 model Dispute {
@@ -4471,5 +4511,53 @@ enum AnalyticsInsightStatus {
   DISMISSED
 }
 
+enum ApprovalAction {
+  SUBMIT
+  APPROVE
+  REJECT
+  ESCALATE
+  DELEGATE
+  AUTO_APPROVE
+  REQUEST_CHANGES
+  CANCEL
+  EXPIRE
+  REASSIGN
+}
 
+enum ApprovalLevel {
+  INITIATOR
+  REVIEWER
+  MANAGER
+  HEAD_OF_DEPARTMENT
+  CFO
+  PARTNER
+  SENIOR_PARTNER
+  COMPLIANCE_OFFICER
+  SYSTEM
+}
 
+enum ApprovalModule {
+  PROCUREMENT
+  PAYROLL
+  FINANCE
+  TRUST
+  BILLING
+  COMPLIANCE
+  OPERATIONS
+  HR
+  RECEPTION
+  COURT
+  CALENDAR
+  DOCUMENT
+  CLIENT
+  MATTER
+  PLATFORM
+  SYSTEM
+}
+
+enum ApprovalPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
