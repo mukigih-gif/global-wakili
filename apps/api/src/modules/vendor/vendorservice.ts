@@ -1,6 +1,6 @@
 import { Decimal } from '@prisma/client/runtime/library';
 import { GeneralLedgerService } from '../finance/GeneralLedgerService';
-import { pushRealtimeFinance } from '../reports/realtime.service';
+import { pushRealtimeFinance } from '../finance/realtime-finance.service';
 import { runFraudMonitor } from '../fraud/fraud-monitor.service';
 
 export class VendorService {
@@ -89,7 +89,7 @@ export class VendorService {
       }, tx);
 
       // ⚡ REALTIME + FRAUD
-      await pushRealtimeFinance(context.tenantId);
+      await pushRealtimeFinance(context.tenantId, context.req);
       await runFraudMonitor(context.tenantId);
 
       return bill;

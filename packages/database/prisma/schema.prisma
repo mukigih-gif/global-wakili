@@ -167,6 +167,13 @@ model Tenant {
   aiArtifacts                      AIArtifact[]
   aiReviewTasks                    AIReviewTask[]
   aiRecommendations                AIRecommendation[]
+  reportDefinitions               ReportDefinition[]
+  reportRuns                      ReportRun[]
+  reportExports                   ReportExport[]
+  dashboardDefinitions            DashboardDefinition[]
+  dashboardWidgets                DashboardWidget[]
+  biConnectorConfigs              BIConnectorConfig[]
+  scheduledReports                ScheduledReport[]
   @@index([subscriptionStatus])
   @@index([createdAt])
   @@index([dataResidencyRegion])
@@ -4825,5 +4832,285 @@ model AIRecommendation {
   @@index([tenantId, status])
   @@index([artifactId])
   @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+enum ReportDefinitionType {
+  DASHBOARD
+  OPERATIONAL
+  FINANCIAL
+  TRUST
+  COMPLIANCE
+  ANALYTICS
+  AI
+  APPROVAL
+  PLATFORM
+  CUSTOM
+}
+
+enum ReportSourceLayer {
+  ANALYTICS
+  DIRECT_QUERY
+  SNAPSHOT
+  HYBRID
+}
+
+enum ReportRunStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+  EXPIRED
+}
+
+enum ReportExportFormat {
+  JSON
+  CSV
+  XLSX
+  PDF
+  POWER_BI
+}
+
+enum ReportExportStatus {
+  PENDING
+  GENERATING
+  READY
+  FAILED
+  EXPIRED
+}
+
+enum ReportDeliveryChannel {
+  DOWNLOAD
+  EMAIL
+  WEBHOOK
+  INTERNAL
+}
+
+enum DashboardVisibility {
+  PRIVATE
+  ROLE
+  TENANT
+  PLATFORM
+}
+
+enum BIConnectorType {
+  POWER_BI
+  GENERIC_API
+  WEBHOOK
+  DATA_EXPORT
+}
+
+enum ScheduleFrequency {
+  HOURLY
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  CUSTOM
+}
+
+model ReportDefinition {
+  id                String               @id @default(cuid())
+  tenantId          String
+  key               String
+  name              String
+  description       String?
+  type              ReportDefinitionType @default(OPERATIONAL)
+  sourceLayer       ReportSourceLayer    @default(HYBRID)
+  defaultFormat     ReportExportFormat   @default(JSON)
+  isSystem          Boolean              @default(false)
+  isActive          Boolean              @default(true)
+  config            Json?
+  filterSchema      Json?
+  columnSchema      Json?
+  tags              Json?
+  metadata          Json?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  tenant           Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reportRuns       ReportRun[]
+  reportExports    ReportExport[]
+  scheduledReports ScheduledReport[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@index([tenantId, type])
+  @@index([tenantId, isActive])
+  @@index([tenantId, sourceLayer])
+  @@index([createdAt])
+}
+
+model ReportRun {
+  id                 String            @id @default(cuid())
+  tenantId           String
+  reportDefinitionId String
+  status             ReportRunStatus   @default(QUEUED)
+  sourceLayer        ReportSourceLayer @default(HYBRID)
+  triggeredByUserId  String?
+  parameters         Json?
+  resultSummary      Json?
+  snapshotRefType    String?
+  snapshotRefId      String?
+  rowCount           Int?
+  startedAt          DateTime?
+  completedAt        DateTime?
+  errorMessage       String?
+  metadata           Json?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reportDefinition ReportDefinition @relation(fields: [reportDefinitionId], references: [id], onDelete: Cascade)
+  reportExports    ReportExport[]
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([reportDefinitionId])
+  @@index([triggeredByUserId])
+  @@index([snapshotRefType, snapshotRefId])
+  @@index([createdAt])
+}
+
+model ReportExport {
+  id                 String               @id @default(cuid())
+  tenantId           String
+  reportDefinitionId String
+  reportRunId        String?
+  status             ReportExportStatus   @default(PENDING)
+  format             ReportExportFormat   @default(JSON)
+  deliveryChannel    ReportDeliveryChannel @default(DOWNLOAD)
+  fileName           String?
+  mimeType           String?
+  storageKey         String?
+  checksum           String?
+  byteSize           Int?
+  downloadUrl        String?
+  expiresAt          DateTime?
+  deliveredAt        DateTime?
+  errorMessage       String?
+  metadata           Json?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reportDefinition ReportDefinition @relation(fields: [reportDefinitionId], references: [id], onDelete: Cascade)
+  reportRun        ReportRun?       @relation(fields: [reportRunId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, format])
+  @@index([reportDefinitionId])
+  @@index([reportRunId])
+  @@index([expiresAt])
+  @@index([createdAt])
+}
+
+model DashboardDefinition {
+  id                String              @id @default(cuid())
+  tenantId          String
+  key               String
+  name              String
+  description       String?
+  visibility        DashboardVisibility @default(TENANT)
+  isSystem          Boolean             @default(false)
+  isActive          Boolean             @default(true)
+  layout            Json?
+  filters           Json?
+  metadata          Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  tenant  Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  widgets DashboardWidget[]
+
+  @@unique([tenantId, key])
+  @@index([tenantId])
+  @@index([tenantId, visibility])
+  @@index([tenantId, isActive])
+  @@index([createdAt])
+}
+
+model DashboardWidget {
+  id                    String   @id @default(cuid())
+  tenantId              String
+  dashboardDefinitionId String
+  key                   String
+  title                 String
+  widgetType            String
+  dataSource            String?
+  config                Json?
+  position              Json?
+  visibilityRules       Json?
+  refreshIntervalSec    Int?
+  isActive              Boolean  @default(true)
+  metadata              Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tenant              Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  dashboardDefinition DashboardDefinition @relation(fields: [dashboardDefinitionId], references: [id], onDelete: Cascade)
+
+  @@unique([dashboardDefinitionId, key])
+  @@index([tenantId])
+  @@index([dashboardDefinitionId])
+  @@index([tenantId, isActive])
+  @@index([createdAt])
+}
+
+model BIConnectorConfig {
+  id            String          @id @default(cuid())
+  tenantId      String
+  connectorType BIConnectorType
+  name          String
+  isEnabled     Boolean         @default(false)
+  endpointUrl   String?
+  workspaceId   String?
+  datasetId     String?
+  credentialsRef String?
+  config        Json?
+  metadata      Json?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([tenantId, connectorType])
+  @@index([tenantId, isEnabled])
+  @@index([createdAt])
+}
+
+model ScheduledReport {
+  id                 String                @id @default(cuid())
+  tenantId           String
+  reportDefinitionId String
+  name               String
+  frequency          ScheduleFrequency
+  cronExpression     String?
+  timezone           String?
+  format             ReportExportFormat    @default(JSON)
+  deliveryChannel    ReportDeliveryChannel @default(DOWNLOAD)
+  isEnabled          Boolean               @default(true)
+  recipients         Json?
+  parameters         Json?
+  nextRunAt          DateTime?
+  lastRunAt          DateTime?
+  createdByUserId    String?
+  metadata           Json?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  tenant           Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  reportDefinition ReportDefinition @relation(fields: [reportDefinitionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenantId, frequency])
+  @@index([tenantId, isEnabled])
+  @@index([reportDefinitionId])
+  @@index([nextRunAt])
   @@index([createdAt])
 }

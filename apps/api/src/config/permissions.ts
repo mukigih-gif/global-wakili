@@ -302,6 +302,22 @@ export const PERMISSIONS = {
     manageInsights: define('analytics', 'manage_insights', 'Create and manage analytics insights'),
   },
 
+  reporting: {
+    viewOverview: define('reporting', 'view_overview', 'View reporting overview'),
+    viewDefinitions: define('reporting', 'view_definitions', 'View report definitions'),
+    manageDefinitions: define('reporting', 'manage_definitions', 'Manage report definitions'),
+    viewDashboards: define('reporting', 'view_dashboards', 'View reporting dashboards'),
+    manageDashboards: define('reporting', 'manage_dashboards', 'Manage reporting dashboards'),
+    viewRuns: define('reporting', 'view_runs', 'View report runs'),
+    runReports: define('reporting', 'run_reports', 'Run reports'),
+    viewExports: define('reporting', 'view_exports', 'View report exports'),
+    exportReports: define('reporting', 'export_reports', 'Create report exports'),
+    viewSchedules: define('reporting', 'view_schedules', 'View scheduled reports'),
+    manageSchedules: define('reporting', 'manage_schedules', 'Manage scheduled reports'),
+    viewBIConnectors: define('reporting', 'view_bi_connectors', 'View BI connector configurations'),
+    manageBIConnectors: define('reporting', 'manage_bi_connectors', 'Manage BI connector configurations'),
+  },
+
   admin: {
     manageUsers: define('admin', 'manage_users', 'Manage users'),
     manageRoles: define('admin', 'manage_roles', 'Manage roles'),
