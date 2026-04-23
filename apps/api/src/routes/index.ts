@@ -22,6 +22,7 @@ import aiRoutes from '../modules/ai/ai.routes';
 import complianceRoutes from '../modules/compliance/compliance.routes';
 import notificationRoutes from '../modules/notifications/notification.routes';
 import queueRoutes from '../modules/queues/queue.routes';
+import analyticsRoutes from '../modules/analytics/analytics.routes';
 
 const router = Router();
 
@@ -66,6 +67,7 @@ router.use('/queues', queueRoutes);
 router.use('/queue', queueRoutes);
 router.use('/jobs', queueRoutes);
 router.use('/integrations', integrationRoutes);
+router.use('/analytics', analyticsRoutes);
 router.use('/dashboards', dashboardRoutes);
 router.use('/ai', aiRoutes);
 

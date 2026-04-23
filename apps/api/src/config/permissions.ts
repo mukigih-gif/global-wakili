@@ -255,6 +255,21 @@ export const PERMISSIONS = {
     ),
   },
 
+    analytics: {
+    viewOverview: define('analytics', 'view_overview', 'View analytics overview'),
+    viewClientAnalytics: define('analytics', 'view_client_analytics', 'View client analytics'),
+    viewMatterAnalytics: define('analytics', 'view_matter_analytics', 'View matter analytics'),
+    viewBillingAnalytics: define('analytics', 'view_billing_analytics', 'View billing analytics'),
+    viewTrustAnalytics: define('analytics', 'view_trust_analytics', 'View trust analytics'),
+    viewProductivityAnalytics: define('analytics', 'view_productivity_analytics', 'View productivity analytics'),
+    viewComplianceAnalytics: define('analytics', 'view_compliance_analytics', 'View compliance analytics'),
+    viewOperationsAnalytics: define('analytics', 'view_operations_analytics', 'View operations analytics'),
+    viewKpis: define('analytics', 'view_kpis', 'View analytics KPIs and persisted analytics data'),
+    manageMetrics: define('analytics', 'manage_metrics', 'Create and manage analytics metrics'),
+    manageSnapshots: define('analytics', 'manage_snapshots', 'Create and manage analytics snapshots'),
+    manageInsights: define('analytics', 'manage_insights', 'Create and manage analytics insights'),
+  },
+
   admin: {
     manageUsers: define('admin', 'manage_users', 'Manage users'),
     manageRoles: define('admin', 'manage_roles', 'Manage roles'),
