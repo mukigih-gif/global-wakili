@@ -1,80 +1,170 @@
 // apps/api/src/modules/ai/ai.routes.ts
 
 import { Router, type Request, type Response } from 'express';
+import { PERMISSIONS } from '../../config/permissions';
+import { requirePermissions } from '../../middleware/rbac';
+import { validate } from '../../middleware/validate';
+import {
+  aiArtifactSearchQuerySchema,
+  aiBillingInsightSchema,
+  aiClientIntakeAssistantSchema,
+  aiContractReviewSchema,
+  aiDeadlineIntelligenceSchema,
+  aiDocumentAnalysisSchema,
+  aiKnowledgeBaseQuerySchema,
+  aiLegalResearchSchema,
+  aiMatterRiskSchema,
+  aiProviderConfigUpsertSchema,
+  aiTrustComplianceAlertSchema,
+  aiUsageSearchQuerySchema,
+  aiDraftingAssistantSchema,
+} from './ai.validators';
+import {
+  executeBillingInsights,
+  executeClientIntakeAssistant,
+  executeContractReview,
+  executeDeadlineIntelligence,
+  executeDocumentAnalysis,
+  executeDraftingAssistant,
+  executeKnowledgeBase,
+  executeLegalResearch,
+  executeMatterRisk,
+  executeTrustComplianceAlerts,
+  getAICapabilities,
+  getAIHealth,
+  getAIHub,
+  getAIProviderConfigs,
+  getAIProviders,
+  getAIScopeHealth,
+  searchAIArtifacts,
+  searchAIUsageLogs,
+  upsertAIProviderConfig,
+} from './ai.controller';
 
 const router = Router();
 
-const plannedAiScopes = [
-  'legal-research',
-  'document-analysis',
-  'contract-review',
-  'matter-risk',
-  'deadline-intelligence',
-  'billing-insights',
-  'trust-compliance-alerts',
-  'client-intake-assistant',
-  'drafting-assistant',
-  'knowledge-base',
-] as const;
+router.get('/health', getAIHealth);
 
-router.get('/health', (req: Request, res: Response) => {
-  res.status(200).json({
-    success: true,
-    module: 'ai',
-    status: 'mounted',
-    service: 'global-wakili-api',
-    lifecycle: 'ai-hub-mounted-pending-final-module-generation',
-    requestId: req.id,
-    timestamp: new Date().toISOString(),
-  });
-});
+router.get(
+  '/',
+  requirePermissions(PERMISSIONS.ai.viewHub),
+  getAIHub,
+);
 
-router.get('/', (req: Request, res: Response) => {
-  res.status(200).json({
-    success: true,
-    module: 'ai',
-    status: 'available',
-    message:
-      'AI hub route is mounted. Full legal AI, document intelligence, matter risk, drafting, research, and compliance workflows are pending final module generation.',
-    plannedScopes: plannedAiScopes,
-    architectureNotes: [
-      'AI workflows must remain tenant-scoped and permission-controlled.',
-      'Legal AI outputs should be auditable and marked as assistant-generated.',
-      'Sensitive client/matter data must not be sent to external providers without policy controls.',
-      'Final AI services should integrate with document, matter, calendar, billing, trust, and compliance modules.',
-      'Future implementation should support provider abstraction, usage logs, prompt audit, and human review workflows.',
-    ],
-    requestId: req.id,
-    timestamp: new Date().toISOString(),
-  });
-});
+router.get(
+  '/capabilities',
+  requirePermissions(PERMISSIONS.ai.viewHub),
+  getAICapabilities,
+);
 
-router.get('/:scope/health', (req: Request, res: Response) => {
-  const scope = req.params.scope;
+router.get(
+  '/providers',
+  requirePermissions(PERMISSIONS.ai.viewHub),
+  getAIProviders,
+);
 
-  if (!plannedAiScopes.includes(scope as any)) {
-    return res.status(404).json({
-      success: false,
-      module: 'ai',
-      error: 'Unknown AI scope',
-      code: 'UNKNOWN_AI_SCOPE',
-      scope,
-      allowedScopes: plannedAiScopes,
-      requestId: req.id,
-      timestamp: new Date().toISOString(),
-    });
-  }
+router.get(
+  '/providers/configs',
+  requirePermissions(PERMISSIONS.ai.manageProviders),
+  getAIProviderConfigs,
+);
 
-  return res.status(200).json({
-    success: true,
-    module: 'ai',
-    scope,
-    status: 'scope-reserved',
-    message: `The ${scope} AI scope is reserved and will be wired during AI module finalization.`,
-    requestId: req.id,
-    timestamp: new Date().toISOString(),
-  });
-});
+router.post(
+  '/providers/configs',
+  requirePermissions(PERMISSIONS.ai.manageProviders),
+  validate({ body: aiProviderConfigUpsertSchema }),
+  upsertAIProviderConfig,
+);
+
+router.get(
+  '/artifacts/search',
+  requirePermissions(PERMISSIONS.ai.viewUsage),
+  validate({ query: aiArtifactSearchQuerySchema }),
+  searchAIArtifacts,
+);
+
+router.get(
+  '/usage/search',
+  requirePermissions(PERMISSIONS.ai.viewUsage),
+  validate({ query: aiUsageSearchQuerySchema }),
+  searchAIUsageLogs,
+);
+
+router.post(
+  '/document-analysis',
+  requirePermissions(PERMISSIONS.ai.executeDocumentAnalysis),
+  validate({ body: aiDocumentAnalysisSchema }),
+  executeDocumentAnalysis,
+);
+
+router.post(
+  '/contract-review',
+  requirePermissions(PERMISSIONS.ai.executeContractReview),
+  validate({ body: aiContractReviewSchema }),
+  executeContractReview,
+);
+
+router.post(
+  '/matter-risk',
+  requirePermissions(PERMISSIONS.ai.executeMatterRisk),
+  validate({ body: aiMatterRiskSchema }),
+  executeMatterRisk,
+);
+
+router.post(
+  '/deadline-intelligence',
+  requirePermissions(PERMISSIONS.ai.executeDeadlineIntelligence),
+  validate({ body: aiDeadlineIntelligenceSchema }),
+  executeDeadlineIntelligence,
+);
+
+router.post(
+  '/billing-insights',
+  requirePermissions(PERMISSIONS.ai.executeBillingInsights),
+  validate({ body: aiBillingInsightSchema }),
+  executeBillingInsights,
+);
+
+router.post(
+  '/trust-compliance-alerts',
+  requirePermissions(PERMISSIONS.ai.executeTrustComplianceAlerts),
+  validate({ body: aiTrustComplianceAlertSchema }),
+  executeTrustComplianceAlerts,
+);
+
+router.post(
+  '/client-intake-assistant',
+  requirePermissions(PERMISSIONS.ai.executeClientIntakeAssistant),
+  validate({ body: aiClientIntakeAssistantSchema }),
+  executeClientIntakeAssistant,
+);
+
+router.post(
+  '/drafting-assistant',
+  requirePermissions(PERMISSIONS.ai.executeDraftingAssistant),
+  validate({ body: aiDraftingAssistantSchema }),
+  executeDraftingAssistant,
+);
+
+router.post(
+  '/knowledge-base',
+  requirePermissions(PERMISSIONS.ai.executeKnowledgeBase),
+  validate({ body: aiKnowledgeBaseQuerySchema }),
+  executeKnowledgeBase,
+);
+
+router.post(
+  '/legal-research',
+  requirePermissions(PERMISSIONS.ai.executeLegalResearch),
+  validate({ body: aiLegalResearchSchema }),
+  executeLegalResearch,
+);
+
+router.get(
+  '/:scope/health',
+  requirePermissions(PERMISSIONS.ai.viewHub),
+  getAIScopeHealth,
+);
 
 router.use((req: Request, res: Response) => {
   res.status(404).json({
@@ -83,7 +173,6 @@ router.use((req: Request, res: Response) => {
     error: 'AI route not found',
     code: 'AI_ROUTE_NOT_FOUND',
     path: req.originalUrl,
-    plannedScopes: plannedAiScopes,
     requestId: req.id,
     timestamp: new Date().toISOString(),
   });

@@ -49,6 +49,23 @@ export const PERMISSIONS = {
     viewDashboard: define('approval', 'view_dashboard', 'View approval dashboard'),
   },
 
+  ai: {
+    viewHub: define('ai', 'view_hub', 'View AI hub and capabilities'),
+    viewUsage: define('ai', 'view_usage', 'View AI usage logs and artifacts'),
+    manageProviders: define('ai', 'manage_providers', 'Manage AI provider configuration'),
+    reviewOutputs: define('ai', 'review_outputs', 'Review AI-generated outputs'),
+    executeLegalResearch: define('ai', 'execute_legal_research', 'Execute legal research AI workflows'),
+    executeDocumentAnalysis: define('ai', 'execute_document_analysis', 'Execute document analysis AI workflows'),
+    executeContractReview: define('ai', 'execute_contract_review', 'Execute contract review AI workflows'),
+    executeMatterRisk: define('ai', 'execute_matter_risk', 'Execute matter risk AI workflows'),
+    executeDeadlineIntelligence: define('ai', 'execute_deadline_intelligence', 'Execute deadline intelligence AI workflows'),
+    executeBillingInsights: define('ai', 'execute_billing_insights', 'Execute billing insight AI workflows'),
+    executeTrustComplianceAlerts: define('ai', 'execute_trust_compliance_alerts', 'Execute trust and compliance AI alert workflows'),
+    executeClientIntakeAssistant: define('ai', 'execute_client_intake_assistant', 'Execute client intake assistant AI workflows'),
+    executeDraftingAssistant: define('ai', 'execute_drafting_assistant', 'Execute drafting assistant AI workflows'),
+    executeKnowledgeBase: define('ai', 'execute_knowledge_base', 'Execute AI knowledge-base workflows'),
+  },
+
   billing: {
     viewInvoice: define('billing', 'view_invoice', 'View billing invoices'),
     createInvoice: define('billing', 'create_invoice', 'Create billing invoices'),

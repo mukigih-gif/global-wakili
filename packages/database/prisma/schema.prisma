@@ -161,6 +161,12 @@ model Tenant {
   analyticsSnapshots            AnalyticsSnapshot[]
   analyticsInsights             AnalyticsInsight[]
 
+  aiProviderConfigs                AIProviderConfig[]
+  aiPromptAudits                   AIPromptAudit[]
+  aiUsageLogs                      AIUsageLog[]
+  aiArtifacts                      AIArtifact[]
+  aiReviewTasks                    AIReviewTask[]
+  aiRecommendations                AIRecommendation[]
   @@index([subscriptionStatus])
   @@index([createdAt])
   @@index([dataResidencyRegion])
@@ -4560,4 +4566,264 @@ enum ApprovalPriority {
   NORMAL
   HIGH
   CRITICAL
+}
+
+enum AIProvider {
+  OPENAI
+  AZURE_OPENAI
+  ANTHROPIC
+  GOOGLE_GEMINI
+  AWS_BEDROCK
+  INTERNAL_RULES
+  OCR_ONLY
+}
+
+enum AITaskType {
+  DOCUMENT_ANALYSIS
+  LEGAL_RESEARCH
+  CONTRACT_REVIEW
+  MATTER_RISK
+  DEADLINE_INTELLIGENCE
+  BILLING_INSIGHT
+  TRUST_COMPLIANCE_ALERT
+  CLIENT_INTAKE_ASSISTANT
+  DRAFTING_ASSISTANT
+  KNOWLEDGE_BASE
+  EXTRACTION
+  SUMMARIZATION
+  RECOMMENDATION
+}
+
+enum AIExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  BLOCKED
+  CANCELLED
+  REVIEW_REQUIRED
+}
+
+enum AIArtifactStatus {
+  DRAFT
+  GENERATED
+  REVIEW_REQUIRED
+  APPROVED
+  REJECTED
+  ARCHIVED
+}
+
+enum AIReviewStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  ESCALATED
+}
+
+enum AIRecommendationStatus {
+  OPEN
+  ACCEPTED
+  REJECTED
+  DISMISSED
+  EXPIRED
+}
+
+enum AIDataSensitivity {
+  PUBLIC
+  INTERNAL
+  CONFIDENTIAL
+  PRIVILEGED
+  HIGHLY_RESTRICTED
+}
+
+model AIProviderConfig {
+  id                  String    @id @default(cuid())
+  tenantId            String
+  provider            AIProvider
+  isEnabled           Boolean   @default(false)
+  defaultModel        String?
+  endpointUrl         String?
+  apiKeyRef           String?
+  humanReviewRequired Boolean   @default(true)
+  redactionRequired   Boolean   @default(true)
+  usageCapDaily       Int?
+  usageCapMonthly     Int?
+  allowedScopes       Json?
+  blockedScopes       Json?
+  metadata            Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider])
+  @@index([tenantId])
+  @@index([tenantId, isEnabled])
+}
+
+model AIPromptAudit {
+  id                String            @id @default(cuid())
+  tenantId          String
+  provider          AIProvider
+  taskType          AITaskType
+  executionStatus   AIExecutionStatus @default(PENDING)
+  sensitivity       AIDataSensitivity @default(CONFIDENTIAL)
+  promptTemplateKey String?
+  systemPrompt      String?
+  userPrompt        String?
+  redactedInput     Json?
+  outputPreview     Json?
+  requesterUserId   String?
+  entityType        String?
+  entityId          String?
+  queueJobId        String?
+  metadata          Json?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  usageLogs          AIUsageLog[]
+  artifacts          AIArtifact[]
+  @@index([tenantId])
+  @@index([tenantId, provider])
+  @@index([tenantId, taskType])
+  @@index([tenantId, executionStatus])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model AIUsageLog {
+  id               String            @id @default(cuid())
+  tenantId         String
+  provider         AIProvider
+  taskType         AITaskType
+  status           AIExecutionStatus @default(PENDING)
+  sensitivity      AIDataSensitivity @default(CONFIDENTIAL)
+  requesterUserId  String?
+  reviewerUserId   String?
+  entityType       String?
+  entityId         String?
+  promptAuditId    String?
+  queueJobId       String?
+  providerRequestId String?
+  modelName        String?
+  inputTokens      Int?
+  outputTokens     Int?
+  totalTokens      Int?
+  estimatedCost    Decimal?          @db.Decimal(14, 4)
+  latencyMs        Int?
+  redactionApplied Boolean           @default(false)
+  blockedReason    String?
+  errorMessage     String?
+  metadata         Json?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  promptAudit AIPromptAudit? @relation(fields: [promptAuditId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, provider])
+  @@index([tenantId, taskType])
+  @@index([tenantId, status])
+  @@index([promptAuditId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model AIArtifact {
+  id                  String            @id @default(cuid())
+  tenantId            String
+  taskType            AITaskType
+  status              AIArtifactStatus  @default(GENERATED)
+  sensitivity         AIDataSensitivity @default(CONFIDENTIAL)
+  entityType          String?
+  entityId            String?
+  title               String?
+  content             Json
+  summary             String?
+  promptAuditId       String?
+  requiresHumanReview Boolean           @default(true)
+  reviewedByUserId    String?
+  reviewedAt          DateTime?
+  queueJobId          String?
+  metadata            Json?
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  promptAudit AIPromptAudit? @relation(fields: [promptAuditId], references: [id], onDelete: SetNull)
+
+  reviewTasks        AIReviewTask[]
+  recommendations    AIRecommendation[]
+  @@index([tenantId])
+  @@index([tenantId, taskType])
+  @@index([tenantId, status])
+  @@index([promptAuditId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
+}
+
+model AIReviewTask {
+  id               String          @id @default(cuid())
+  tenantId         String
+  artifactId       String?
+  taskType         AITaskType
+  status           AIReviewStatus  @default(PENDING)
+  priority         ApprovalPriority @default(NORMAL)
+  entityType       String?
+  entityId         String?
+  assignedReviewerId String?
+  reason           String?
+  decisionReason   String?
+  dueAt            DateTime?
+  resolvedAt       DateTime?
+  metadata         Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  artifact AIArtifact? @relation(fields: [artifactId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([tenantId, taskType])
+  @@index([artifactId])
+  @@index([assignedReviewerId])
+  @@index([dueAt])
+  @@index([createdAt])
+}
+
+model AIRecommendation {
+  id                  String                 @id @default(cuid())
+  tenantId            String
+  taskType            AITaskType
+  status              AIRecommendationStatus @default(OPEN)
+  sensitivity         AIDataSensitivity      @default(CONFIDENTIAL)
+  entityType          String?
+  entityId            String?
+  category            String
+  title               String
+  summary             String
+  recommendation      Json
+  confidence          Decimal?               @db.Decimal(5, 4)
+  requiresHumanReview Boolean                @default(true)
+  artifactId          String?
+  metadata            Json?
+  createdAt           DateTime               @default(now())
+  updatedAt           DateTime               @updatedAt
+
+  tenant   Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  artifact AIArtifact? @relation(fields: [artifactId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, taskType])
+  @@index([tenantId, status])
+  @@index([artifactId])
+  @@index([entityType, entityId])
+  @@index([createdAt])
 }
