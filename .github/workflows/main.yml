@@ -1,0 +1,9 @@
+jobs:
+  validate-env:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Environment Template
+        run: |
+          # Check if .env.example exists and matches required keys
+          if [ ! -f .env.example ]; then echo "Missing .env.example template"; exit 1; fi

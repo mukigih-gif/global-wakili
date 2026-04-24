@@ -2,22 +2,29 @@
   "name": "global-wakili-root",
   "version": "1.0.0",
   "private": true,
-  "description": "Enterprise Legal Matter Management Root",
+  "description": "Global Wakili Enterprise Legal Matter Management Root",
   "workspaces": [
     "apps/*",
     "packages/*"
   ],
   "scripts": {
-    "dev:api": "pnpm --filter api dev",
-    "dev:web": "pnpm --filter web dev",
-    "db:pull": "npx prisma db pull --schema=packages/database/prisma/schema.prisma --config=packages/database/prisma/prisma.config.ts",
-    "db:push": "npx prisma db push --schema=packages/database/prisma/schema.prisma --config=packages/database/prisma/prisma.config.ts",
-    "db:gen": "npx prisma generate --schema=packages/database/prisma/schema.prisma",
-    "db:migrate": "npx prisma migrate dev --schema=packages/database/prisma/schema.prisma --config=packages/database/prisma/prisma.config.ts"
+  "dev:api": "npm run dev --workspace=apps/api",
+  "dev:web": "npm run dev --workspace=apps/web",
+
+  "db:format": "prisma format --config ./prisma.config.ts",
+  "db:validate": "prisma validate --config ./prisma.config.ts",
+  "db:gen": "prisma generate --config ./prisma.config.ts",
+  "db:status": "prisma migrate status --config ./prisma.config.ts",
+  "db:deploy": "prisma migrate deploy --config ./prisma.config.ts",
+  "db:reset": "prisma migrate reset --config ./prisma.config.ts",
+  "db:seed": "prisma db seed --config ./prisma.config.ts",
+
+  "db:pull": "prisma db pull --config ./prisma.config.ts",
+  "db:push": "prisma db push --config ./prisma.config.ts"
   },
   "dependencies": {
-    "@prisma/adapter-pg": "^7.6.0",
-    "@prisma/client": "^7.6.0",
+    "@prisma/adapter-pg": "^7.7.0",
+    "@prisma/client": "^7.7.0",
     "bcryptjs": "^3.0.3",
     "dotenv": "^17.3.1",
     "zod": "^3.22.0"
@@ -29,8 +36,9 @@
     "dotenv-cli": "^11.0.0",
     "fs-extra": "^11.3.4",
     "pg": "^8.20.0",
-    "prisma": "^7.6.0",
+    "prisma": "^7.7.0",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^5.3.3"
   }
 }

@@ -1,58 +1,67 @@
 import http from 'http';
-import app from './app';
-import { connectPrisma, disconnectPrisma } from '@wakili/database';
 
-const PORT = Number(process.env.PORT || 4000);
+import app from './app';
+import { env } from './config/env';
+import { connectPrisma, disconnectPrisma } from '@global-wakili/database';
+import { connectRedis, disconnectRedis } from './config/redis';
+
 const SHUTDOWN_TIMEOUT_MS = 30_000;
 
-async function bootstrap() {
-  try {
-    await connectPrisma();
-    console.info('✔ Database connection established');
+async function bootstrap(): Promise<void> {
+  await connectPrisma();
+  await connectRedis();
 
-    const server = http.createServer(app);
+  const server = http.createServer(app);
 
-    server.listen(PORT, () => {
-      console.info(`✔ API Server running on http://localhost:${PORT}`);
-    });
+  server.listen(env.PORT, () => {
+    console.info(`✔ Global Wakili API listening on port ${env.PORT}`);
+  });
 
-    const shutdown = async (signal?: string) => {
-      console.info(`Received ${signal ?? 'shutdown'} - closing server`);
-      server.close(async (err) => {
-        if (err) {
-          console.error('Error while closing server', err);
-          process.exit(1);
-        }
-        try {
-          await disconnectPrisma();
-          console.info('✔ Database disconnected. Process terminated.');
-          process.exit(0);
-        } catch (e) {
-          console.error('Error during disconnectPrisma', e);
-          process.exit(1);
-        }
-      });
+  const gracefulShutdown = async (signal: string): Promise<void> => {
+    console.info(`${signal} received. Commencing graceful shutdown.`);
 
-      setTimeout(() => {
-        console.warn('Forcing shutdown after timeout');
+    server.close(async (serverError) => {
+      if (serverError) {
+        console.error('HTTP server close failed', serverError);
         process.exit(1);
-      }, SHUTDOWN_TIMEOUT_MS).unref();
-    };
+      }
 
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT', () => shutdown('SIGINT'));
-    process.on('uncaughtException', (err) => {
-      console.error('Uncaught exception, shutting down', err);
-      shutdown('uncaughtException');
+      try {
+        await Promise.allSettled([disconnectRedis(), disconnectPrisma()]);
+        console.info('✔ Infrastructure disconnected. Shutdown complete.');
+        process.exit(0);
+      } catch (disconnectError) {
+        console.error('Shutdown disconnect failed', disconnectError);
+        process.exit(1);
+      }
     });
-    process.on('unhandledRejection', (reason) => {
-      console.error('Unhandled rejection, shutting down', reason);
-      shutdown('unhandledRejection');
-    });
-  } catch (error) {
-    console.error('✘ Failed to start server:', error);
-    process.exit(1);
-  }
+
+    setTimeout(() => {
+      console.error('Graceful shutdown timeout exceeded. Forcing exit.');
+      process.exit(1);
+    }, SHUTDOWN_TIMEOUT_MS).unref();
+  };
+
+  process.on('SIGTERM', () => {
+    void gracefulShutdown('SIGTERM');
+  });
+
+  process.on('SIGINT', () => {
+    void gracefulShutdown('SIGINT');
+  });
+
+  process.on('uncaughtException', (error) => {
+    console.error('Uncaught exception', error);
+    void gracefulShutdown('uncaughtException');
+  });
+
+  process.on('unhandledRejection', (reason) => {
+    console.error('Unhandled rejection', reason);
+    void gracefulShutdown('unhandledRejection');
+  });
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  console.error('✘ Failed to bootstrap application', error);
+  process.exit(1);
+});

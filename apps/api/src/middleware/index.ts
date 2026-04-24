@@ -1,19 +1,19 @@
-import { Express } from 'express';
-import correlationId from './correlationId';
-import requestLogger from './requestLogger';
-import { authMiddleware } from './auth';
-import rbacMiddleware from './rbac';
-import rateLimiter from './rateLimiter';
-import { validationMiddleware } from './validation';
-import { errorHandler, notFoundHandler } from './errorHandler';
+import type { Express } from 'express';
+import { requestContext } from './request-context';
+import { requestLogger } from './request-logger';
+import { rateLimiter } from './rate-limit';
+import { rbac } from './rbac';
 
-export function registerMiddlewares(app: Express) {
-  app.use(correlationId());
+export function registerMiddlewares(app: Express): void {
+  app.use(requestContext);
   app.use(requestLogger());
   app.use(rateLimiter());
-  app.use(validationMiddleware());
-  app.use(authMiddleware);
-  app.use(rbacMiddleware);
+  app.use(rbac());
 }
 
-export { errorHandler, notFoundHandler };
+export * from './request-context';
+export * from './request-logger';
+export * from './rate-limit';
+export * from './rbac';
+export * from './unified-tenancy';
+export * from './global-error-handler';
