@@ -24,6 +24,8 @@ import queueRoutes from '../modules/queues/queue.routes';
 import analyticsRoutes from '../modules/analytics/analytics.routes';
 import approvalRoutes from '../modules/approval/approval.routes';
 import reportingRoutes from '../modules/reporting/reporting.routes';
+import platformRoutes from '../modules/platform/platform.routes';
+import payrollRoutes from '../modules/payroll/payroll.routes';
 
 const router = Router();
 
@@ -72,6 +74,10 @@ router.use('/analytics', analyticsRoutes);
 router.use('/approvals', approvalRoutes);
 router.use('/approval', approvalRoutes);
 router.use('/reporting', reportingRoutes);
+router.use('/hr', payrollRoutes);
+router.use('/human-resources', payrollRoutes);
 router.use('/ai', aiRoutes);
+router.use('/platform', platformRoutes);
 
 export default router;
+

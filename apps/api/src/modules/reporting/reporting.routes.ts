@@ -4,6 +4,9 @@ import { Router } from 'express';
 import { PERMISSIONS } from '../../config/permissions';
 import { requirePermissions } from '../../middleware/rbac';
 import { validate } from '../../middleware/validate';
+import { bindPlatformModuleEnforcement } from '../../middleware/platform';
+import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
+import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 import {
   biConnectorSearchQuerySchema,
   biConnectorUpsertSchema,
@@ -42,6 +45,21 @@ import {
 } from './reporting.controller';
 
 const router = Router();
+
+bindPlatformModuleEnforcement(router, {
+  moduleKey: 'reporting',
+  metricType: 'API_REQUESTS',
+});
+
+const reportingBIConnectorsFeature = platformFeatureFlag(
+  PLATFORM_FEATURE_KEYS.REPORTING_BI_CONNECTORS,
+  'reporting',
+);
+
+const reportingAdvancedSchedulingFeature = platformFeatureFlag(
+  PLATFORM_FEATURE_KEYS.REPORTING_ADVANCED_SCHEDULING,
+  'reporting',
+);
 
 router.get('/health', getReportingHealth);
 
@@ -135,6 +153,7 @@ router.post(
 
 router.get(
   '/schedules/search',
+  reportingAdvancedSchedulingFeature,
   requirePermissions(PERMISSIONS.reporting.viewSchedules),
   validate({ query: scheduledReportSearchQuerySchema }),
   searchScheduledReports,
@@ -142,6 +161,7 @@ router.get(
 
 router.post(
   '/schedules',
+  reportingAdvancedSchedulingFeature,
   requirePermissions(PERMISSIONS.reporting.manageSchedules),
   validate({ body: scheduledReportUpsertSchema }),
   upsertScheduledReport,
@@ -149,6 +169,7 @@ router.post(
 
 router.get(
   '/bi-connectors/search',
+  reportingBIConnectorsFeature,
   requirePermissions(PERMISSIONS.reporting.viewBIConnectors),
   validate({ query: biConnectorSearchQuerySchema }),
   searchBIConnectors,
@@ -156,6 +177,7 @@ router.get(
 
 router.post(
   '/bi-connectors',
+  reportingBIConnectorsFeature,
   requirePermissions(PERMISSIONS.reporting.manageBIConnectors),
   validate({ body: biConnectorUpsertSchema }),
   upsertBIConnector,

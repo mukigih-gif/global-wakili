@@ -41,12 +41,26 @@ import {
   upsertAIProviderConfig,
 } from './ai.controller';
 
+import { bindPlatformModuleEnforcement } from '../../middleware/platform';
+import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
+import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 const router = Router();
+
+bindPlatformModuleEnforcement(router, {
+  moduleKey: 'ai',
+  metricType: 'API_REQUESTS',
+});
+
+const aiTenantWorkflowsFeature = platformFeatureFlag(
+  PLATFORM_FEATURE_KEYS.AI_TENANT_WORKFLOWS,
+  'ai',
+);
 
 router.get('/health', getAIHealth);
 
 router.get(
   '/',
+  aiTenantWorkflowsFeature,
   requirePermissions(PERMISSIONS.ai.viewHub),
   getAIHub,
 );
@@ -78,6 +92,7 @@ router.post(
 
 router.get(
   '/artifacts/search',
+  aiTenantWorkflowsFeature,
   requirePermissions(PERMISSIONS.ai.viewUsage),
   validate({ query: aiArtifactSearchQuerySchema }),
   searchAIArtifacts,
@@ -99,6 +114,7 @@ router.post(
 
 router.post(
   '/contract-review',
+  aiTenantWorkflowsFeature,
   requirePermissions(PERMISSIONS.ai.executeContractReview),
   validate({ body: aiContractReviewSchema }),
   executeContractReview,
@@ -134,6 +150,7 @@ router.post(
 
 router.post(
   '/client-intake-assistant',
+  aiTenantWorkflowsFeature,
   requirePermissions(PERMISSIONS.ai.executeClientIntakeAssistant),
   validate({ body: aiClientIntakeAssistantSchema }),
   executeClientIntakeAssistant,
@@ -141,6 +158,7 @@ router.post(
 
 router.post(
   '/drafting-assistant',
+  aiTenantWorkflowsFeature,
   requirePermissions(PERMISSIONS.ai.executeDraftingAssistant),
   validate({ body: aiDraftingAssistantSchema }),
   executeDraftingAssistant,

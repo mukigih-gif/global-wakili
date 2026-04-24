@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { validate } from '../../middleware/validate';
 import { requirePermissions } from '../../middleware/rbac';
+import { bindPlatformModuleEnforcement } from '../../middleware/platform';
+import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
+import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 import {
   createTrustTransaction,
   emitTrustAlerts,
@@ -25,6 +28,16 @@ import {
 } from './trust.validators';
 
 const router = Router();
+
+bindPlatformModuleEnforcement(router, {
+  moduleKey: 'trust',
+  metricType: 'API_REQUESTS',
+});
+
+const trustStatementExportFeature = platformFeatureFlag(
+  PLATFORM_FEATURE_KEYS.TRUST_STATEMENT_EXPORTS,
+  'trust',
+);
 
 const reconciliationBodySchema = z.object({
   trustAccountId: z.string().trim().min(1),
@@ -116,6 +129,7 @@ router.post(
 
 router.get(
   '/accounts/:trustAccountId/statement',
+  trustStatementExportFeature,
   requirePermissions(['trust.view_statement']),
   validate({ query: statementQuerySchema }),
   getTrustStatement,
@@ -123,6 +137,7 @@ router.get(
 
 router.get(
   '/accounts/:trustAccountId/view',
+  trustStatementExportFeature,
   requirePermissions(['trust.view_statement']),
   validate({ query: accountViewQuerySchema }),
   getTrustAccountView,
@@ -130,6 +145,7 @@ router.get(
 
 router.get(
   '/accounts/:trustAccountId/snapshot',
+  trustStatementExportFeature,
   requirePermissions(['trust.view_reconciliation']),
   validate({ query: snapshotQuerySchema }),
   getTrustAccountSnapshot,

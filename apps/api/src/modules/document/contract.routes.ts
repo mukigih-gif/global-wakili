@@ -18,7 +18,20 @@ import {
   contractVersionCreateSchema,
 } from './contract.validators';
 
+import { bindPlatformModuleEnforcement } from '../../middleware/platform';
+import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
+import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 const router = Router();
+
+bindPlatformModuleEnforcement(router, {
+  moduleKey: 'document',
+  metricType: 'FILE_STORAGE',
+});
+
+const documentSecureFileOpsFeature = platformFeatureFlag(
+  PLATFORM_FEATURE_KEYS.DOCUMENT_SECURE_FILE_OPERATIONS,
+  'document',
+);
 
 const listMatterContractsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
@@ -35,6 +48,7 @@ router.post(
 
 router.patch(
   '/:contractId',
+  documentSecureFileOpsFeature,
   requirePermissions(PERMISSIONS.document.updateContract),
   validate({ body: contractUpdateSchema }),
   updateContract,
@@ -42,6 +56,7 @@ router.patch(
 
 router.get(
   '/:contractId',
+  documentSecureFileOpsFeature,
   requirePermissions(PERMISSIONS.document.viewContract),
   getContractById,
 );
@@ -55,6 +70,7 @@ router.get(
 
 router.post(
   '/:contractId/versions',
+  documentSecureFileOpsFeature,
   requirePermissions(PERMISSIONS.document.versionContract),
   validate({ body: contractVersionCreateSchema.omit({ contractId: true }) }),
   addContractVersion,
@@ -62,12 +78,14 @@ router.post(
 
 router.get(
   '/:contractId/versions/latest',
+  documentSecureFileOpsFeature,
   requirePermissions(PERMISSIONS.document.viewContract),
   getLatestContractVersion,
 );
 
 router.get(
   '/:contractId/versions',
+  documentSecureFileOpsFeature,
   requirePermissions(PERMISSIONS.document.viewContract),
   getContractVersionHistory,
 );

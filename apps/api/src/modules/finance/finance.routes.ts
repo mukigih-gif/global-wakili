@@ -2,7 +2,9 @@
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-
+import { bindPlatformModuleEnforcement } from '../../middleware/platform';
+import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
+import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 import { validate } from '../../middleware/validate';
 
 import {
@@ -44,6 +46,16 @@ import {
 } from './finance.controller';
 
 const router = Router();
+
+bindPlatformModuleEnforcement(router, {
+  moduleKey: 'finance',
+  metricType: 'API_REQUESTS',
+});
+
+const financeExportFeature = platformFeatureFlag(
+  PLATFORM_FEATURE_KEYS.FINANCE_REPORT_EXPORTS,
+  'finance',
+);
 
 const idParamSchema = z.object({
   id: z.string().trim().min(1),
@@ -491,6 +503,7 @@ router.post(
 
 router.post(
   '/reports/export',
+  financeExportFeature,
   requireFinancePermission(FINANCE_PERMISSIONS.exportReports),
   validate({ body: exportReportSchema }),
   exportReport,

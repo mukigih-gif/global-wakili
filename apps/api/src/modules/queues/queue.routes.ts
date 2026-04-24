@@ -28,7 +28,20 @@ import {
   queueSearchQuerySchema,
 } from './queue.validators';
 
+import { bindPlatformModuleEnforcement } from '../../middleware/platform';
+import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
+import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 const router = Router();
+
+bindPlatformModuleEnforcement(router, {
+  moduleKey: 'queues',
+  metricType: 'QUEUE_JOBS',
+});
+
+const queuesOperatorActionsFeature = platformFeatureFlag(
+  PLATFORM_FEATURE_KEYS.QUEUES_OPERATOR_ACTIONS,
+  'queues',
+);
 
 router.get('/health', (req: Request, res: Response) => {
   res.status(200).json({
@@ -125,6 +138,7 @@ router.post(
 
 router.post(
   '/jobs/:jobId/retry',
+  queuesOperatorActionsFeature,
   requirePermissions(PERMISSIONS.queues.retryJob),
   validate({ params: queueJobIdParamSchema }),
   retryQueueJob,

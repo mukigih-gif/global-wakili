@@ -27,7 +27,20 @@ import {
   complianceReviewSchema,
 } from './compliance.validators';
 
+import { bindPlatformModuleEnforcement } from '../../middleware/platform';
+import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
+import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 const router = Router();
+
+bindPlatformModuleEnforcement(router, {
+  moduleKey: 'compliance',
+  metricType: 'API_REQUESTS',
+});
+
+const complianceRegulatoryOpsFeature = platformFeatureFlag(
+  PLATFORM_FEATURE_KEYS.COMPLIANCE_REGULATORY_OPERATIONS,
+  'compliance',
+);
 
 router.get('/health', (req: Request, res: Response) => {
   res.status(200).json({
@@ -56,6 +69,7 @@ router.get(
 
 router.post(
   '/reports',
+  complianceRegulatoryOpsFeature,
   requirePermissions(PERMISSIONS.compliance.createReport),
   validate({ body: complianceReportCreateSchema }),
   createComplianceReport,
@@ -63,6 +77,7 @@ router.post(
 
 router.get(
   '/reports/search',
+  complianceRegulatoryOpsFeature,
   requirePermissions(PERMISSIONS.compliance.searchReport),
   validate({ query: complianceReportSearchQuerySchema }),
   searchComplianceReports,
@@ -90,12 +105,14 @@ router.get(
 
 router.get(
   '/reports/:reportId',
+  complianceRegulatoryOpsFeature,
   requirePermissions(PERMISSIONS.compliance.viewReport),
   getComplianceReport,
 );
 
 router.patch(
   '/reports/:reportId',
+  complianceRegulatoryOpsFeature,
   requirePermissions(PERMISSIONS.compliance.updateReport),
   validate({ body: complianceReportUpdateSchema }),
   updateComplianceReport,
@@ -103,12 +120,14 @@ router.patch(
 
 router.post(
   '/reports/:reportId/goaml/submit',
+  complianceRegulatoryOpsFeature,
   requirePermissions(PERMISSIONS.compliance.submitGoaml),
   submitComplianceReportToGoAML,
 );
 
 router.post(
   '/reports/:reportId/goaml/sync',
+  complianceRegulatoryOpsFeature,
   requirePermissions(PERMISSIONS.compliance.syncGoaml),
   syncComplianceReportGoAMLStatus,
 );

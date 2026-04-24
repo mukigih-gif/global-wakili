@@ -5,7 +5,20 @@ import { BankService } from './banking/bank.service';
 import { NotificationTemplateRegistry } from '../notifications/providers/NotificationTemplateRegistry';
 import { INTEGRATIONS_MODULE_STATUS } from './index';
 
+import { bindPlatformModuleEnforcement } from '../../middleware/platform';
+import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
+import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 const router = Router();
+
+bindPlatformModuleEnforcement(router, {
+  moduleKey: 'integrations',
+  metricType: 'API_REQUESTS',
+});
+
+const integrationsActiveSyncFeature = platformFeatureFlag(
+  PLATFORM_FEATURE_KEYS.INTEGRATIONS_ACTIVE_SYNC,
+  'integrations',
+);
 
 router.get('/health', (req: Request, res: Response) => {
   res.status(200).json({

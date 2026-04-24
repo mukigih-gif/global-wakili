@@ -22,7 +22,20 @@ import {
   restoreDocumentSchema,
 } from './document.validators';
 
+import { bindPlatformModuleEnforcement } from '../../middleware/platform';
+import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
+import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 const router = Router();
+
+bindPlatformModuleEnforcement(router, {
+  moduleKey: 'document',
+  metricType: 'FILE_STORAGE',
+});
+
+const documentSecureFileOpsFeature = platformFeatureFlag(
+  PLATFORM_FEATURE_KEYS.DOCUMENT_SECURE_FILE_OPERATIONS,
+  'document',
+);
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -110,6 +123,7 @@ router.get(
 
 router.get(
   '/:documentId/download',
+  documentSecureFileOpsFeature,
   requirePermissions(PERMISSIONS.document.downloadDocument),
   validate({ query: downloadQuerySchema }),
   getDocumentDownloadLink,

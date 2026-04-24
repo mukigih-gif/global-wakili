@@ -19,6 +19,9 @@ import {
   requirePayrollPermission,
 } from './payroll-permission.map';
 
+import { bindPlatformModuleEnforcement } from '../../middleware/platform';
+import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
+import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 import {
   approvePayrollBatch,
   calculatePayroll,
@@ -49,6 +52,16 @@ import {
 } from './payroll.controller';
 
 const router = Router();
+
+bindPlatformModuleEnforcement(router, {
+  moduleKey: 'payroll',
+  metricType: 'PAYROLL_BATCHES',
+});
+
+const payrollStatutoryEngineFeature = platformFeatureFlag(
+  PLATFORM_FEATURE_KEYS.PAYROLL_STATUTORY_ENGINE,
+  'payroll',
+);
 
 router.get('/health', (req: Request, res: Response) => {
   res.status(200).json({
@@ -232,12 +245,14 @@ router.post(
 
 router.get(
   '/reports/p9/:employeeId',
+  payrollStatutoryEngineFeature,
   requirePayrollPermission(PAYROLL_PERMISSIONS.viewReports),
   generateP9Report,
 );
 
 router.get(
   '/reports/p10',
+  payrollStatutoryEngineFeature,
   requirePayrollPermission(PAYROLL_PERMISSIONS.viewReports),
   generateP10Report,
 );
