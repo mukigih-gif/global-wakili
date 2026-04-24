@@ -34,8 +34,7 @@ function getTenantId(req: Request): string {
 
 function getActorId(req: Request): string {
   const actorId =
-    req.user?.id ??
-    (req as any).user?.id ??
+    req.user?.sub ??
     req.body?.userId ??
     req.body?.actorId ??
     req.headers['x-user-id'];
