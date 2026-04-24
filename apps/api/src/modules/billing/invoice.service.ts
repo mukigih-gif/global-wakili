@@ -31,41 +31,41 @@ export class InvoiceService {
       BILLING_DEFAULTS.maxBillingPageSize,
     );
 
+    const where: Prisma.InvoiceWhereInput = {
+      tenantId: input.tenantId,
+      ...(input.matterId ? { matterId: input.matterId } : {}),
+      ...(input.branchId ? { branchId: input.branchId } : {}),
+      ...(input.status ? { status: input.status as InvoiceStatus } : {}),
+      ...(input.clientId ? { clientId: input.clientId } : {}),
+      ...(input.search
+        ? {
+            OR: [
+              { invoiceNumber: { contains: input.search, mode: 'insensitive' } },
+              { kraControlNumber: { contains: input.search, mode: 'insensitive' } },
+              { etimsReference: { contains: input.search, mode: 'insensitive' } },
+            ],
+          }
+        : {}),
+      ...(input.issuedFrom || input.issuedTo
+        ? {
+            issuedDate: {
+              ...(input.issuedFrom ? { gte: input.issuedFrom } : {}),
+              ...(input.issuedTo ? { lte: input.issuedTo } : {}),
+            },
+          }
+        : {}),
+      ...(input.dueFrom || input.dueTo
+        ? {
+            dueDate: {
+              ...(input.dueFrom ? { gte: input.dueFrom } : {}),
+              ...(input.dueTo ? { lte: input.dueTo } : {}),
+            },
+          }
+        : {}),
+    };
+
     return prisma.invoice.findMany({
-      where: {
-        tenantId: input.tenantId,
-        ...(input.matterId ? { matterId: input.matterId } : {}),
-        ...(input.branchId ? { branchId: input.branchId } : {}),
-        ...(input.status ? { status: input.status } : {}),
-        ...(input.clientId ? { clientId: input.clientId } : {}),
-        ...(input.search
-          ? {
-              OR: [
-                { invoiceNumber: { contains: input.search, mode: 'insensitive' } },
-                { kraControlNumber: { contains: input.search, mode: 'insensitive' } },
-                { etimsReference: { contains: input.search, mode: 'insensitive' } },
-                { matter: { title: { contains: input.search, mode: 'insensitive' } } },
-                { matter: { caseNumber: { contains: input.search, mode: 'insensitive' } } },
-              ],
-            }
-          : {}),
-        ...(input.issuedFrom || input.issuedTo
-          ? {
-              issuedDate: {
-                ...(input.issuedFrom ? { gte: input.issuedFrom } : {}),
-                ...(input.issuedTo ? { lte: input.issuedTo } : {}),
-              },
-            }
-          : {}),
-        ...(input.dueFrom || input.dueTo
-          ? {
-              dueDate: {
-                ...(input.dueFrom ? { gte: input.dueFrom } : {}),
-                ...(input.dueTo ? { lte: input.dueTo } : {}),
-              },
-            }
-          : {}),
-      },
+      where,
       include: this.invoiceInclude(),
       orderBy: [{ issuedDate: 'desc' }, { createdAt: 'desc' }],
       take,
@@ -139,16 +139,20 @@ export class InvoiceService {
               quantity: line.quantity,
               unitPrice: line.unitPrice,
               subTotal: line.subTotal,
-              taxRate: line.taxRate,
-              taxMode: line.taxMode,
-              taxInclusive: line.taxInclusive,
               taxAmount: line.taxAmount,
-              isWhtApplicable: line.isWhtApplicable,
-              whtRate: line.whtRate,
-              whtAmount: line.whtAmount,
-              sourceType: line.sourceType,
-              sourceId: line.sourceId,
               total: line.total,
+              ...(line.sourceType ? { sourceType: line.sourceType } : {}),
+              ...(line.sourceId ? { sourceId: line.sourceId } : {}),
+              ...(line.isWhtApplicable !== undefined
+                ? { isWhtApplicable: line.isWhtApplicable }
+                : {}),
+              ...(line.whtRate ? { whtRate: line.whtRate } : {}),
+              ...(line.whtAmount ? { whtAmount: line.whtAmount } : {}),
+              ...(line.taxRate ? { taxRate: line.taxRate } : {}),
+              ...(line.taxMode ? { taxMode: line.taxMode } : {}),
+              ...(line.taxInclusive !== undefined
+                ? { taxInclusive: line.taxInclusive }
+                : {}),
             })),
           },
         },
@@ -228,16 +232,20 @@ export class InvoiceService {
               quantity: line.quantity,
               unitPrice: line.unitPrice,
               subTotal: line.subTotal,
-              taxRate: line.taxRate,
-              taxMode: line.taxMode,
-              taxInclusive: line.taxInclusive,
               taxAmount: line.taxAmount,
-              isWhtApplicable: line.isWhtApplicable,
-              whtRate: line.whtRate,
-              whtAmount: line.whtAmount,
-              sourceType: line.sourceType,
-              sourceId: line.sourceId,
               total: line.total,
+              ...(line.sourceType ? { sourceType: line.sourceType } : {}),
+              ...(line.sourceId ? { sourceId: line.sourceId } : {}),
+              ...(line.isWhtApplicable !== undefined
+                ? { isWhtApplicable: line.isWhtApplicable }
+                : {}),
+              ...(line.whtRate ? { whtRate: line.whtRate } : {}),
+              ...(line.whtAmount ? { whtAmount: line.whtAmount } : {}),
+              ...(line.taxRate ? { taxRate: line.taxRate } : {}),
+              ...(line.taxMode ? { taxMode: line.taxMode } : {}),
+              ...(line.taxInclusive !== undefined
+                ? { taxInclusive: line.taxInclusive }
+                : {}),
             })),
           },
         },
@@ -271,7 +279,7 @@ export class InvoiceService {
           tenantId: input.tenantId,
           matterId: matter.id,
           timeEntryCount: 0,
-          totalHours: new Prisma.Decimal(0),
+          totalHours: 0,
           totalUnbilledAmount: new Prisma.Decimal(0),
         },
       });
@@ -299,7 +307,10 @@ export class InvoiceService {
       throw new Error('Invoice is already cancelled.');
     }
 
-    if (invoice.status === InvoiceStatus.PAID || invoice.status === InvoiceStatus.PARTIALLY_PAID) {
+    if (
+      invoice.status === InvoiceStatus.PAID ||
+      invoice.status === InvoiceStatus.PARTIALLY_PAID
+    ) {
       throw new Error('Paid or partially paid invoices require credit note or reversal workflow.');
     }
 
@@ -311,10 +322,13 @@ export class InvoiceService {
       throw new Error('Fiscalized invoices require controlled credit note workflow.');
     }
 
-    const timeLines = invoice.lines.filter((line) => line.sourceType === 'TIME' && line.sourceId);
-    const timeEntryIds = timeLines.map((line) => String(line.sourceId));
+    const timeLines = (invoice.lines as any[]).filter(
+      (line: any) => line.sourceType === 'TIME' && line.sourceId,
+    );
+
+    const timeEntryIds = timeLines.map((line: any) => String(line.sourceId));
     const wipRecoveryAmount = timeLines.reduce(
-      (sum, line) => sum.plus(line.subTotal),
+      (sum: Prisma.Decimal, line: any) => sum.plus(line.subTotal),
       new Prisma.Decimal(0),
     );
 
@@ -344,7 +358,7 @@ export class InvoiceService {
             tenantId: input.tenantId,
             matterId: invoice.matterId,
             timeEntryCount: timeEntryIds.length,
-            totalHours: new Prisma.Decimal(0),
+            totalHours: 0,
             totalUnbilledAmount: wipRecoveryAmount,
           },
         });
@@ -384,8 +398,11 @@ export class InvoiceService {
       return invoice;
     }
 
-    const paidAmount = invoice.paymentAllocations
-      .reduce((sum, allocation) => sum.plus(allocation.amountApplied), new Prisma.Decimal(0))
+    const paidAmount = (invoice.paymentAllocations as any[])
+      .reduce(
+        (sum: Prisma.Decimal, allocation: any) => sum.plus(allocation.amountApplied),
+        new Prisma.Decimal(0),
+      )
       .toDecimalPlaces(2);
 
     const nextStatus =
@@ -406,20 +423,19 @@ export class InvoiceService {
     });
   }
 
-  private invoiceInclude() {
+  private invoiceInclude(): Prisma.InvoiceInclude {
     return {
       matter: {
         select: {
           id: true,
           title: true,
-          caseNumber: true,
           clientId: true,
         },
       },
       lines: true,
       paymentAllocations: true,
       creditNotes: true,
-    } satisfies Prisma.InvoiceInclude;
+    };
   }
 }
 
