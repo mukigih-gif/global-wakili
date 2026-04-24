@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { validate } from '../../middleware/validate';
 import { requirePermissions } from '../../middleware/rbac';
-import { bindPlatformModuleEnforcement } from '../../middleware/platform';
+import { bindPlatformModuleEnforcement } from '../../middleware/platform/module-enforcement';
 import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
 import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 import {

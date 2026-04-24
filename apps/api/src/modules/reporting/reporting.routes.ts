@@ -4,7 +4,7 @@ import { Router } from 'express';
 import { PERMISSIONS } from '../../config/permissions';
 import { requirePermissions } from '../../middleware/rbac';
 import { validate } from '../../middleware/validate';
-import { bindPlatformModuleEnforcement } from '../../middleware/platform';
+import { bindPlatformModuleEnforcement } from '../../middleware/platform/module-enforcement';
 import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
 import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 import {
