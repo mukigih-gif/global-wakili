@@ -163,37 +163,37 @@ export type AIDbClient = {
   user: {
     findFirst: Function;
   };
-  aiProviderConfig: {
+  aIProviderConfig: {
     findFirst: Function;
     findMany: Function;
     create: Function;
     update: Function;
     count: Function;
   };
-  aiPromptAudit: {
+  aIPromptAudit: {
     create: Function;
     update: Function;
     findFirst: Function;
   };
-  aiUsageLog: {
+  aIUsageLog: {
     create: Function;
     update: Function;
     findMany: Function;
     count: Function;
   };
-  aiArtifact: {
+  aIArtifact: {
     create: Function;
     update: Function;
     findMany: Function;
     count: Function;
   };
-  aiReviewTask: {
+  aIReviewTask: {
     create: Function;
     update: Function;
     findMany: Function;
     count: Function;
   };
-  aiRecommendation: {
+  aIRecommendation: {
     create: Function;
     findMany: Function;
     count: Function;

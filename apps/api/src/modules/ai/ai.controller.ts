@@ -6,8 +6,14 @@ import { AIAuditService } from './AIAuditService';
 import { AICapabilityService } from './AICapabilityService';
 import { AIProviderRegistry } from './AIProviderRegistry';
 import { AIOrchestratorService } from './AIOrchestratorService';
-import { AI_SCOPES } from './ai.types';
-import type { AIScope } from './ai.types';
+import {
+  AI_ARTIFACT_STATUSES,
+  AI_EXECUTION_STATUSES,
+  AI_PROVIDERS,
+  AI_SCOPES,
+  AI_TASK_TYPES,
+} from './ai.types';
+import type { AIDbClient, AIArtifactStatus, AIExecutionStatus, AIProvider, AIScope, AITaskType } from './ai.types';
 import { AIUsageLogService } from './AIUsageLogService';
 
 function requireTenantId(req: Request): string {
@@ -18,7 +24,7 @@ function requireTenantId(req: Request): string {
     });
   }
 
-  return req.tenantId;
+  return req.tenantId.trim();
 }
 
 function requireUserId(req: Request): string {
@@ -30,7 +36,104 @@ function requireUserId(req: Request): string {
     });
   }
 
-  return userId;
+  return userId.trim();
+}
+
+
+function assertDelegate(
+  db: Record<string, unknown>,
+  delegateName: keyof AIDbClient,
+  methods: string[],
+): void {
+  const delegate = db[delegateName as string] as Record<string, unknown> | undefined;
+
+  if (!delegate || typeof delegate !== 'object') {
+    throw Object.assign(
+      new Error(`AI database delegate "${String(delegateName)}" is not available.`),
+      {
+        statusCode: 500,
+        code: 'AI_DB_DELEGATE_MISSING',
+        details: { delegateName },
+      },
+    );
+  }
+
+  const missingMethods = methods.filter((method) => typeof delegate[method] !== 'function');
+
+  if (missingMethods.length > 0) {
+    throw Object.assign(
+      new Error(`AI database delegate "${String(delegateName)}" is missing required methods.`),
+      {
+        statusCode: 500,
+        code: 'AI_DB_DELEGATE_METHOD_MISSING',
+        details: { delegateName, missingMethods },
+      },
+    );
+  }
+}
+
+function aiDb(req: Request): AIDbClient {
+  const db = req.db as unknown as Record<string, unknown>;
+
+  if (!db || typeof db !== 'object') {
+    throw Object.assign(new Error('Database client is required for AI module.'), {
+      statusCode: 500,
+      code: 'AI_DB_CLIENT_REQUIRED',
+    });
+  }
+
+  assertDelegate(db, 'tenant', ['findFirst']);
+  assertDelegate(db, 'user', ['findFirst']);
+  assertDelegate(db, 'aIProviderConfig', ['findFirst', 'findMany', 'create', 'update', 'count']);
+  assertDelegate(db, 'aIPromptAudit', ['create', 'update', 'findFirst']);
+  assertDelegate(db, 'aIUsageLog', ['create', 'update', 'findMany', 'count']);
+  assertDelegate(db, 'aIArtifact', ['create', 'update', 'findMany', 'count']);
+  assertDelegate(db, 'aIReviewTask', ['create', 'update', 'findMany', 'count']);
+  assertDelegate(db, 'aIRecommendation', ['create', 'findMany', 'count']);
+  assertDelegate(db, 'auditLog', ['create']);
+
+  return db as unknown as AIDbClient;
+}
+
+function parsePositiveInteger(value: unknown, fieldName: string): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw Object.assign(new Error(`${fieldName} must be a positive number.`), {
+      statusCode: 400,
+      code: 'AI_INVALID_PAGINATION',
+      details: { fieldName, value },
+    });
+  }
+
+  return Math.trunc(parsed);
+}
+
+function parseOptionalString(value: unknown): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  return String(value);
+}
+
+function parseEnumQueryValue<T extends string>(
+  value: unknown,
+  allowedValues: readonly T[],
+  fieldName: string,
+): T | null {
+  if (value === undefined || value === null || value === '') return null;
+
+  const normalized = String(value);
+
+  if (!allowedValues.includes(normalized as T)) {
+    throw Object.assign(new Error(`${fieldName} is invalid.`), {
+      statusCode: 400,
+      code: 'AI_INVALID_QUERY_FILTER',
+      details: { fieldName, value, allowedValues },
+    });
+  }
+
+  return normalized as T;
 }
 
 async function logAction(
@@ -42,7 +145,7 @@ async function logAction(
     metadata?: Record<string, unknown>;
   },
 ) {
-  await AIAuditService.logAction(req.db, {
+  await AIAuditService.logAction(aiDb(req), {
     tenantId: requireTenantId(req),
     userId: req.user?.sub ?? null,
     action,
@@ -59,7 +162,7 @@ async function executeScope(req: Request, res: Response, scope: AIScope) {
   const tenantId = requireTenantId(req);
   const requesterUserId = requireUserId(req);
 
-  const result = await AIOrchestratorService.execute(req.db, {
+  const result = await AIOrchestratorService.execute(aiDb(req), {
     tenantId,
     requesterUserId,
     scope,
@@ -156,7 +259,7 @@ export const getAIProviders = asyncHandler(async (req: Request, res: Response) =
 
 export const getAIProviderConfigs = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = requireTenantId(req);
-  const configs = await AIProviderRegistry.listTenantProviderConfigs(req.db, tenantId);
+  const configs = await AIProviderRegistry.listTenantProviderConfigs(aiDb(req), tenantId);
 
   await logAction(req, 'PROVIDER_CONFIGS_VIEWED', {
     metadata: {
@@ -173,7 +276,7 @@ export const getAIProviderConfigs = asyncHandler(async (req: Request, res: Respo
 export const upsertAIProviderConfig = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = requireTenantId(req);
 
-  const result = await AIProviderRegistry.upsertProviderConfig(req.db, {
+  const result = await AIProviderRegistry.upsertProviderConfig(aiDb(req), {
     tenantId,
     provider: req.body.provider,
     isEnabled: req.body.isEnabled,
@@ -204,17 +307,17 @@ export const upsertAIProviderConfig = asyncHandler(async (req: Request, res: Res
 export const searchAIArtifacts = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = requireTenantId(req);
 
-  const result = await AIOrchestratorService.searchArtifacts(req.db, {
+  const result = await AIOrchestratorService.searchArtifacts(aiDb(req), {
     tenantId,
-    page: req.query.page ? Number(req.query.page) : undefined,
-    limit: req.query.limit ? Number(req.query.limit) : undefined,
+    page: parsePositiveInteger(req.query.page, 'page'),
+    limit: parsePositiveInteger(req.query.limit, 'limit'),
     filters: {
-      taskType: req.query.taskType ? (String(req.query.taskType) as any) : null,
-      status: req.query.status ? (String(req.query.status) as any) : null,
-      entityType: req.query.entityType ? String(req.query.entityType) : null,
-      entityId: req.query.entityId ? String(req.query.entityId) : null,
-      createdFrom: req.query.createdFrom ? String(req.query.createdFrom) : null,
-      createdTo: req.query.createdTo ? String(req.query.createdTo) : null,
+      taskType: parseEnumQueryValue<AITaskType>(req.query.taskType, AI_TASK_TYPES, 'taskType'),
+      status: parseEnumQueryValue<AIArtifactStatus>(req.query.status, AI_ARTIFACT_STATUSES, 'status'),
+      entityType: parseOptionalString(req.query.entityType),
+      entityId: parseOptionalString(req.query.entityId),
+      createdFrom: parseOptionalString(req.query.createdFrom),
+      createdTo: parseOptionalString(req.query.createdTo),
     },
   });
 
@@ -232,18 +335,18 @@ export const searchAIArtifacts = asyncHandler(async (req: Request, res: Response
 export const searchAIUsageLogs = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = requireTenantId(req);
 
-  const result = await AIUsageLogService.searchUsageLogs(req.db, {
+  const result = await AIUsageLogService.searchUsageLogs(aiDb(req), {
     tenantId,
-    page: req.query.page ? Number(req.query.page) : undefined,
-    limit: req.query.limit ? Number(req.query.limit) : undefined,
+    page: parsePositiveInteger(req.query.page, 'page'),
+    limit: parsePositiveInteger(req.query.limit, 'limit'),
     filters: {
-      taskType: req.query.taskType ? (String(req.query.taskType) as any) : null,
-      provider: req.query.provider ? (String(req.query.provider) as any) : null,
-      status: req.query.status ? (String(req.query.status) as any) : null,
-      entityType: req.query.entityType ? String(req.query.entityType) : null,
-      entityId: req.query.entityId ? String(req.query.entityId) : null,
-      createdFrom: req.query.createdFrom ? String(req.query.createdFrom) : null,
-      createdTo: req.query.createdTo ? String(req.query.createdTo) : null,
+      taskType: parseEnumQueryValue<AITaskType>(req.query.taskType, AI_TASK_TYPES, 'taskType'),
+      provider: parseEnumQueryValue<AIProvider>(req.query.provider, AI_PROVIDERS, 'provider'),
+      status: parseEnumQueryValue<AIExecutionStatus>(req.query.status, AI_EXECUTION_STATUSES, 'status'),
+      entityType: parseOptionalString(req.query.entityType),
+      entityId: parseOptionalString(req.query.entityId),
+      createdFrom: parseOptionalString(req.query.createdFrom),
+      createdTo: parseOptionalString(req.query.createdTo),
     },
   });
 

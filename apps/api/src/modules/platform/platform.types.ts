@@ -25,7 +25,12 @@ export const SUBSCRIPTION_STATUSES = [
   'EXPIRED',
 ] as const;
 
-export const BILLING_PLANS = ['BASIC', 'PRO', 'ENTERPRISE', 'CUSTOM'] as const;
+export const BILLING_PLANS = [
+  'BASIC',
+  'PRO',
+  'ENTERPRISE',
+  'CUSTOM',
+] as const;
 
 export const USAGE_METRIC_TYPES = [
   'DATABASE_STORAGE',
@@ -47,29 +52,184 @@ export const QUOTA_ENFORCEMENT_MODES = [
   'SUSPEND',
 ] as const;
 
-export const FEATURE_FLAG_SCOPES = ['GLOBAL', 'PLAN', 'TENANT', 'MODULE'] as const;
-export const GLOBAL_SETTING_SCOPES = ['GLOBAL', 'PLAN', 'TENANT', 'MODULE'] as const;
-export const PLATFORM_CONFIG_STATUSES = ['DRAFT', 'REVIEWED', 'PUBLISHED', 'ROLLED_BACK', 'ARCHIVED'] as const;
-export const PLATFORM_ACCESS_MODES = ['READ_ONLY', 'ELEVATED'] as const;
-export const PLATFORM_TARGET_SCOPES = ['GLOBAL', 'PLAN', 'TENANT', 'MODULE'] as const;
-export const IMPERSONATION_STATUSES = ['REQUESTED', 'APPROVED', 'ACTIVE', 'EXPIRED', 'REVOKED', 'DENIED'] as const;
-export const INCIDENT_SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
-export const INCIDENT_STATUSES = ['OPEN', 'INVESTIGATING', 'MONITORING', 'RESOLVED', 'CLOSED'] as const;
-export const MAINTENANCE_STATUSES = ['SCHEDULED', 'ACTIVE', 'COMPLETED', 'CANCELLED'] as const;
-export const BACKUP_STATUSES = ['PENDING', 'RUNNING', 'SUCCEEDED', 'FAILED', 'CANCELLED', 'EXPIRED'] as const;
-export const TENANT_LIFECYCLE_STATUSES = ['PROVISIONING', 'ACTIVE', 'SUSPENDED', 'READ_ONLY', 'TERMINATED', 'ARCHIVED'] as const;
-export const TENANT_HEALTH_STATUSES = ['HEALTHY', 'DEGRADED', 'AT_RISK', 'CRITICAL'] as const;
-export const SUPPORT_TICKET_STATUSES = ['OPEN', 'IN_PROGRESS', 'WAITING_ON_TENANT', 'WAITING_ON_INTERNAL', 'ESCALATED', 'RESOLVED', 'CLOSED'] as const;
-export const SUPPORT_TICKET_PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'CRITICAL', 'URGENT'] as const;
-export const SUPPORT_TICKET_CATEGORIES = ['GENERAL', 'BILLING', 'TECHNICAL', 'SECURITY', 'DATA', 'INTEGRATION', 'PAYROLL', 'COMPLIANCE'] as const;
-export const SUPPORT_COMMENT_VISIBILITIES = ['INTERNAL', 'TENANT_VISIBLE'] as const;
-export const GLOBAL_MESSAGE_STATUSES = ['DRAFT', 'SCHEDULED', 'SENT', 'CANCELLED', 'EXPIRED'] as const;
-export const GLOBAL_MESSAGE_AUDIENCES = ['ALL_TENANTS', 'PLAN', 'TENANT', 'ROLE', 'PLATFORM_USERS'] as const;
-export const PATCH_DEPLOYMENT_STATUSES = ['DRAFT', 'SCHEDULED', 'IN_PROGRESS', 'SUCCEEDED', 'FAILED', 'ROLLED_BACK', 'CANCELLED'] as const;
-export const PATCH_SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'] as const;
-export const PLATFORM_WEBHOOK_DIRECTIONS = ['INBOUND', 'OUTBOUND'] as const;
-export const PLATFORM_WEBHOOK_STATUSES = ['PENDING', 'SUCCEEDED', 'FAILED', 'RETRYING'] as const;
-export const SCHEDULE_FREQUENCIES = ['HOURLY', 'DAILY', 'WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY', 'CUSTOM'] as const;
+export const FEATURE_FLAG_SCOPES = [
+  'GLOBAL',
+  'PLAN',
+  'TENANT',
+  'MODULE',
+] as const;
+
+export const GLOBAL_SETTING_SCOPES = [
+  'GLOBAL',
+  'PLAN',
+  'TENANT',
+  'MODULE',
+] as const;
+
+export const PLATFORM_CONFIG_STATUSES = [
+  'DRAFT',
+  'REVIEWED',
+  'PUBLISHED',
+  'ROLLED_BACK',
+  'ARCHIVED',
+] as const;
+
+export const PLATFORM_ACCESS_MODES = [
+  'READ_ONLY',
+  'ELEVATED',
+] as const;
+
+export const PLATFORM_TARGET_SCOPES = [
+  'GLOBAL',
+  'PLAN',
+  'TENANT',
+  'MODULE',
+] as const;
+
+export const IMPERSONATION_STATUSES = [
+  'REQUESTED',
+  'APPROVED',
+  'ACTIVE',
+  'EXPIRED',
+  'REVOKED',
+  'DENIED',
+] as const;
+
+export const INCIDENT_SEVERITIES = [
+  'LOW',
+  'MEDIUM',
+  'HIGH',
+  'CRITICAL',
+] as const;
+
+export const INCIDENT_STATUSES = [
+  'OPEN',
+  'INVESTIGATING',
+  'MONITORING',
+  'RESOLVED',
+  'CLOSED',
+] as const;
+
+export const MAINTENANCE_STATUSES = [
+  'SCHEDULED',
+  'ACTIVE',
+  'COMPLETED',
+  'CANCELLED',
+] as const;
+
+export const BACKUP_STATUSES = [
+  'PENDING',
+  'RUNNING',
+  'SUCCEEDED',
+  'FAILED',
+  'CANCELLED',
+  'EXPIRED',
+] as const;
+
+export const TENANT_LIFECYCLE_STATUSES = [
+  'PROVISIONING',
+  'ACTIVE',
+  'SUSPENDED',
+  'READ_ONLY',
+  'TERMINATED',
+  'ARCHIVED',
+] as const;
+
+export const TENANT_HEALTH_STATUSES = [
+  'HEALTHY',
+  'DEGRADED',
+  'AT_RISK',
+  'CRITICAL',
+] as const;
+
+export const SUPPORT_TICKET_STATUSES = [
+  'OPEN',
+  'IN_PROGRESS',
+  'WAITING_ON_TENANT',
+  'WAITING_ON_INTERNAL',
+  'ESCALATED',
+  'RESOLVED',
+  'CLOSED',
+] as const;
+
+export const SUPPORT_TICKET_PRIORITIES = [
+  'LOW',
+  'NORMAL',
+  'HIGH',
+  'CRITICAL',
+  'URGENT',
+] as const;
+
+export const SUPPORT_TICKET_CATEGORIES = [
+  'GENERAL',
+  'BILLING',
+  'TECHNICAL',
+  'SECURITY',
+  'DATA',
+  'INTEGRATION',
+  'PAYROLL',
+  'COMPLIANCE',
+] as const;
+
+export const SUPPORT_COMMENT_VISIBILITIES = [
+  'INTERNAL',
+  'TENANT_VISIBLE',
+] as const;
+
+export const GLOBAL_MESSAGE_STATUSES = [
+  'DRAFT',
+  'SCHEDULED',
+  'SENT',
+  'CANCELLED',
+  'EXPIRED',
+] as const;
+
+export const GLOBAL_MESSAGE_AUDIENCES = [
+  'ALL_TENANTS',
+  'PLAN',
+  'TENANT',
+  'ROLE',
+  'PLATFORM_USERS',
+] as const;
+
+export const PATCH_DEPLOYMENT_STATUSES = [
+  'DRAFT',
+  'SCHEDULED',
+  'IN_PROGRESS',
+  'SUCCEEDED',
+  'FAILED',
+  'ROLLED_BACK',
+  'CANCELLED',
+] as const;
+
+export const PATCH_SEVERITIES = [
+  'LOW',
+  'MEDIUM',
+  'HIGH',
+  'CRITICAL',
+] as const;
+
+export const PLATFORM_WEBHOOK_DIRECTIONS = [
+  'INBOUND',
+  'OUTBOUND',
+] as const;
+
+export const PLATFORM_WEBHOOK_STATUSES = [
+  'PENDING',
+  'SUCCEEDED',
+  'FAILED',
+  'RETRYING',
+] as const;
+
+export const SCHEDULE_FREQUENCIES = [
+  'HOURLY',
+  'DAILY',
+  'WEEKLY',
+  'MONTHLY',
+  'QUARTERLY',
+  'YEARLY',
+  'CUSTOM',
+] as const;
 
 export type PlatformAdminRole = (typeof PLATFORM_ADMIN_ROLES)[number];
 export type PlatformUserStatus = (typeof PLATFORM_USER_STATUSES)[number];
@@ -148,36 +308,71 @@ export type PlatformAuditAction =
   | 'QUEUE_JOBS_SEARCHED'
   | 'QUEUE_JOB_RETRIED';
 
+type PlatformDelegateMethod = (...args: any[]) => any;
+
+export type PlatformModelDelegate = {
+  findFirst: PlatformDelegateMethod;
+  findMany: PlatformDelegateMethod;
+  create: PlatformDelegateMethod;
+  update: PlatformDelegateMethod;
+  count: PlatformDelegateMethod;
+
+  upsert: PlatformDelegateMethod;
+  createMany: PlatformDelegateMethod;
+  updateMany: PlatformDelegateMethod;
+  delete: PlatformDelegateMethod;
+  deleteMany: PlatformDelegateMethod;
+  aggregate: PlatformDelegateMethod;
+  groupBy: PlatformDelegateMethod;
+
+  /**
+   * Prisma delegates expose non-function metadata, including `fields`.
+   * This keeps Prisma extended-client delegates assignable without
+   * making the callable delegate methods optional.
+   */
+  [property: string]: any;
+};
+
 export type PlatformDbClient = {
-  tenant: { findFirst: Function; findMany: Function; count: Function };
-  user?: { findFirst: Function };
-  platformUser: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformRole: { findFirst: Function; findMany: Function; count: Function };
-  platformPermission: { findMany: Function; count: Function };
-  platformUserRole: { findFirst: Function; findMany: Function; create: Function; count: Function };
-  platformTenantProfile: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformPermission: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformRolePermission: { findFirst: Function; create: Function; count: Function };
-  platformWebhookLog: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };  
-  tenantSubscription: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  tenantQuotaPolicy: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  tenantUsageMetric: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  tenantModuleEntitlement: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformFeatureFlag: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformGlobalSetting: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformConfigVersion: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformImpersonationSession: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformIncident: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformMaintenanceWindow: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformBackupJob: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformWebhookLog: { findMany: Function; count: Function };
-  tenantHealthSnapshot: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformSupportTicket: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformSupportTicketComment: { create: Function; findMany: Function; count: Function };
-  platformGlobalMessage: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  platformPatchDeployment: { findFirst: Function; findMany: Function; create: Function; update: Function; count: Function };
-  externalJobQueue: { findFirst: Function; findMany: Function; update: Function; count: Function };
-  auditLog: { create: Function };
+  tenant: PlatformModelDelegate;
+  user: PlatformModelDelegate;
+
+  platformUser: PlatformModelDelegate;
+  platformRole: PlatformModelDelegate;
+  platformPermission: PlatformModelDelegate;
+  platformUserRole: PlatformModelDelegate;
+  platformRolePermission: PlatformModelDelegate;
+
+  platformTenantProfile: PlatformModelDelegate;
+  tenantSubscription: PlatformModelDelegate;
+  tenantQuotaPolicy: PlatformModelDelegate;
+  tenantUsageMetric: PlatformModelDelegate;
+  tenantModuleEntitlement: PlatformModelDelegate;
+
+  platformFeatureFlag: PlatformModelDelegate;
+  platformGlobalSetting: PlatformModelDelegate;
+  platformConfigVersion: PlatformModelDelegate;
+
+  platformImpersonationSession: PlatformModelDelegate;
+  platformIncident: PlatformModelDelegate;
+  platformMaintenanceWindow: PlatformModelDelegate;
+  platformBackupJob: PlatformModelDelegate;
+  platformWebhookLog: PlatformModelDelegate;
+  tenantHealthSnapshot: PlatformModelDelegate;
+
+  platformSupportTicket: PlatformModelDelegate;
+  platformSupportTicketComment: PlatformModelDelegate;
+  platformGlobalMessage: PlatformModelDelegate;
+  platformPatchDeployment: PlatformModelDelegate;
+
+  externalJobQueue: PlatformModelDelegate;
+  auditLog: PlatformModelDelegate;
+
+  /**
+   * Allows Prisma extended-client metadata and future platform delegates
+   * without weakening known platform model properties to unknown.
+   */
+  [model: string]: any;
 };
 
 export type PlatformSearchFilters = {

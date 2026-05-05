@@ -1,12 +1,11 @@
+// apps/api/src/routes/superAdmin/index.ts
+
 import { Router } from 'express';
-import tenantsRouter from './tenants';
-import auditRouter from './audit';
-import { requireSuperAdmin } from '../../middleware/superAdminAuth';
+
+import tenantRouter from './tenant';
 
 const router = Router();
 
-router.use(requireSuperAdmin);
-router.use('/tenants', tenantsRouter);
-router.use('/audit', auditRouter);
+router.use('/tenants', tenantRouter);
 
 export default router;

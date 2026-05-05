@@ -4,6 +4,44 @@ import { Router } from 'express';
 import { PERMISSIONS } from '../../config/permissions';
 import { requirePermissions } from '../../middleware/rbac';
 import { validate } from '../../middleware/validate';
+import { requireSuperAdmin } from '../../middleware/superAdminAuth';
+import type { Request } from 'express';
+
+type RequestUserLike = {
+  id?: string;
+  sub?: string;
+  userId?: string;
+  role?: string | null;
+  primaryRole?: string | null;
+  systemRole?: string | null;
+  tenantRole?: string | null;
+  isSuperAdmin?: boolean;
+};
+
+function getRequiredRequestUserId(req: Request): string {
+  const user = (req as unknown as { user?: RequestUserLike }).user;
+  const userId = user?.sub ?? user?.id ?? user?.userId ?? null;
+
+  if (!userId) {
+    throw new Error('Authenticated user context is missing.');
+  }
+
+  return userId;
+}
+
+function getRequestId(req: Request): string | null {
+  const requestId = (req as unknown as { id?: unknown }).id;
+
+  if (typeof requestId === 'string') {
+    return requestId;
+  }
+
+  if (typeof requestId === 'number' || typeof requestId === 'bigint') {
+    return String(requestId);
+  }
+
+  return null;
+}
 import {
   backupJobCreateSchema,
   backupJobSearchQuerySchema,
@@ -113,6 +151,14 @@ import {
 const router = Router();
 
 router.get('/health', getPlatformHealth);
+
+/**
+ * Platform control-plane routes are super-admin only.
+ * Permission checks still apply after this, but tenant roles must not reach
+ * platform operations merely because they have seeded platform permissions.
+ */
+router.use(requireSuperAdmin);
+
 router.get('/overview', requirePermissions(PERMISSIONS.platform.viewOverview), getPlatformOverview);
 router.get('/capabilities', requirePermissions(PERMISSIONS.platform.viewOverview), getPlatformCapabilities);
 

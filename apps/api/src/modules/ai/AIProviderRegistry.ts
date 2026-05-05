@@ -94,14 +94,14 @@ export class AIProviderRegistry {
   }
 
   static async listTenantProviderConfigs(db: AIDbClient, tenantId: string) {
-    return db.aiProviderConfig.findMany({
+    return db.aIProviderConfig.findMany({
       where: { tenantId },
       orderBy: [{ provider: 'asc' }],
     });
   }
 
   static async upsertProviderConfig(db: AIDbClient, input: AIProviderConfigInput) {
-    const existing = await db.aiProviderConfig.findFirst({
+    const existing = await db.aIProviderConfig.findFirst({
       where: {
         tenantId: input.tenantId,
         provider: input.provider,
@@ -125,13 +125,13 @@ export class AIProviderRegistry {
     };
 
     if (existing) {
-      return db.aiProviderConfig.update({
+      return db.aIProviderConfig.update({
         where: { id: existing.id },
         data: payload,
       });
     }
 
-    return db.aiProviderConfig.create({
+    return db.aIProviderConfig.create({
       data: payload,
     });
   }
