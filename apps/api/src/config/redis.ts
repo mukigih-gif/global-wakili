@@ -16,8 +16,15 @@ function isProduction(): boolean {
 }
 
 function isRedisEnabled(): boolean {
-  if (process.env.REDIS_ENABLED === 'false') return false;
-  return true;
+  return process.env.REDIS_ENABLED !== 'false';
+}
+
+function isReadyStatus(status: unknown): boolean {
+  return status === 'ready';
+}
+
+function isConnectedStatus(status: unknown): boolean {
+  return status === 'ready' || status === 'connect';
 }
 
 function createRedisClient(): Redis {
@@ -80,7 +87,7 @@ function createRedisClient(): Redis {
     }
   });
 
-  client.on('error', (error) => {
+  client.on('error', (error: Error) => {
     isRedisConnected = false;
 
     if (isProduction()) {
@@ -99,10 +106,9 @@ function createRedisClient(): Redis {
   return client;
 }
 
-export const redis: Redis | null =
-  isRedisEnabled()
-    ? global.__globalWakiliRedis__ ?? createRedisClient()
-    : null;
+export const redis: Redis | null = isRedisEnabled()
+  ? global.__globalWakiliRedis__ ?? createRedisClient()
+  : null;
 
 if (!isProduction() && redis) {
   global.__globalWakiliRedis__ = redis;
@@ -117,15 +123,15 @@ export async function connectRedis(): Promise<void> {
     return;
   }
 
-  if (isRedisConnected || redis.status === 'ready') {
+  if (isRedisConnected || isReadyStatus(redis.status)) {
     isRedisConnected = true;
     return;
   }
 
   try {
     await redis.connect();
-    isRedisConnected = redis.status === 'ready';
-  } catch (error) {
+    isRedisConnected = isReadyStatus(redis.status);
+  } catch (error: unknown) {
     isRedisConnected = false;
 
     if (isProduction()) {
@@ -145,7 +151,7 @@ export async function disconnectRedis(): Promise<void> {
   if (!redis) return;
 
   try {
-    if (redis.status === 'ready' || redis.status === 'connect') {
+    if (isConnectedStatus(redis.status)) {
       await redis.quit();
     } else {
       redis.disconnect();
@@ -158,7 +164,7 @@ export async function disconnectRedis(): Promise<void> {
 }
 
 export function isRedisReady(): boolean {
-  return Boolean(redis && redis.status === 'ready');
+  return Boolean(redis && isReadyStatus(redis.status));
 }
 
 export function getRedisClient(): Redis | null {

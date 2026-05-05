@@ -12,19 +12,61 @@ type PermissionSource =
 
 type TenantScopedDb = Request['db'];
 
-declare global {
-  namespace Express {
-    interface Request {
-      requiredPermissions?: string[];
-      grantedPermissionsCache?: Set<string>;
-    }
-  }
-}
-
 type PermissionRecord = {
   resource?: string | null;
   action?: string | null;
 };
+
+type RequestUserLike = {
+  id?: string;
+  sub?: string;
+  userId?: string;
+  roles?: string[];
+  roleNames?: string[];
+  role?: string | null;
+  primaryRole?: string | null;
+  isSuperAdmin?: boolean;
+  systemRole?: string | null;
+  tenantRole?: string | null;
+};
+
+function getRequestUser(req: Request): RequestUserLike | null {
+  return (req as unknown as { user?: RequestUserLike }).user ?? null;
+}
+
+function getRequestUserId(req: Request): string | null {
+  const user = getRequestUser(req);
+
+  return user?.sub ?? user?.id ?? user?.userId ?? null;
+}
+
+function isSuperAdmin(req: Request): boolean {
+  const user = getRequestUser(req);
+
+  if (!user) {
+    return false;
+  }
+
+  const roles = [
+    ...(Array.isArray(user.roles) ? user.roles : []),
+    ...(Array.isArray(user.roleNames) ? user.roleNames : []),
+    user.role,
+    user.primaryRole,
+    user.systemRole,
+  ]
+    .filter((role): role is string => typeof role === 'string')
+    .map((role) => role.toLowerCase());
+
+  return (
+    user.isSuperAdmin === true ||
+    user.systemRole === 'SUPER_ADMIN' ||
+    user.systemRole === 'SYSTEM_ADMIN' ||
+    roles.includes('super_admin') ||
+    roles.includes('system_admin') ||
+    roles.includes('super_admin'.toLowerCase()) ||
+    roles.includes('system_admin'.toLowerCase())
+  );
+}
 
 function isPermissionDefinition(value: unknown): value is PermissionDefinition {
   return Boolean(
@@ -42,7 +84,9 @@ function normalizeSegment(value: string): string {
 }
 
 function normalizePermissions(input: PermissionSource): string[] {
-  if (!input) return [];
+  if (!input) {
+    return [];
+  }
 
   let values: string[] = [];
 
@@ -78,7 +122,9 @@ function buildPermissionKey(resource: string, action: string): string {
   return `${normalizeSegment(resource)}.${normalizeSegment(action)}`;
 }
 
-function isValidPermissionRecord(permission: PermissionRecord): permission is Required<PermissionRecord> {
+function isValidPermissionRecord(
+  permission: PermissionRecord,
+): permission is Required<PermissionRecord> {
   return Boolean(
     permission &&
       typeof permission.resource === 'string' &&
@@ -100,8 +146,9 @@ function expandPermissionCandidates(permission: string): string[] {
 }
 
 function hasPermission(granted: Set<string>, required: string): boolean {
-  const candidates = expandPermissionCandidates(required);
-  return candidates.some((candidate) => granted.has(candidate));
+  return expandPermissionCandidates(required).some((candidate) =>
+    granted.has(candidate),
+  );
 }
 
 async function getGrantedPermissions(
@@ -182,12 +229,77 @@ function forbidden(
   });
 }
 
+async function enforcePermissions(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+  requiredPermissions: string[],
+): Promise<void> {
+  try {
+    if (requiredPermissions.length === 0) {
+      next();
+      return;
+    }
+
+    const userId = getRequestUserId(req);
+
+    if (!userId) {
+      unauthorized(res, req);
+      return;
+    }
+
+    if (isSuperAdmin(req)) {
+      next();
+      return;
+    }
+
+    if (!req.tenantId || !req.db) {
+      forbidden(res, req, 'TENANT_CONTEXT_REQUIRED');
+      return;
+    }
+
+    const grantedPermissions =
+      req.grantedPermissionsCache ??
+      (await getGrantedPermissions(req.db, req.tenantId, userId));
+
+    req.grantedPermissionsCache = grantedPermissions;
+
+    if (grantedPermissions.size === 0) {
+      forbidden(res, req, 'RBAC_ROLE_NOT_FOUND');
+      return;
+    }
+
+    const missingPermissions = requiredPermissions.filter(
+      (permission) => !hasPermission(grantedPermissions, permission),
+    );
+
+    if (missingPermissions.length > 0) {
+      forbidden(res, req, 'RBAC_PERMISSION_DENIED', {
+        missingPermissions,
+      });
+      return;
+    }
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+}
+
+/**
+ * Route-level permission guard.
+ *
+ * This enforces immediately, instead of only marking req.requiredPermissions.
+ * That is safer because module routes already use:
+ *
+ * router.get('/x', requirePermissions(...), controller)
+ */
 export function requirePermissions(required: PermissionSource): RequestHandler {
   const permissions = normalizePermissions(required);
 
-  return (req: Request, _res: Response, next: NextFunction): void => {
+  return (req: Request, res: Response, next: NextFunction): void => {
     req.requiredPermissions = permissions;
-    next();
+    void enforcePermissions(req, res, next, permissions);
   };
 }
 
@@ -195,61 +307,23 @@ export function checkPermission(permission: PermissionSource): RequestHandler {
   return requirePermissions(permission);
 }
 
+/**
+ * Compatibility middleware for routes that set req.requiredPermissions earlier.
+ */
 export function rbac(): RequestHandler {
-  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const requiredPermissions = normalizePermissions(
-        req.requiredPermissions ??
-          (res.locals?.requiredPermissions as PermissionSource) ??
-          (res.locals?.requiredPermission as PermissionSource),
-      );
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const requiredPermissions = normalizePermissions(
+      req.requiredPermissions ??
+        (res.locals?.requiredPermissions as PermissionSource) ??
+        (res.locals?.requiredPermission as PermissionSource),
+    );
 
-      if (requiredPermissions.length === 0) {
-        next();
-        return;
-      }
-
-      if (!req.user?.sub || !req.tenantId || !req.db) {
-        unauthorized(res, req);
-        return;
-      }
-
-      if (req.user.isSuperAdmin) {
-        next();
-        return;
-      }
-
-      const grantedPermissions =
-        req.grantedPermissionsCache ??
-        (await getGrantedPermissions(req.db, req.tenantId, req.user.sub));
-
-      req.grantedPermissionsCache = grantedPermissions;
-
-      if (grantedPermissions.size === 0) {
-        forbidden(res, req, 'RBAC_ROLE_NOT_FOUND');
-        return;
-      }
-
-      const missingPermissions = requiredPermissions.filter(
-        (permission) => !hasPermission(grantedPermissions, permission),
-      );
-
-      if (missingPermissions.length > 0) {
-        forbidden(res, req, 'RBAC_PERMISSION_DENIED', {
-          missingPermissions,
-        });
-        return;
-      }
-
-      next();
-    } catch (error) {
-      next(error);
-    }
+    void enforcePermissions(req, res, next, requiredPermissions);
   };
 }
 
 export function userHasPermission(req: Request, permission: string): boolean {
-  if (req.user?.isSuperAdmin) {
+  if (isSuperAdmin(req)) {
     return true;
   }
 

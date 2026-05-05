@@ -1,12 +1,23 @@
 // apps/api/src/middleware/platform-maintenance.middleware.ts
 
 import type { NextFunction, Request, Response } from 'express';
-import { PlatformAccessAuditService } from '../modules/platform/PlatformAccessAuditService';
-import { PlatformBannerService } from '../modules/platform/PlatformBannerService';
 import { PlatformMaintenancePolicyService } from '../modules/platform/PlatformMaintenancePolicyService';
 import { PlatformModuleRegistry } from '../services/platform/PlatformModuleRegistry';
 
-function respond(res: Response, statusCode: number, code: string, message: string, details?: unknown) {
+type PlatformMaintenanceOptions = {
+  moduleKey?: string | null;
+  allowReadOnly?: boolean;
+};
+
+type PlatformMaintenanceInput = string | PlatformMaintenanceOptions;
+
+function respond(
+  res: Response,
+  statusCode: number,
+  code: string,
+  message: string,
+  details?: unknown,
+) {
   return res.status(statusCode).json({
     success: false,
     code,
@@ -15,92 +26,161 @@ function respond(res: Response, statusCode: number, code: string, message: strin
   });
 }
 
-export function platformMaintenance(moduleKey?: string) {
+function toNullableString(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+
+  if (Array.isArray(value)) {
+    return toNullableString(value[0]);
+  }
+
+  return null;
+}
+
+function normalizeOptions(input: PlatformMaintenanceInput = {}): PlatformMaintenanceOptions {
+  if (typeof input === 'string') {
+    return {
+      moduleKey: input,
+    };
+  }
+
+  return input;
+}
+
+function resolveModuleKey(req: Request, configuredModuleKey?: string | null): string | null {
+  const configured = toNullableString(configuredModuleKey);
+
+  if (configured) {
+    return configured;
+  }
+
+  return toNullableString(PlatformModuleRegistry.resolveModuleKey(req));
+}
+
+function getActivePolicies(result: unknown): unknown[] {
+  if (!result || typeof result !== 'object') {
+    return [];
+  }
+
+  const value = result as Record<string, unknown>;
+
+  return Array.isArray(value.active) ? value.active : [];
+}
+
+function hasReadOnlyRequired(result: unknown): boolean {
+  if (!result || typeof result !== 'object') {
+    return false;
+  }
+
+  const value = result as Record<string, unknown>;
+
+  return value.readOnlyRequired === true;
+}
+
+function hasDenyRequired(result: unknown): boolean {
+  const active = getActivePolicies(result);
+
+  return active.some((policy) => {
+    if (!policy || typeof policy !== 'object') {
+      return false;
+    }
+
+    const value = policy as Record<string, unknown>;
+
+    return (
+      value.denyRequired === true ||
+      value.blocksAccess === true ||
+      value.accessBlocked === true
+    );
+  });
+}
+
+function responseCode(result: unknown, allowReadOnly: boolean): string {
+  if (hasDenyRequired(result)) {
+    return 'PLATFORM_MAINTENANCE_ACTIVE';
+  }
+
+  if (hasReadOnlyRequired(result) && !allowReadOnly) {
+    return 'PLATFORM_READ_ONLY';
+  }
+
+  return 'PLATFORM_MAINTENANCE_ACTIVE';
+}
+
+function errorStatusCode(error: unknown): number {
+  const value = (error as { statusCode?: unknown } | null)?.statusCode;
+  return typeof value === 'number' ? value : 500;
+}
+
+function errorCode(error: unknown): string {
+  const value = (error as { code?: unknown } | null)?.code;
+  return typeof value === 'string' ? value : 'PLATFORM_MAINTENANCE_ERROR';
+}
+
+function errorMessage(error: unknown): string {
+  const value = (error as { message?: unknown } | null)?.message;
+  return typeof value === 'string'
+    ? value
+    : 'Platform maintenance middleware failed.';
+}
+
+function errorDetails(error: unknown): unknown {
+  return (error as { details?: unknown } | null)?.details ?? null;
+}
+
+export function platformMaintenance(input: PlatformMaintenanceInput = {}) {
+  const options = normalizeOptions(input);
+
   return async function platformMaintenanceMiddleware(
     req: Request,
     res: Response,
     next: NextFunction,
   ) {
     try {
-      const resolvedModuleKey =
-        PlatformModuleRegistry.resolveModuleKey(moduleKey ?? req) ?? null;
+      const tenantId = toNullableString(req.tenantId);
+      const moduleKey = resolveModuleKey(req, options.moduleKey);
+      const allowReadOnly = options.allowReadOnly ?? false;
 
-      if (!resolvedModuleKey || !req.tenantId?.trim()) {
-        return next();
-      }
-
-      const [maintenance, broadcasts] = await Promise.all([
-        PlatformMaintenancePolicyService.getActivePolicies(req.db, {
-          tenantId: req.tenantId,
-          moduleKey: resolvedModuleKey,
-        }),
-        PlatformBannerService.getActiveBroadcasts(req.db, {
-          tenantId: req.tenantId,
-          plan: req.platformAccessPolicy?.plan ?? null,
-          moduleKey: resolvedModuleKey,
-        }),
-      ]);
-
-      const denyRequired = maintenance.active.some((item: any) => item.isReadOnly === false);
-      const readOnlyRequired =
-        maintenance.readOnlyRequired || broadcasts.readOnlyRequired;
-
-      req.platformMaintenancePolicy = {
-        active: maintenance.active,
-        readOnlyRequired,
-        denyRequired,
-        reasons: maintenance.active.map((item: any) =>
-          String(item.bannerMessage ?? item.title ?? 'Maintenance is active.'),
-        ),
-      };
-
-      req.platformBroadcasts = broadcasts;
-
-      if (denyRequired) {
-        await PlatformAccessAuditService.logDecision(req.db, req, {
-          action: 'PLATFORM_MAINTENANCE_BLOCKED',
-          moduleKey: resolvedModuleKey,
-          metadata: {
-            activeMaintenanceCount: maintenance.active.length,
-          },
-        });
-
+      if (!tenantId) {
         return respond(
           res,
-          503,
-          'MAINTENANCE_ACTIVE',
-          'This module is temporarily unavailable due to active maintenance.',
-          req.platformMaintenancePolicy,
+          400,
+          'TENANT_CONTEXT_REQUIRED',
+          'Tenant context is required before evaluating platform maintenance policy.',
         );
       }
 
-      if (readOnlyRequired && PlatformModuleRegistry.isWriteMethod(req.method)) {
-        await PlatformAccessAuditService.logDecision(req.db, req, {
-          action: 'PLATFORM_MAINTENANCE_BLOCKED',
-          moduleKey: resolvedModuleKey,
-          metadata: {
-            activeMaintenanceCount: maintenance.active.length,
-            readOnlyRequired: true,
-          },
-        });
+      const maintenancePolicy = await PlatformMaintenancePolicyService.getActivePolicies(req.db, {
+        tenantId,
+        moduleKey,
+      });
 
+      req.platformMaintenancePolicy = maintenancePolicy;
+
+      const shouldBlock =
+        hasDenyRequired(maintenancePolicy) ||
+        (hasReadOnlyRequired(maintenancePolicy) && !allowReadOnly);
+
+      if (shouldBlock) {
         return respond(
           res,
-          423,
-          'MAINTENANCE_READ_ONLY',
-          'This module is temporarily read-only due to active maintenance.',
-          req.platformMaintenancePolicy,
+          hasDenyRequired(maintenancePolicy) ? 503 : 423,
+          responseCode(maintenancePolicy, allowReadOnly),
+          'This tenant or module is currently under platform maintenance.',
+          maintenancePolicy,
         );
       }
 
       return next();
-    } catch (error: any) {
+    } catch (error: unknown) {
       return respond(
         res,
-        Number(error?.statusCode ?? 500),
-        String(error?.code ?? 'PLATFORM_MAINTENANCE_ERROR'),
-        String(error?.message ?? 'Platform maintenance middleware failed.'),
-        error?.details ?? null,
+        errorStatusCode(error),
+        errorCode(error),
+        errorMessage(error),
+        errorDetails(error),
       );
     }
   };
