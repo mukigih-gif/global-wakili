@@ -9,10 +9,79 @@ import { TaskCapabilityService } from './TaskCapabilityService';
 import { TaskReminderBridgeService } from './TaskReminderBridgeService';
 import { TaskCalendarBridgeService } from './TaskCalendarBridgeService';
 import { TaskAuditService } from './TaskAuditService';
+import type { LegalTaskPriority, LegalTaskStatus } from './task.types';
+import {
+  getRequestId,
+  getRequestIp,
+  getRequestUserAgent,
+  getRequestUserId,
+  requireRequestUserId,
+  requireTenantId,
+} from '../../utils/request-identity';
+
+function getTenantId(req: Request): string {
+  return requireTenantId(req);
+}
+
+function getUserId(req: Request): string {
+  return requireRequestUserId(req);
+}
+
+function getOptionalUserId(req: Request): string | null {
+  return getRequestUserId(req);
+}
+
+function requestMeta(req: Request) {
+  return {
+    requestId: getRequestId(req),
+    ipAddress: getRequestIp(req),
+    userAgent: getRequestUserAgent(req),
+  };
+}
+
+function parseTaskStatus(value: unknown): LegalTaskStatus | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  switch (value.trim().toUpperCase()) {
+    case 'TODO':
+      return 'TODO';
+    case 'IN_PROGRESS':
+      return 'IN_PROGRESS';
+    case 'BLOCKED':
+      return 'BLOCKED';
+    case 'DONE':
+      return 'DONE';
+    case 'CANCELLED':
+      return 'CANCELLED';
+    default:
+      return null;
+  }
+}
+
+function parseTaskPriority(value: unknown): LegalTaskPriority | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  switch (value.trim().toUpperCase()) {
+    case 'LOW':
+      return 'LOW';
+    case 'NORMAL':
+      return 'NORMAL';
+    case 'HIGH':
+      return 'HIGH';
+    case 'URGENT':
+      return 'URGENT';
+    default:
+      return null;
+  }
+}
 
 export const createTask = asyncHandler(async (req: Request, res: Response) => {
   const task = await TaskService.createTask(req.db, {
-    tenantId: req.tenantId!,
+    tenantId: getTenantId(req),
     matterId: req.body.matterId,
     title: req.body.title,
     description: req.body.description ?? null,
@@ -20,18 +89,16 @@ export const createTask = asyncHandler(async (req: Request, res: Response) => {
     priority: req.body.priority ?? 'NORMAL',
     assignedTo: req.body.assignedTo ?? null,
     dueDate: req.body.dueDate ?? null,
-    createdById: req.user!.sub,
+    createdById: getUserId(req),
   });
 
   await TaskAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
-    userId: req.user?.sub ?? null,
+    tenantId: getTenantId(req),
+    userId: getOptionalUserId(req),
     taskId: task.id,
     matterId: task.matterId,
     action: 'CREATED',
-    requestId: req.id,
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'] ?? null,
+    ...requestMeta(req),
     metadata: {
       assignedTo: task.assignedTo ?? null,
       priority: task.priority,
@@ -45,20 +112,18 @@ export const createTask = asyncHandler(async (req: Request, res: Response) => {
 
 export const getTask = asyncHandler(async (req: Request, res: Response) => {
   const task = await TaskService.getTask(req.db, {
-    tenantId: req.tenantId!,
+    tenantId: getTenantId(req),
     taskId: req.params.taskId,
-    userId: req.user!.sub,
+    userId: getUserId(req),
   });
 
   await TaskAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
-    userId: req.user?.sub ?? null,
+    tenantId: getTenantId(req),
+    userId: getOptionalUserId(req),
     taskId: task.id,
     matterId: task.matterId,
     action: 'VIEWED',
-    requestId: req.id,
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'] ?? null,
+    ...requestMeta(req),
   });
 
   res.status(200).json(task);
@@ -66,8 +131,8 @@ export const getTask = asyncHandler(async (req: Request, res: Response) => {
 
 export const searchTasks = asyncHandler(async (req: Request, res: Response) => {
   const result = await TaskService.searchTasks(req.db, {
-    tenantId: req.tenantId!,
-    userId: req.user!.sub,
+    tenantId: getTenantId(req),
+    userId: getUserId(req),
     query: req.query.query ? String(req.query.query) : null,
     page: req.query.page ? Number(req.query.page) : undefined,
     limit: req.query.limit ? Number(req.query.limit) : undefined,
@@ -76,8 +141,8 @@ export const searchTasks = asyncHandler(async (req: Request, res: Response) => {
       clientId: req.query.clientId ? String(req.query.clientId) : null,
       assignedTo: req.query.assignedTo ? String(req.query.assignedTo) : null,
       createdById: req.query.createdById ? String(req.query.createdById) : null,
-      status: req.query.status ? (String(req.query.status) as any) : null,
-      priority: req.query.priority ? (String(req.query.priority) as any) : null,
+      status: parseTaskStatus(req.query.status),
+      priority: parseTaskPriority(req.query.priority),
       dueFrom: req.query.dueFrom ? String(req.query.dueFrom) : null,
       dueTo: req.query.dueTo ? String(req.query.dueTo) : null,
       overdueOnly:
@@ -88,12 +153,10 @@ export const searchTasks = asyncHandler(async (req: Request, res: Response) => {
   });
 
   await TaskAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
-    userId: req.user?.sub ?? null,
+    tenantId: getTenantId(req),
+    userId: getOptionalUserId(req),
     action: 'SEARCHED',
-    requestId: req.id,
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'] ?? null,
+    ...requestMeta(req),
     metadata: {
       query: req.query.query ?? null,
       resultCount: result.meta.total,
@@ -105,9 +168,9 @@ export const searchTasks = asyncHandler(async (req: Request, res: Response) => {
 
 export const updateTask = asyncHandler(async (req: Request, res: Response) => {
   const task = await TaskService.updateTask(req.db, {
-    tenantId: req.tenantId!,
+    tenantId: getTenantId(req),
     taskId: req.params.taskId,
-    actorId: req.user!.sub,
+    actorId: getUserId(req),
     title: req.body.title,
     description: req.body.description,
     status: req.body.status,
@@ -117,14 +180,12 @@ export const updateTask = asyncHandler(async (req: Request, res: Response) => {
   });
 
   await TaskAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
-    userId: req.user?.sub ?? null,
+    tenantId: getTenantId(req),
+    userId: getOptionalUserId(req),
     taskId: task.id,
     matterId: task.matterId,
     action: 'UPDATED',
-    requestId: req.id,
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'] ?? null,
+    ...requestMeta(req),
     metadata: {
       status: task.status,
       priority: task.priority,
@@ -138,21 +199,19 @@ export const updateTask = asyncHandler(async (req: Request, res: Response) => {
 
 export const updateTaskStatus = asyncHandler(async (req: Request, res: Response) => {
   const task = await TaskService.setStatus(req.db, {
-    tenantId: req.tenantId!,
+    tenantId: getTenantId(req),
     taskId: req.params.taskId,
-    actorId: req.user!.sub,
+    actorId: getUserId(req),
     status: req.body.status,
   });
 
   await TaskAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
-    userId: req.user?.sub ?? null,
+    tenantId: getTenantId(req),
+    userId: getOptionalUserId(req),
     taskId: task.id,
     matterId: task.matterId,
     action: task.status === 'DONE' ? 'COMPLETED' : 'STATUS_CHANGED',
-    requestId: req.id,
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'] ?? null,
+    ...requestMeta(req),
     metadata: {
       status: task.status,
       reason: req.body.reason ?? null,
@@ -164,20 +223,18 @@ export const updateTaskStatus = asyncHandler(async (req: Request, res: Response)
 
 export const completeTask = asyncHandler(async (req: Request, res: Response) => {
   const task = await TaskService.completeTask(req.db, {
-    tenantId: req.tenantId!,
+    tenantId: getTenantId(req),
     taskId: req.params.taskId,
-    actorId: req.user!.sub,
+    actorId: getUserId(req),
   });
 
   await TaskAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
-    userId: req.user?.sub ?? null,
+    tenantId: getTenantId(req),
+    userId: getOptionalUserId(req),
     taskId: task.id,
     matterId: task.matterId,
     action: 'COMPLETED',
-    requestId: req.id,
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'] ?? null,
+    ...requestMeta(req),
   });
 
   res.status(200).json(task);
@@ -185,20 +242,18 @@ export const completeTask = asyncHandler(async (req: Request, res: Response) => 
 
 export const cancelTask = asyncHandler(async (req: Request, res: Response) => {
   const task = await TaskService.cancelTask(req.db, {
-    tenantId: req.tenantId!,
+    tenantId: getTenantId(req),
     taskId: req.params.taskId,
-    actorId: req.user!.sub,
+    actorId: getUserId(req),
   });
 
   await TaskAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
-    userId: req.user?.sub ?? null,
+    tenantId: getTenantId(req),
+    userId: getOptionalUserId(req),
     taskId: task.id,
     matterId: task.matterId,
     action: 'CANCELLED',
-    requestId: req.id,
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'] ?? null,
+    ...requestMeta(req),
     metadata: {
       reason: req.body?.reason ?? null,
     },
@@ -209,21 +264,19 @@ export const cancelTask = asyncHandler(async (req: Request, res: Response) => {
 
 export const addTaskComment = asyncHandler(async (req: Request, res: Response) => {
   const result = await TaskCommentService.addComment(req.db, {
-    tenantId: req.tenantId!,
+    tenantId: getTenantId(req),
     taskId: req.params.taskId,
-    userId: req.user!.sub,
+    userId: getUserId(req),
     message: req.body.message,
   });
 
   await TaskAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
-    userId: req.user?.sub ?? null,
+    tenantId: getTenantId(req),
+    userId: getOptionalUserId(req),
     taskId: req.params.taskId,
     matterId: result.task.matterId,
     action: 'COMMENT_ADDED',
-    requestId: req.id,
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'] ?? null,
+    ...requestMeta(req),
   });
 
   res.status(201).json(result.comment);
@@ -231,21 +284,19 @@ export const addTaskComment = asyncHandler(async (req: Request, res: Response) =
 
 export const listTaskComments = asyncHandler(async (req: Request, res: Response) => {
   const result = await TaskCommentService.listComments(req.db, {
-    tenantId: req.tenantId!,
+    tenantId: getTenantId(req),
     taskId: req.params.taskId,
-    userId: req.user!.sub,
+    userId: getUserId(req),
     page: req.query.page ? Number(req.query.page) : undefined,
     limit: req.query.limit ? Number(req.query.limit) : undefined,
   });
 
   await TaskAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
-    userId: req.user?.sub ?? null,
+    tenantId: getTenantId(req),
+    userId: getOptionalUserId(req),
     taskId: req.params.taskId,
     action: 'COMMENTS_VIEWED',
-    requestId: req.id,
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'] ?? null,
+    ...requestMeta(req),
     metadata: {
       resultCount: result.meta.total,
     },
@@ -256,20 +307,18 @@ export const listTaskComments = asyncHandler(async (req: Request, res: Response)
 
 export const getTaskDashboard = asyncHandler(async (req: Request, res: Response) => {
   const dashboard = await TaskDashboardService.getDashboard(req.db, {
-    tenantId: req.tenantId!,
-    userId: req.user!.sub,
+    tenantId: getTenantId(req),
+    userId: getUserId(req),
     matterId: req.query.matterId ? String(req.query.matterId) : null,
     from: req.query.from ? String(req.query.from) : null,
     to: req.query.to ? String(req.query.to) : null,
   });
 
   await TaskAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
-    userId: req.user?.sub ?? null,
+    tenantId: getTenantId(req),
+    userId: getOptionalUserId(req),
     action: 'DASHBOARD_VIEWED',
-    requestId: req.id,
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'] ?? null,
+    ...requestMeta(req),
   });
 
   res.status(200).json(dashboard);
@@ -279,12 +328,10 @@ export const getTaskCapabilities = asyncHandler(async (req: Request, res: Respon
   const result = TaskCapabilityService.getSummary();
 
   await TaskAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
-    userId: req.user?.sub ?? null,
+    tenantId: getTenantId(req),
+    userId: getOptionalUserId(req),
     action: 'CAPABILITY_VIEWED',
-    requestId: req.id,
-    ipAddress: req.ip,
-    userAgent: req.headers['user-agent'] ?? null,
+    ...requestMeta(req),
     metadata: {
       active: result.active,
       pendingSchema: result.pendingSchema,
@@ -297,9 +344,9 @@ export const getTaskCapabilities = asyncHandler(async (req: Request, res: Respon
 
 export const requestTaskReminder = asyncHandler(async (req: Request, res: Response) => {
   await TaskReminderBridgeService.requestReminder(req.db, {
-    tenantId: req.tenantId!,
+    tenantId: getTenantId(req),
     taskId: req.params.taskId,
-    actorId: req.user!.sub,
+    actorId: getUserId(req),
     remindAt: req.body.remindAt,
     channel: req.body.channel ?? 'IN_APP',
     message: req.body.message ?? null,
@@ -313,9 +360,9 @@ export const requestTaskReminder = asyncHandler(async (req: Request, res: Respon
 
 export const requestTaskCalendarLink = asyncHandler(async (req: Request, res: Response) => {
   await TaskCalendarBridgeService.requestCalendarLink(req.db, {
-    tenantId: req.tenantId!,
+    tenantId: getTenantId(req),
     taskId: req.params.taskId,
-    actorId: req.user!.sub,
+    actorId: getUserId(req),
     title: req.body.title ?? null,
     startTime: req.body.startTime,
     endTime: req.body.endTime,
