@@ -21,9 +21,18 @@ import {
   type InvoiceTotals,
 } from './billing.types';
 
+const ZERO = new Prisma.Decimal(0);
+
 export class BillingRulesEngine {
-  toDecimal(value: DecimalInput, fieldName = 'amount'): Prisma.Decimal {
-    const decimal = new Prisma.Decimal(value);
+  toDecimal(
+    value: DecimalInput | null | undefined,
+    fieldName = 'amount',
+  ): Prisma.Decimal {
+    if (value === null || value === undefined || value === '') {
+      throw new Error(`${fieldName} is required.`);
+    }
+
+    const decimal = new Prisma.Decimal(value as Prisma.Decimal.Value);
 
     if (!decimal.isFinite()) {
       throw new Error(`${fieldName} must be a finite decimal value.`);
@@ -52,7 +61,7 @@ export class BillingRulesEngine {
     return decimal;
   }
 
-  taxRate(value?: DecimalInput): Prisma.Decimal {
+  taxRate(value?: DecimalInput | null): Prisma.Decimal {
     if (value === undefined || value === null) {
       return new Prisma.Decimal(BILLING_DEFAULTS.vatRate);
     }
@@ -66,7 +75,7 @@ export class BillingRulesEngine {
     return decimal;
   }
 
-  whtRate(value?: DecimalInput): Prisma.Decimal {
+  whtRate(value?: DecimalInput | null): Prisma.Decimal {
     if (value === undefined || value === null) {
       return new Prisma.Decimal(BILLING_DEFAULTS.whtRate);
     }
@@ -80,35 +89,39 @@ export class BillingRulesEngine {
     return decimal;
   }
 
-  calculateLine(input: InvoiceLineInput, clientTaxExempt = false): CalculatedInvoiceLine {
+  calculateLine(
+    input: InvoiceLineInput,
+    clientTaxExempt = false,
+  ): CalculatedInvoiceLine {
     const quantity = this.quantity(input.quantity);
     const unitPrice = this.money(input.unitPrice, 'unitPrice');
     const taxMode = this.resolveTaxMode(input.taxMode, clientTaxExempt);
     const taxInclusive = Boolean(input.taxInclusive);
-    const lineGrossBeforeTaxSplit = quantity.mul(unitPrice);
-    const rate = taxMode === 'VATABLE' ? this.taxRate(input.taxRate) : new Prisma.Decimal(0);
+
+    const lineGross = quantity.mul(unitPrice);
+    const rate = taxMode === 'VATABLE' ? this.taxRate(input.taxRate) : ZERO;
 
     const subTotal = taxInclusive && rate.gt(0)
-      ? lineGrossBeforeTaxSplit.div(new Prisma.Decimal(1).plus(rate))
-      : lineGrossBeforeTaxSplit;
+      ? lineGross.div(new Prisma.Decimal(1).plus(rate))
+      : lineGross;
 
     const taxAmount = taxInclusive && rate.gt(0)
-      ? lineGrossBeforeTaxSplit.minus(subTotal)
+      ? lineGross.minus(subTotal)
       : subTotal.mul(rate);
 
     const total = subTotal.plus(taxAmount);
+    const sourceType: BillingLineKind = input.sourceType ?? 'OTHER';
 
-    const sourceType = input.sourceType ?? 'OTHER';
     const isWhtApplicable =
       input.isWhtApplicable ?? this.isProfessionalFeeLine(sourceType);
 
     const resolvedWhtRate = isWhtApplicable
       ? this.whtRate(input.whtRate)
-      : new Prisma.Decimal(0);
+      : ZERO;
 
     const whtAmount = isWhtApplicable
       ? subTotal.mul(resolvedWhtRate)
-      : new Prisma.Decimal(0);
+      : ZERO;
 
     return {
       description: input.description.trim(),
@@ -118,13 +131,14 @@ export class BillingRulesEngine {
       subTotal: subTotal.toDecimalPlaces(2),
       taxRate: rate.toDecimalPlaces(4),
       taxAmount: taxAmount.toDecimalPlaces(2),
+      vatAmount: taxAmount.toDecimalPlaces(2),
       total: total.toDecimalPlaces(2),
       taxMode,
       taxInclusive,
-      matterId: input.matterId,
-      clientId: input.clientId,
+      matterId: input.matterId ?? null,
+      clientId: input.clientId ?? null,
       sourceType,
-      sourceId: input.sourceId,
+      sourceId: input.sourceId ?? null,
       isWhtApplicable,
       whtRate: resolvedWhtRate.toDecimalPlaces(4),
       whtAmount: whtAmount.toDecimalPlaces(2),
@@ -136,24 +150,18 @@ export class BillingRulesEngine {
       throw new Error('Invoice must have at least one line.');
     }
 
-    const subTotalRaw = lines.reduce(
-      (sum, line) => sum.plus(line.subTotal),
-      new Prisma.Decimal(0),
-    );
+    const subTotal = lines
+      .reduce((sum, line) => sum.plus(line.subTotal), ZERO)
+      .toDecimalPlaces(2);
 
-    const taxAmountRaw = lines.reduce(
-      (sum, line) => sum.plus(line.taxAmount),
-      new Prisma.Decimal(0),
-    );
+    const vatAmount = lines
+      .reduce((sum, line) => sum.plus(line.vatAmount), ZERO)
+      .toDecimalPlaces(2);
 
-    const whtAmountRaw = lines.reduce(
-      (sum, line) => sum.plus(line.whtAmount),
-      new Prisma.Decimal(0),
-    );
+    const whtAmount = lines
+      .reduce((sum, line) => sum.plus(line.whtAmount), ZERO)
+      .toDecimalPlaces(2);
 
-    const subTotal = subTotalRaw.toDecimalPlaces(2);
-    const vatAmount = taxAmountRaw.toDecimalPlaces(2);
-    const whtAmount = whtAmountRaw.toDecimalPlaces(2);
     const netAmount = subTotal.plus(vatAmount).toDecimalPlaces(2);
     const total = netAmount;
     const balanceDue = total.minus(whtAmount).toDecimalPlaces(2);
@@ -176,9 +184,13 @@ export class BillingRulesEngine {
   calculateInvoice(input: {
     lines: InvoiceLineInput[];
     currency?: string;
-    exchangeRate?: DecimalInput;
+    exchangeRate?: DecimalInput | null;
     clientTaxExempt?: boolean;
   }): InvoiceComputation {
+    if (input.lines.length === 0) {
+      throw new Error('Invoice must have at least one line.');
+    }
+
     if (input.lines.length > BILLING_DEFAULTS.maxInvoiceLines) {
       throw new Error(`Invoice cannot exceed ${BILLING_DEFAULTS.maxInvoiceLines} lines.`);
     }
@@ -192,9 +204,10 @@ export class BillingRulesEngine {
     return {
       ...totals,
       currency: input.currency ?? BILLING_DEFAULTS.currency,
-      exchangeRate: input.exchangeRate
-        ? this.toDecimal(input.exchangeRate, 'exchangeRate').toDecimalPlaces(6)
-        : new Prisma.Decimal(BILLING_DEFAULTS.exchangeRate),
+      exchangeRate:
+        input.exchangeRate === undefined || input.exchangeRate === null
+          ? new Prisma.Decimal(BILLING_DEFAULTS.exchangeRate)
+          : this.toDecimal(input.exchangeRate, 'exchangeRate').toDecimalPlaces(6),
       lines,
     };
   }
@@ -209,7 +222,10 @@ export class BillingRulesEngine {
     return computed;
   }
 
-  async getMatterSnapshot(tenantId: string, matterId: string): Promise<BillingMatterSnapshot> {
+  async getMatterSnapshot(
+    tenantId: string,
+    matterId: string,
+  ): Promise<BillingMatterSnapshot> {
     const matter = await prisma.matter.findFirst({
       where: {
         id: matterId,
@@ -221,20 +237,7 @@ export class BillingRulesEngine {
         tenantId: true,
         branchId: true,
         clientId: true,
-        title: true,
-        caseNumber: true,
         status: true,
-        client: {
-          select: {
-            id: true,
-            tenantId: true,
-            name: true,
-            email: true,
-            kraPin: true,
-            currency: true,
-            taxExempt: true,
-          },
-        },
       },
     });
 
@@ -242,15 +245,41 @@ export class BillingRulesEngine {
       throw new Error('Matter not found or not accessible for billing.');
     }
 
-    if (matter.status !== MatterStatus.ACTIVE && matter.status !== MatterStatus.ON_HOLD) {
+    if (
+      matter.status !== MatterStatus.ACTIVE &&
+      matter.status !== MatterStatus.ON_HOLD
+    ) {
       throw new Error(`Matter status ${matter.status} does not allow billing.`);
     }
 
-    if (matter.client.tenantId !== tenantId) {
-      throw new Error('Matter client tenant mismatch detected.');
+    const client = await prisma.client.findFirst({
+      where: {
+        id: matter.clientId,
+        tenantId,
+      },
+      select: {
+        id: true,
+        currency: true,
+        taxExempt: true,
+      },
+    });
+
+    if (!client) {
+      throw new Error('Matter client not found or not accessible for billing.');
     }
 
-    return matter;
+    return {
+      id: matter.id,
+      tenantId: matter.tenantId,
+      branchId: matter.branchId,
+      clientId: matter.clientId,
+      status: matter.status,
+      client: {
+        id: client.id,
+        currency: client.currency,
+        taxExempt: Boolean(client.taxExempt),
+      },
+    };
   }
 
   async getApprovedBillableTimeEntries(input: {
@@ -268,9 +297,7 @@ export class BillingRulesEngine {
       where: {
         tenantId: input.tenantId,
         matterId: input.matterId,
-        id: {
-          in: uniqueIds,
-        },
+        id: { in: uniqueIds },
       },
       select: {
         id: true,
@@ -282,14 +309,12 @@ export class BillingRulesEngine {
         durationHours: true,
         appliedRate: true,
         billableAmount: true,
+        billingModel: true,
+        status: true,
         isBillable: true,
         isInvoiced: true,
-        status: true,
-        billingModel: true,
       },
-      orderBy: {
-        entryDate: 'asc',
-      },
+      orderBy: { entryDate: 'asc' },
     });
 
     if (entries.length !== uniqueIds.length) {
@@ -297,10 +322,10 @@ export class BillingRulesEngine {
     }
 
     for (const entry of entries) {
-      this.assertTimeEntryBillable(entry);
+      this.assertTimeEntryBillable(entry as BillableTimeEntrySnapshot);
     }
 
-    return entries;
+    return entries as BillableTimeEntrySnapshot[];
   }
 
   linesFromTimeEntries(entries: BillableTimeEntrySnapshot[]): InvoiceLineInput[] {
@@ -313,7 +338,7 @@ export class BillingRulesEngine {
       quantity: entry.billingModel === BillingModel.HOURLY ? entry.durationHours : '1',
       unitPrice:
         entry.billingModel === BillingModel.HOURLY
-          ? entry.appliedRate
+          ? (entry.appliedRate ?? entry.billableAmount)
           : entry.billableAmount,
       taxMode: 'VATABLE',
       taxInclusive: false,
@@ -342,7 +367,7 @@ export class BillingRulesEngine {
   }
 
   private resolveTaxMode(
-    taxMode: BillingTaxMode | undefined,
+    taxMode: BillingTaxMode | null | undefined,
     clientTaxExempt: boolean,
   ): BillingTaxMode {
     if (clientTaxExempt) {
@@ -369,8 +394,8 @@ export class BillingRulesEngine {
       throw new Error(`Time entry ${entry.id} must be APPROVED before billing.`);
     }
 
-    if (entry.billableAmount.lt(0)) {
-      throw new Error(`Time entry ${entry.id} has an invalid negative billable amount.`);
+    if (this.toDecimal(entry.billableAmount, 'billableAmount').lt(0)) {
+      throw new Error(`Time entry ${entry.id} has an invalid billable amount.`);
     }
   }
 }

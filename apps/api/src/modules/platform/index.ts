@@ -3,7 +3,9 @@
 export * from './platform.types';
 export * from './platform.validators';
 export * from './PlatformPermissionMap';
-export * from './PlatformAuditService';
+
+export { PlatformAuditService } from './PlatformAuditService';
+
 export * from './PlatformCapabilityService';
 export * from './PlatformRBACService';
 export * from './PlatformTenantLifecycleService';

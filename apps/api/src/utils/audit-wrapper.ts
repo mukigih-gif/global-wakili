@@ -1,15 +1,31 @@
 import type { Request } from 'express';
 import { logAdminAction } from './audit-logger';
-import type { AuditAction, AuditEventPayload } from '../types/audit';
-import { AuditSeverity } from '../types/audit';
+import {
+  AuditAction,
+  AuditSeverity,
+  type AuditEventPayload,
+} from '../types/audit';
 
 type AuditMeta = {
   action: AuditAction;
   severity?: AuditSeverity;
+  entityType?: string;
   entityId?: string | null;
   buildSuccessPayload?: (result: unknown) => AuditEventPayload;
   buildFailurePayload?: (error: unknown) => AuditEventPayload;
 };
+
+function requestIdToString(value: unknown): string | null {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'bigint') {
+    return String(value);
+  }
+
+  return null;
+}
 
 function defaultFailurePayload(error: unknown): AuditEventPayload {
   if (error instanceof Error) {
@@ -39,6 +55,7 @@ export async function withAudit<T>(
         req,
         action: meta.action,
         severity: meta.severity ?? AuditSeverity.INFO,
+        entityType: meta.entityType,
         entityId: meta.entityId ?? null,
         payload:
           meta.buildSuccessPayload?.(result) ?? {
@@ -47,7 +64,7 @@ export async function withAudit<T>(
       });
     } catch (auditError) {
       console.error('AUDIT_SUCCESS_LOG_FAILURE', {
-        requestId: req.id,
+        requestId: requestIdToString((req as unknown as { id?: unknown }).id),
         auditError,
         action: meta.action,
       });
@@ -60,12 +77,15 @@ export async function withAudit<T>(
         req,
         action: meta.action,
         severity: AuditSeverity.CRITICAL,
+        entityType: meta.entityType,
         entityId: meta.entityId ?? null,
         payload: meta.buildFailurePayload?.(error) ?? defaultFailurePayload(error),
+        success: false,
+        failureReason: error instanceof Error ? error.message : 'Unknown error',
       });
     } catch (auditError) {
       console.error('AUDIT_FAILURE_LOG_FAILURE', {
-        requestId: req.id,
+        requestId: requestIdToString((req as unknown as { id?: unknown }).id),
         auditError,
         action: meta.action,
       });

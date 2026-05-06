@@ -36,7 +36,21 @@ export class BillingPostingService {
 
     const invoice = await tx.invoice.findFirst({
       where: { id: input.invoiceId, tenantId: input.tenantId },
-      include: { matter: true },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        clientId: true,
+        matterId: true,
+        branchId: true,
+        balanceDue: true,
+        subTotal: true,
+        whtAmount: true,
+        vatAmount: true,
+        total: true,
+        issuedDate: true,
+        currency: true,
+        exchangeRate: true,
+      },
     });
 
     if (!invoice) {
@@ -81,9 +95,28 @@ export class BillingPostingService {
 
     const reference = invoice.invoiceNumber;
 
-    const lines: Prisma.JournalLineCreateWithoutJournalInput[] = [
+    const journal = await tx.journalEntry.create({
+      data: {
+        tenantId: input.tenantId,
+        reference: `BILLING-INVOICE-${invoice.id}`,
+        description: `Invoice issued: ${reference}`,
+        date: invoice.issuedDate,
+        amount: invoice.total,
+        postedById: input.postedById ?? null,
+        currency: invoice.currency,
+        exchangeRate: invoice.exchangeRate,
+        sourceModule: 'BILLING',
+        sourceEntityType: 'INVOICE',
+        sourceEntityId: invoice.id,
+        matterId: invoice.matterId,
+      },
+      select: { id: true },
+    });
+
+    const lines: Prisma.JournalLineCreateManyInput[] = [
       {
         tenantId: input.tenantId,
+        journalId: journal.id,
         accountId: arAccount.id,
         clientId: invoice.clientId,
         matterId: invoice.matterId,
@@ -95,6 +128,7 @@ export class BillingPostingService {
       },
       {
         tenantId: input.tenantId,
+        journalId: journal.id,
         accountId: feeIncomeAccount.id,
         clientId: invoice.clientId,
         matterId: invoice.matterId,
@@ -109,6 +143,7 @@ export class BillingPostingService {
     if (invoice.whtAmount.gt(0)) {
       lines.push({
         tenantId: input.tenantId,
+        journalId: journal.id,
         accountId: whtReceivableAccount.id,
         clientId: invoice.clientId,
         matterId: invoice.matterId,
@@ -123,6 +158,7 @@ export class BillingPostingService {
     if (invoice.vatAmount.gt(0)) {
       lines.push({
         tenantId: input.tenantId,
+        journalId: journal.id,
         accountId: vatOutputAccount.id,
         clientId: invoice.clientId,
         matterId: invoice.matterId,
@@ -134,23 +170,7 @@ export class BillingPostingService {
       });
     }
 
-    await tx.journalEntry.create({
-      data: {
-        tenantId: input.tenantId,
-        reference: `BILLING-INVOICE-${invoice.id}`,
-        description: `Invoice issued: ${reference}`,
-        date: invoice.issuedDate,
-        amount: invoice.total,
-        postedById: input.postedById ?? null,
-        currency: invoice.currency,
-        exchangeRate: invoice.exchangeRate,
-        sourceModule: 'BILLING',
-        sourceEntityType: 'INVOICE',
-        sourceEntityId: invoice.id,
-        matterId: invoice.matterId,
-        lines: { create: lines },
-      },
-    });
+    await tx.journalLine.createMany({ data: lines });
   }
 
   async reverseInvoiceIssued(tx: TransactionClient, input: BillingReversalInput): Promise<void> {
@@ -178,7 +198,7 @@ export class BillingPostingService {
 
     if (existingReversal) return;
 
-    await tx.journalEntry.create({
+    const reversal = await tx.journalEntry.create({
       data: {
         tenantId: input.tenantId,
         reference: `BILLING-INVOICE-REVERSAL-${input.invoiceId}`,
@@ -193,20 +213,23 @@ export class BillingPostingService {
         sourceEntityId: input.invoiceId,
         reversalOfId: original.id,
         matterId: original.matterId,
-        lines: {
-          create: original.lines.map((line) => ({
-            tenantId: input.tenantId,
-            accountId: line.accountId,
-            clientId: line.clientId,
-            matterId: line.matterId,
-            branchId: line.branchId,
-            reference: line.reference,
-            description: `Reversal: ${line.description ?? ''}`.trim(),
-            debit: line.credit,
-            credit: line.debit,
-          })),
-        },
       },
+      select: { id: true },
+    });
+
+    await tx.journalLine.createMany({
+      data: original.lines.map((line) => ({
+        tenantId: input.tenantId,
+        journalId: reversal.id,
+        accountId: line.accountId,
+        clientId: line.clientId,
+        matterId: line.matterId,
+        branchId: line.branchId,
+        reference: line.reference,
+        description: `Reversal: ${line.description ?? ''}`.trim(),
+        debit: line.credit,
+        credit: line.debit,
+      })),
     });
   }
 

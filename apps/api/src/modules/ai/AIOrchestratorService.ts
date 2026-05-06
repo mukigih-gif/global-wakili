@@ -181,7 +181,7 @@ export class AIOrchestratorService {
         sensitivity,
       });
 
-      const artifact = await db.aiArtifact.create({
+      const artifact = await db.aIArtifact.create({
         data: {
           tenantId: input.tenantId,
           taskType,
@@ -202,7 +202,7 @@ export class AIOrchestratorService {
 
       const recommendationRecords = [];
       for (const item of result.recommendations ?? []) {
-        const created = await db.aiRecommendation.create({
+        const created = await db.aIRecommendation.create({
           data: {
             tenantId: input.tenantId,
             taskType,
@@ -228,7 +228,7 @@ export class AIOrchestratorService {
 
       let reviewTask = null;
       if (requiresHumanReview) {
-        reviewTask = await db.aiReviewTask.create({
+        reviewTask = await db.aIReviewTask.create({
           data: {
             tenantId: input.tenantId,
             artifactId: artifact.id,
@@ -362,13 +362,13 @@ export class AIOrchestratorService {
     };
 
     const [data, total] = await Promise.all([
-      db.aiArtifact.findMany({
+      db.aIArtifact.findMany({
         where,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip,
         take: limit,
       }),
-      db.aiArtifact.count({ where }),
+      db.aIArtifact.count({ where }),
     ]);
 
     return {

@@ -25,7 +25,7 @@ export class AIPromptAuditService {
       metadata?: Record<string, unknown> | null;
     },
   ) {
-    return db.aiPromptAudit.create({
+    return db.aIPromptAudit.create({
       data: {
         tenantId: params.tenantId,
         provider: params.provider,
@@ -52,7 +52,7 @@ export class AIPromptAuditService {
       metadata?: Record<string, unknown> | null;
     },
   ) {
-    return db.aiPromptAudit.update({
+    return db.aIPromptAudit.update({
       where: { id: params.promptAuditId },
       data: {
         executionStatus: params.executionStatus,

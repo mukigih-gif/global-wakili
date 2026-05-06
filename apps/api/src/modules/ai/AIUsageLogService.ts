@@ -51,7 +51,7 @@ export class AIUsageLogService {
       metadata?: Record<string, unknown> | null;
     },
   ) {
-    return db.aiUsageLog.create({
+    return db.aIUsageLog.create({
       data: {
         tenantId: params.tenantId,
         provider: params.provider,
@@ -83,7 +83,7 @@ export class AIUsageLogService {
       metadata?: Record<string, unknown> | null;
     },
   ) {
-    return db.aiUsageLog.update({
+    return db.aIUsageLog.update({
       where: { id: params.usageLogId },
       data: {
         status: params.status,
@@ -113,7 +113,7 @@ export class AIUsageLogService {
       metadata?: Record<string, unknown> | null;
     },
   ) {
-    return db.aiUsageLog.create({
+    return db.aIUsageLog.create({
       data: {
         tenantId: params.tenantId,
         provider: params.provider,
@@ -163,13 +163,13 @@ export class AIUsageLogService {
     };
 
     const [data, total] = await Promise.all([
-      db.aiUsageLog.findMany({
+      db.aIUsageLog.findMany({
         where,
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         skip,
         take: limit,
       }),
-      db.aiUsageLog.count({ where }),
+      db.aIUsageLog.count({ where }),
     ]);
 
     return {

@@ -1,19 +1,36 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "lib": ["ES2022"],
     "module": "CommonJS",
-    "moduleResolution": "Node",
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true,
-    "strict": true,
+    "moduleResolution": "node",
     "baseUrl": ".",
     "paths": {
-      "@wakili/*": ["packages/*/src"]
+      "@global-wakili/database": ["packages/database/src"],
+      "@global-wakili/database/*": ["packages/database/src/*"],
+      "@global-wakili/core/*": ["packages/core/*"],
+      "@global-wakili/common/*": ["packages/common/*"]
     },
+    "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
     "resolveJsonModule": true,
-    "declaration": true,
-    "sourceMap": true
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
+    "noEmit": true
   },
-  "exclude": ["node_modules", "dist"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "_archive",
+    "**/_archive/**",
+    "**/*.bak.ts",
+    "**/*.backup.ts",
+    "**/*.old.ts"
+  ]
 }

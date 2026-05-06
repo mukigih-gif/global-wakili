@@ -51,12 +51,6 @@ app.get('/health', (_req: Request, res: Response) => {
   });
 });
 
-/**
- * Public API health endpoint.
- *
- * This must be mounted before unifiedTenancy so infrastructure probes,
- * load balancers, and local smoke tests can verify the API without auth.
- */
 app.get('/api/v1/health', (_req: Request, res: Response) => {
   res.status(200).json({
     success: true,
@@ -68,12 +62,6 @@ app.get('/api/v1/health', (_req: Request, res: Response) => {
   });
 });
 
-/**
- * Public module health probe.
- *
- * This does not expose business data. It only confirms that the API can
- * acknowledge a module namespace while deeper module implementation continues.
- */
 app.get('/api/v1/:module/health', (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
@@ -85,22 +73,7 @@ app.get('/api/v1/:module/health', (req: Request, res: Response) => {
   });
 });
 
-/**
- * Public auth routes.
- *
- * These must remain outside unifiedTenancy because registration creates
- * the tenant and login may resolve tenant context from credentials.
- */
 app.use('/api/v1/auth', authRouter);
-
-/**
- * Protected tenant-scoped business routes.
- */
-app.use('/api/v1', unifiedTenancy, apiV1Router);
-
-/**
- * Protected tenant-scoped business routes.
- */
 app.use('/api/v1', unifiedTenancy, apiV1Router);
 
 app.use((_req: Request, res: Response) => {

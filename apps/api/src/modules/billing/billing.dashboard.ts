@@ -19,7 +19,9 @@ function delegate(db: DbClient, name: string) {
 
   if (!modelDelegate) {
     throw Object.assign(
-      new Error(`Prisma model delegate "${name}" is missing. Apply Billing schema before activating this workflow.`),
+      new Error(
+        `Prisma model delegate "${name}" is missing. Apply Billing schema before activating this workflow.`,
+      ),
       {
         statusCode: 500,
         code: 'BILLING_SCHEMA_DELEGATE_MISSING',
@@ -82,7 +84,7 @@ export class BillingDashboardService {
     const baseWhere = scopeWhere(input);
     const invoiceWhere = {
       ...baseWhere,
-      ...periodWhere(input, 'invoiceDate'),
+      ...periodWhere(input, 'issuedDate'),
     };
 
     const [
@@ -101,7 +103,7 @@ export class BillingDashboardService {
         where: invoiceWhere,
         select: {
           id: true,
-          totalAmount: true,
+          total: true,
           balanceDue: true,
           paidAmount: true,
           taxAmount: true,
@@ -128,7 +130,7 @@ export class BillingDashboardService {
       creditNote.count({
         where: {
           ...baseWhere,
-          ...periodWhere(input, 'creditDate'),
+          ...periodWhere(input, 'createdAt'),
         },
       }),
 
@@ -189,9 +191,18 @@ export class BillingDashboardService {
     ]);
 
     const totals = invoices.reduce(
-      (acc, item: any) => ({
+      (
+        acc: {
+          invoiceCount: number;
+          invoicedAmount: Prisma.Decimal;
+          paidAmount: Prisma.Decimal;
+          taxAmount: Prisma.Decimal;
+          outstandingAmount: Prisma.Decimal;
+        },
+        item: any,
+      ) => ({
         invoiceCount: acc.invoiceCount + 1,
-        invoicedAmount: acc.invoicedAmount.plus(money(item.totalAmount)),
+        invoicedAmount: acc.invoicedAmount.plus(money(item.total)),
         paidAmount: acc.paidAmount.plus(money(item.paidAmount)),
         taxAmount: acc.taxAmount.plus(money(item.taxAmount)),
         outstandingAmount: acc.outstandingAmount.plus(money(item.balanceDue)),
@@ -206,7 +217,15 @@ export class BillingDashboardService {
     );
 
     const retainerTotals = activeRetainers.reduce(
-      (acc: any, item: any) => ({
+      (
+        acc: {
+          count: number;
+          amount: Prisma.Decimal;
+          appliedAmount: Prisma.Decimal;
+          unappliedAmount: Prisma.Decimal;
+        },
+        item: any,
+      ) => ({
         count: acc.count + 1,
         amount: acc.amount.plus(money(item.amount)),
         appliedAmount: acc.appliedAmount.plus(money(item.appliedAmount)),
@@ -265,7 +284,6 @@ export class BillingDashboardService {
         proformas: recentProformas,
         creditNotes: recentCreditNotes,
       },
-      generatedAt: new Date(),
     };
   }
 }

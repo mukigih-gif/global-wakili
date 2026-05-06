@@ -1,0 +1,32 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..",
+    "outDir": "./dist",
+    "noEmit": true,
+    "types": ["node", "express"],
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "skipLibCheck": true
+  },
+  "include": [
+  "src/**/*.ts",
+  "src/**/*.d.ts",
+  "../../packages/database/src/**/*.ts"
+
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "_archive",
+    "**/_archive/**",
+    "**/*.tsx",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/*.bak.ts",
+    "**/*.backup.ts",
+    "**/*.old.ts"
+  ]
+}

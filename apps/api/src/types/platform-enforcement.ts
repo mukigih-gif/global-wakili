@@ -1,93 +1,64 @@
 // apps/api/src/types/platform-enforcement.ts
 
-export type PlatformModuleKey =
-  | 'analytics'
-  | 'ai'
-  | 'approval'
-  | 'billing'
-  | 'calendar'
-  | 'client'
-  | 'compliance'
-  | 'document'
-  | 'finance'
-  | 'integrations'
-  | 'matter'
-  | 'notifications'
-  | 'payroll'
-  | 'platform'
-  | 'procurement'
-  | 'queues'
-  | 'reporting'
-  | 'trust';
-
-export type PlatformAccessDecisionCode =
-  | 'ALLOWED'
-  | 'MODULE_UNKNOWN'
-  | 'TENANT_CONTEXT_REQUIRED'
-  | 'TENANT_ACCESS_DENIED'
-  | 'TENANT_READ_ONLY'
-  | 'FEATURE_FLAG_DISABLED'
-  | 'MAINTENANCE_ACTIVE'
-  | 'MAINTENANCE_READ_ONLY'
-  | 'IMPERSONATION_INVALID'
-  | 'IMPERSONATION_READ_ONLY'
-  | 'QUOTA_EXCEEDED';
+export type PlatformModuleKey = string;
+export type PlatformFeatureKey = string;
+export type PlatformAccessDecisionCode = string;
 
 export type PlatformAccessPolicy = {
-  moduleKey: PlatformModuleKey | string;
+  moduleKey?: PlatformModuleKey | null;
+  featureKey?: PlatformFeatureKey | null;
   allowed: boolean;
   readOnly: boolean;
-  plan: string | null;
-  subscriptionStatus: string | null;
-  lifecycleStatus: string | null;
-  entitlementEnabled: boolean;
-  reasons: string[];
-  features: string[];
+  plan?: string | null;
+  subscriptionStatus?: string | null;
+  lifecycleStatus?: string | null;
+  entitlementEnabled?: boolean | null;
+  reasons: unknown[];
+  features?: string[];
   decisionCode: PlatformAccessDecisionCode;
+  [key: string]: unknown;
 };
 
 export type PlatformMaintenancePolicy = {
-  active: Array<Record<string, unknown>>;
-  readOnlyRequired: boolean;
-  denyRequired: boolean;
-  reasons: string[];
+  generatedAt?: Date | string;
+  active?: unknown[];
+  activePolicies?: unknown[];
+  readOnlyRequired?: boolean;
+  denyRequired?: boolean;
+  reasons?: unknown[];
+  [key: string]: unknown;
 };
 
 export type PlatformBroadcastContext = {
-  activeMessages: Array<Record<string, unknown>>;
-  activeMaintenance: Array<Record<string, unknown>>;
-  readOnlyRequired: boolean;
+  generatedAt?: Date | string;
+  activeMessages?: unknown[];
+  activeMaintenance?: unknown[];
+  readOnlyRequired?: boolean;
+  [key: string]: unknown;
+};
+
+export type PlatformFeatureContext = {
+  tenantId?: string | null;
+  moduleKey?: PlatformModuleKey | null;
+  featureKey?: PlatformFeatureKey | null;
+  allowed?: boolean;
+  enabled?: boolean;
+  isEnabled?: boolean;
+  featureEnabled?: boolean;
+  source?: string | null;
+  reasons?: unknown[];
+  [key: string]: unknown;
 };
 
 export type PlatformImpersonationContext = {
   isImpersonated: boolean;
   sessionId: string | null;
-  accessMode: 'READ_ONLY' | 'ELEVATED' | null;
+  accessMode: string | null;
   targetUserId: string | null;
   requestedByPlatformUserId: string | null;
   approvedByPlatformUserId: string | null;
   status: string | null;
   expiresAt: string | null;
   reasons: string[];
+  [key: string]: unknown;
 };
-
-export type PlatformFeatureContext = {
-  featureKey: string | null;
-  allowed: boolean;
-  matchedFlags: Array<Record<string, unknown>>;
-  reasons: string[];
-};
-
-declare global {
-  namespace Express {
-    interface Request {
-      platformAccessPolicy?: PlatformAccessPolicy;
-      platformMaintenancePolicy?: PlatformMaintenancePolicy;
-      platformBroadcasts?: PlatformBroadcastContext;
-      platformImpersonation?: PlatformImpersonationContext;
-      platformFeatureContext?: PlatformFeatureContext;
-    }
-  }
-}
-
-export {};

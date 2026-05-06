@@ -1,84 +1,61 @@
-export enum AuditSeverity {
-  INFO = 'INFO',
-  LOW = 'LOW',
-  MEDIUM = 'MEDIUM',
-  HIGH = 'HIGH',
-  CRITICAL = 'CRITICAL',
-}
+import {
+  AuditAction as PrismaAuditAction,
+  AuditSeverity as PrismaAuditSeverity,
+} from '@prisma/client';
 
-export const AUDIT_REQUIRED_ACTIONS = [
-  'LOGIN_SUCCESS',
-  'LOGIN_FAILED',
-  'PASSWORD_CHANGED',
-  'MFA_ENABLED',
-  'MFA_DISABLED',
+export const AuditAction = PrismaAuditAction;
+export const AuditSeverity = PrismaAuditSeverity;
 
-  'TRUST_DEPOSIT',
-  'TRUST_WITHDRAWAL',
-  'TRUST_TRANSFER',
-  'TRUST_REVERSAL',
-  'TRUST_RECONCILIATION_COMPLETED',
-  'TRUST_RECONCILIATION_FAILED',
+export type AuditAction = PrismaAuditAction;
+export type AuditSeverity = PrismaAuditSeverity;
 
-  'JOURNAL_POSTED',
-  'JOURNAL_REVERSED',
-  'PAYMENT_ALLOCATED',
-  'PAYMENT_UNALLOCATED',
-  'INVOICE_VOIDED',
+export const AUTH_AUDIT_EVENT_CODES = {
+  LOGIN_SUCCESS: 'LOGIN_SUCCESS',
+  LOGIN_FAILED_USER_NOT_FOUND: 'LOGIN_FAILED_USER_NOT_FOUND',
+  LOGIN_FAILED_INVALID_PASSWORD: 'LOGIN_FAILED_INVALID_PASSWORD',
+  LOGIN_FAILED_MISSING_PASSWORD_HASH: 'LOGIN_FAILED_MISSING_PASSWORD_HASH',
+  LOGIN_BLOCKED_INACTIVE_USER: 'LOGIN_BLOCKED_INACTIVE_USER',
+  LOGIN_BLOCKED_LOCKED_USER: 'LOGIN_BLOCKED_LOCKED_USER',
+  LOGIN_BLOCKED_TENANT_SUSPENDED: 'LOGIN_BLOCKED_TENANT_SUSPENDED',
+  LOGOUT_SUCCESS: 'LOGOUT_SUCCESS',
+  LOGOUT_TOKEN_INVALID: 'LOGOUT_TOKEN_INVALID',
+  SESSION_CREATE_FAILED: 'SESSION_CREATE_FAILED',
+  TOKEN_VERIFICATION_FAILED: 'TOKEN_VERIFICATION_FAILED',
+  TENANT_ACCESS_DENIED: 'TENANT_ACCESS_DENIED',
+  TENANT_CONTEXT_REQUIRED: 'TENANT_CONTEXT_REQUIRED',
+  PLATFORM_AUDIT_SKIPPED_TENANT_REQUIRED: 'PLATFORM_AUDIT_SKIPPED_TENANT_REQUIRED',
+  REQUEST_FAILURE: 'REQUEST_FAILURE',
+  SYSTEM_ERROR: 'SYSTEM_ERROR',
+} as const;
 
-  'USER_CREATED',
-  'USER_ROLE_CHANGED',
-  'USER_DEACTIVATED',
-  'USER_REACTIVATED',
-  'PERMISSION_GRANTED',
-  'PERMISSION_REVOKED',
-
-  'DATA_EXPORT',
-  'DATA_IMPORT',
-  'CLIENT_RECORD_EXPORTED',
-  'DOCUMENT_DOWNLOADED',
-  'DOCUMENT_DELETED',
-
-  'REQUEST_FAILURE',
-  'SYSTEM_ERROR',
-  'RATE_LIMIT_EXCEEDED',
-  'ETIMS_SYNC',
-  'PAYROLL_GENERATED',
-  'PAYROLL_APPROVED',
-  'PROCUREMENT_APPROVED',
-] as const;
-
-export type AuditAction = (typeof AUDIT_REQUIRED_ACTIONS)[number];
+export type AuthAuditEventCode =
+  (typeof AUTH_AUDIT_EVENT_CODES)[keyof typeof AUTH_AUDIT_EVENT_CODES];
 
 export type JsonPrimitive = string | number | boolean | null;
-export type JsonValue = JsonPrimitive | JsonObject | JsonValue[];
+
+export type JsonValue =
+  | JsonPrimitive
+  | JsonObject
+  | JsonValue[];
+
 export type JsonObject = {
   [key: string]: JsonValue;
+};
+
+/**
+ * AuditEventPayload allows optional properties at construction time.
+ * Undefined values are removed by sanitizeJson before writing to Prisma JSON.
+ */
+export type AuditEventPayload = {
+  [key: string]: JsonValue | undefined;
+  success?: boolean;
+  error?: string;
+  eventCode?: string;
+  requestId?: string | null;
+  timestamp?: string;
 };
 
 export interface AuditActor {
   id: string;
   role: string;
-}
-
-export interface AuditEventPayload extends JsonObject {
-  success?: boolean;
-  error?: string;
-  timestamp?: string;
-  [key: string]: JsonValue;
-}
-
-export interface AuditEvent {
-  id: string;
-  tenantId: string;
-  actorId: string;
-  action: AuditAction;
-  severity: AuditSeverity;
-  payload: AuditEventPayload;
-  hash: string;
-  previousHash: string;
-  entityId?: string | null;
-  ipAddress?: string | null;
-  userAgent?: string | null;
-  createdAt: Date;
 }

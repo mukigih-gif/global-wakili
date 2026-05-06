@@ -1,17 +1,21 @@
 // apps/api/src/modules/platform/PlatformSeedService.ts
 
 import { PERMISSIONS } from '../../config/permissions';
-import type { PlatformDbClient, PlatformAdminRole } from './platform.types';
+import type { PlatformAdminRole, PlatformDbClient } from './platform.types';
 
 type PermissionLike = {
+  resource?: string;
   module?: string;
   action?: string;
   description?: string;
 };
 
 function flattenPlatformPermissions(): PermissionLike[] {
-  const raw = (PERMISSIONS as any)?.platform ?? {};
-  return Object.values(raw).filter(Boolean) as PermissionLike[];
+  const raw = (PERMISSIONS as { platform?: Record<string, PermissionLike> }).platform ?? {};
+
+  return Object.values(raw).filter((permission): permission is PermissionLike => {
+    return Boolean(permission && typeof permission === 'object');
+  });
 }
 
 function rolePermissionMatrix(): Record<PlatformAdminRole, string[]> {
@@ -118,11 +122,13 @@ export class PlatformSeedService {
     const permissionMap = new Map<string, any>();
 
     for (const permission of permissionInputs) {
-      const module = String(permission.module ?? 'platform').trim();
+      const module = String(permission.module ?? permission.resource ?? 'platform').trim();
       const action = String(permission.action ?? '').trim();
       const description = permission.description ? String(permission.description).trim() : null;
 
-      if (!action) continue;
+      if (!module || !action) {
+        continue;
+      }
 
       let existing = await db.platformPermission.findFirst({
         where: { module, action },
@@ -166,7 +172,9 @@ export class PlatformSeedService {
 
       for (const action of matrix[roleKey]) {
         const permission = permissionMap.get(`platform:${action}`);
-        if (!permission) continue;
+        if (!permission) {
+          continue;
+        }
 
         const existingLink = await db.platformRolePermission.findFirst({
           where: {
