@@ -346,9 +346,26 @@ function conflictBlockCode(conflictLevel?: string | null): string {
   return 'MATTER_CONFLICT_BLOCKED';
 }
 
+type MatterOnboardingDbClient = {
+  $transaction?: <T>(callback: (tx: MatterOnboardingDbClient) => Promise<T>) => Promise<T>;
+  [delegateName: string]: unknown;
+};
+
+type CreatedOnboardedMatterRecord = {
+  id: string;
+  tenantId?: string | null;
+  title?: string | null;
+  category?: string | null;
+  clientId?: string | null;
+  leadAdvocateId?: string | null;
+  status?: string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+  [key: string]: unknown;
+};
 async function runInTransaction<T>(
-  db: any,
-  callback: (tx: any) => Promise<T>,
+  db: MatterOnboardingDbClient,
+  callback: (tx: MatterOnboardingDbClient) => Promise<T>,
 ): Promise<T> {
   if (typeof db?.$transaction === 'function') {
     return db.$transaction(callback);
@@ -360,7 +377,7 @@ async function runInTransaction<T>(
 async function logMatterOnboardingAudit(
   req: Request,
   params: {
-    createdMatter: any;
+    createdMatter: CreatedOnboardedMatterRecord;
     conflictResult: Awaited<ReturnType<typeof MatterConflictService.runConflictCheck>> | null;
     workflowTemplate: {
       matterType: string;
