@@ -2,7 +2,9 @@
 
 import { createHash, randomUUID } from 'crypto';
 import { Prisma } from '@global-wakili/database';
-import { RateCardService } from './RateCardService';
+import { RateCardService, type RateCardDatabase } from './RateCardService';
+
+type QueryArgs = Record<string, unknown>;
 
 type TimeEntryStatus = 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED';
 type BillingModel = 'HOURLY' | 'FIXED_FEE' | 'CONTINGENCY' | 'CAPPED_FEE';
@@ -27,7 +29,9 @@ type TimeEntryCreateInput = {
   roleKey?: string | null;
 };
 
-type TimeEntryUpdateInput = Partial<Omit<TimeEntryCreateInput, 'tenantId' | 'matterId' | 'advocateId'>> & {
+type TimeEntryUpdateInput = Partial<
+  Omit<TimeEntryCreateInput, 'tenantId' | 'matterId' | 'advocateId'>
+> & {
   matterId?: string | null;
   advocateId?: string | null;
 };
@@ -55,12 +59,156 @@ type TimeEntryDecisionParams = {
   reason?: string | null;
 };
 
+type AuditAction = 'CREATE' | 'UPDATE' | 'APPROVE' | 'REJECT' | 'DELETE' | 'READ';
+
+type MatterTimeRecord = {
+  id: string;
+  title?: string | null;
+  category?: string | null;
+  clientId?: string | null;
+  leadAdvocateId?: string | null;
+  branchId?: string | null;
+  status?: string | null;
+  deletedAt?: Date | string | null;
+};
+
+type AdvocateTimeRecord = {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  defaultRate?: MoneyInput;
+  branchId?: string | null;
+};
+
+type BranchTimeRecord = {
+  id: string;
+  name?: string | null;
+};
+
+type TimeEntryRecord = {
+  id: string;
+  tenantId: string;
+  matterId: string;
+  advocateId: string;
+  branchId?: string | null;
+  invoiceId?: string | null;
+  billingRunId?: string | null;
+  description?: string | null;
+  entryDate?: Date | string | null;
+  startTime?: Date | string | null;
+  endTime?: Date | string | null;
+  durationHours?: MoneyInput;
+  durationMinutes?: number | string | null;
+  appliedRate?: MoneyInput;
+  billableAmount?: MoneyInput;
+  isBillable?: boolean | null;
+  isInvoiced?: boolean | null;
+  status?: TimeEntryStatus | string | null;
+  billingModel?: BillingModel | string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+  matter?: MatterTimeRecord | null;
+  advocate?: AdvocateTimeRecord | null;
+  branch?: BranchTimeRecord | null;
+};
+
+type TimeEntryAggregate = {
+  _sum?: {
+    durationHours?: MoneyInput;
+    durationMinutes?: MoneyInput;
+    billableAmount?: MoneyInput;
+  } | null;
+  _count?: {
+    id?: number | null;
+  } | number | null;
+};
+
+type TimeEntryStatusGroupRow = {
+  status?: TimeEntryStatus | string | null;
+  _count?: {
+    id?: number | null;
+  } | number | null;
+  _sum?: {
+    durationHours?: MoneyInput;
+    billableAmount?: MoneyInput;
+  } | null;
+};
+
+type TimeEntryAdvocateGroupRow = {
+  advocateId?: string | null;
+  _count?: {
+    id?: number | null;
+  } | number | null;
+  _sum?: {
+    durationHours?: MoneyInput;
+    billableAmount?: MoneyInput;
+  } | null;
+};
+
+type AuditHashRecord = {
+  hash?: string | null;
+};
+
+type FindFirstDelegate<TRecord> = {
+  findFirst(args: QueryArgs): Promise<TRecord | null>;
+};
+
+type FindManyDelegate<TRecord> = {
+  findMany(args: QueryArgs): Promise<TRecord[]>;
+};
+
+type CreateDelegate<TRecord> = {
+  create(args: QueryArgs): Promise<TRecord>;
+};
+
+type UpdateDelegate<TRecord> = {
+  update(args: QueryArgs): Promise<TRecord>;
+};
+
+type DeleteDelegate<TRecord> = {
+  delete(args: QueryArgs): Promise<TRecord>;
+};
+
+type CountDelegate = {
+  count(args: QueryArgs): Promise<number>;
+};
+
+type AggregateDelegate<TAggregate> = {
+  aggregate(args: QueryArgs): Promise<TAggregate>;
+};
+
+type GroupByDelegate<TRow> = {
+  groupBy(args: QueryArgs): Promise<TRow[]>;
+};
+
+type TimeEntryDelegate =
+  FindFirstDelegate<TimeEntryRecord> &
+  FindManyDelegate<TimeEntryRecord> &
+  CreateDelegate<TimeEntryRecord> &
+  UpdateDelegate<TimeEntryRecord> &
+  DeleteDelegate<TimeEntryRecord> &
+  CountDelegate &
+  AggregateDelegate<TimeEntryAggregate> &
+  GroupByDelegate<TimeEntryStatusGroupRow | TimeEntryAdvocateGroupRow>;
+
+type TimeTrackingDbClient = RateCardDatabase & {
+  timeEntry: TimeEntryDelegate;
+  matter: FindFirstDelegate<MatterTimeRecord>;
+  user: FindFirstDelegate<AdvocateTimeRecord> & FindManyDelegate<AdvocateTimeRecord>;
+  branch: FindFirstDelegate<BranchTimeRecord>;
+  auditLog?: FindFirstDelegate<AuditHashRecord> & CreateDelegate<unknown>;
+};
+
+function serviceError(message: string, statusCode: number, code: string): Error {
+  return Object.assign(new Error(message), {
+    statusCode,
+    code,
+  });
+}
+
 function requiredString(value: unknown, label: string, code: string): string {
   if (typeof value !== 'string' || !value.trim()) {
-    throw Object.assign(new Error(`${label} is required`), {
-      statusCode: 422,
-      code,
-    });
+    throw serviceError(`${label} is required`, 422, code);
   }
 
   return value.trim();
@@ -84,10 +232,11 @@ function normalizeDate(value: Date | string | null | undefined, label: string): 
   const parsed = value instanceof Date ? value : new Date(String(value));
 
   if (Number.isNaN(parsed.getTime())) {
-    throw Object.assign(new Error(`Invalid time-entry ${label}`), {
-      statusCode: 422,
-      code: `INVALID_TIME_ENTRY_${label.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`,
-    });
+    throw serviceError(
+      `Invalid time-entry ${label}`,
+      422,
+      `INVALID_TIME_ENTRY_${label.toUpperCase().replace(/[^A-Z0-9]/g, '_')}`,
+    );
   }
 
   return parsed;
@@ -105,7 +254,10 @@ function normalizeBoolean(value: unknown, fallback = true): boolean {
   return fallback;
 }
 
-function normalizeStatus(value?: string | null, fallback: TimeEntryStatus = 'DRAFT'): TimeEntryStatus {
+function normalizeStatus(
+  value?: string | null,
+  fallback: TimeEntryStatus = 'DRAFT',
+): TimeEntryStatus {
   const normalized = toNullableString(value)?.toUpperCase();
 
   if (
@@ -151,10 +303,11 @@ function toDecimal(value: MoneyInput, fallback = '0'): Prisma.Decimal {
   const decimal = value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
 
   if (!decimal.isFinite() || decimal.lt(0)) {
-    throw Object.assign(new Error('Time-entry numeric values must be non-negative finite decimals'), {
-      statusCode: 422,
-      code: 'INVALID_TIME_ENTRY_DECIMAL',
-    });
+    throw serviceError(
+      'Time-entry numeric values must be non-negative finite decimals',
+      422,
+      'INVALID_TIME_ENTRY_DECIMAL',
+    );
   }
 
   return decimal;
@@ -183,14 +336,15 @@ function normalizeDuration(params: {
   startTime?: Date | null;
   endTime?: Date | null;
   durationHours?: MoneyInput;
-  durationMinutes?: number | null;
+  durationMinutes?: number | string | null;
 }) {
   if (params.startTime && params.endTime) {
     if (params.startTime >= params.endTime) {
-      throw Object.assign(new Error('Time-entry startTime must be before endTime'), {
-        statusCode: 422,
-        code: 'INVALID_TIME_ENTRY_TIME_RANGE',
-      });
+      throw serviceError(
+        'Time-entry startTime must be before endTime',
+        422,
+        'INVALID_TIME_ENTRY_TIME_RANGE',
+      );
     }
 
     const durationMs = params.endTime.getTime() - params.startTime.getTime();
@@ -203,27 +357,34 @@ function normalizeDuration(params: {
     };
   }
 
-  if (typeof params.durationMinutes === 'number' && Number.isInteger(params.durationMinutes)) {
-    if (params.durationMinutes <= 0) {
-      throw Object.assign(new Error('durationMinutes must be greater than zero'), {
-        statusCode: 422,
-        code: 'INVALID_TIME_ENTRY_DURATION_MINUTES',
-      });
+  const parsedMinutes =
+    typeof params.durationMinutes === 'string'
+      ? Number(params.durationMinutes)
+      : params.durationMinutes;
+
+  if (typeof parsedMinutes === 'number' && Number.isInteger(parsedMinutes)) {
+    if (parsedMinutes <= 0) {
+      throw serviceError(
+        'durationMinutes must be greater than zero',
+        422,
+        'INVALID_TIME_ENTRY_DURATION_MINUTES',
+      );
     }
 
     return {
-      durationHours: durationToHours(params.durationMinutes),
-      durationMinutes: params.durationMinutes,
+      durationHours: durationToHours(parsedMinutes),
+      durationMinutes: parsedMinutes,
     };
   }
 
   const durationHours = toDecimal(params.durationHours, '0');
 
   if (durationHours.lte(0)) {
-    throw Object.assign(new Error('durationHours or start/end time is required'), {
-      statusCode: 422,
-      code: 'TIME_ENTRY_DURATION_REQUIRED',
-    });
+    throw serviceError(
+      'durationHours or start/end time is required',
+      422,
+      'TIME_ENTRY_DURATION_REQUIRED',
+    );
   }
 
   return {
@@ -303,7 +464,7 @@ function timeEntrySelect() {
   };
 }
 
-function compactTimeEntry(entry: any) {
+function compactTimeEntry(entry: TimeEntryRecord) {
   return {
     id: entry.id,
     tenantId: entry.tenantId,
@@ -342,8 +503,12 @@ function aggregateNumber(value: unknown): number {
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
-  if (typeof value === 'object' && typeof (value as { toString?: () => string }).toString === 'function') {
-    const parsed = Number((value as { toString: () => string }).toString());
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { toString?: unknown }).toString === 'function'
+  ) {
+    const parsed = Number((value as { toString(): string }).toString());
     return Number.isFinite(parsed) ? parsed : 0;
   }
 
@@ -412,12 +577,12 @@ function changedJsonFields(beforeData: unknown, afterData: unknown): string[] {
 }
 
 async function assertTenantMatter(
-  db: any,
+  db: TimeTrackingDbClient,
   params: {
     tenantId: string;
     matterId: string;
   },
-) {
+): Promise<MatterTimeRecord> {
   const matter = await db.matter.findFirst({
     where: {
       tenantId: params.tenantId,
@@ -437,22 +602,19 @@ async function assertTenantMatter(
   });
 
   if (!matter) {
-    throw Object.assign(new Error('Matter not found'), {
-      statusCode: 404,
-      code: 'TIME_ENTRY_MATTER_NOT_FOUND',
-    });
+    throw serviceError('Matter not found', 404, 'TIME_ENTRY_MATTER_NOT_FOUND');
   }
 
   return matter;
 }
 
 async function assertTenantAdvocate(
-  db: any,
+  db: TimeTrackingDbClient,
   params: {
     tenantId: string;
     advocateId: string;
   },
-) {
+): Promise<AdvocateTimeRecord> {
   const advocate = await db.user.findFirst({
     where: {
       tenantId: params.tenantId,
@@ -469,22 +631,23 @@ async function assertTenantAdvocate(
   });
 
   if (!advocate) {
-    throw Object.assign(new Error('Advocate not found or inactive'), {
-      statusCode: 404,
-      code: 'TIME_ENTRY_ADVOCATE_NOT_FOUND',
-    });
+    throw serviceError(
+      'Advocate not found or inactive',
+      404,
+      'TIME_ENTRY_ADVOCATE_NOT_FOUND',
+    );
   }
 
   return advocate;
 }
 
 async function assertTenantBranch(
-  db: any,
+  db: TimeTrackingDbClient,
   params: {
     tenantId: string;
     branchId?: string | null;
   },
-) {
+): Promise<BranchTimeRecord | null> {
   const branchId = toNullableString(params.branchId);
 
   if (!branchId) return null;
@@ -501,27 +664,28 @@ async function assertTenantBranch(
   });
 
   if (!branch) {
-    throw Object.assign(new Error('Branch not found'), {
-      statusCode: 404,
-      code: 'TIME_ENTRY_BRANCH_NOT_FOUND',
-    });
+    throw serviceError('Branch not found', 404, 'TIME_ENTRY_BRANCH_NOT_FOUND');
   }
 
   return branch;
 }
 
 async function resolveAppliedRate(
-  db: any,
+  db: TimeTrackingDbClient,
   params: {
     tenantId: string;
     matterId: string;
-    advocate: any;
+    advocate: AdvocateTimeRecord;
     appliedRate?: MoneyInput;
     roleKey?: string | null;
     asOf?: Date | string | null;
   },
 ): Promise<Prisma.Decimal> {
-  if (params.appliedRate !== undefined && params.appliedRate !== null && params.appliedRate !== '') {
+  if (
+    params.appliedRate !== undefined &&
+    params.appliedRate !== null &&
+    params.appliedRate !== ''
+  ) {
     return toDecimal(params.appliedRate).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
   }
 
@@ -538,15 +702,18 @@ async function resolveAppliedRate(
     return rateFromCard.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
   }
 
-  return toDecimal(params.advocate?.defaultRate ?? 0).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  return toDecimal(params.advocate.defaultRate ?? 0).toDecimalPlaces(
+    2,
+    Prisma.Decimal.ROUND_HALF_UP,
+  );
 }
 
 async function writeTimeAudit(
-  db: any,
+  db: TimeTrackingDbClient,
   params: {
     tenantId: string;
     userId?: string | null;
-    action: 'CREATE' | 'UPDATE' | 'APPROVE' | 'REJECT' | 'DELETE' | 'READ';
+    action: AuditAction;
     eventCode: string;
     timeEntryId: string;
     beforeData?: Record<string, unknown> | null;
@@ -554,7 +721,7 @@ async function writeTimeAudit(
     reason?: string | null;
   },
 ) {
-  if (!db?.auditLog?.create || !db?.auditLog?.findFirst) return null;
+  if (!db.auditLog?.create || !db.auditLog?.findFirst) return null;
 
   const createdAt = new Date().toISOString();
 
@@ -575,7 +742,10 @@ async function writeTimeAudit(
       ? previous.hash
       : '0'.repeat(64);
 
-  const beforeData = params.beforeData ? (jsonSafe(params.beforeData) as Record<string, unknown>) : null;
+  const beforeData = params.beforeData
+    ? (jsonSafe(params.beforeData) as Record<string, unknown>)
+    : null;
+
   const afterData = {
     ...(jsonSafe(params.afterData ?? {}) as Record<string, unknown>),
     eventCode: params.eventCode,
@@ -728,14 +898,42 @@ function buildListWhere(params: TimeEntryListParams) {
   return where;
 }
 
+function aggregateCount(aggregate: TimeEntryAggregate): number {
+  if (typeof aggregate._count === 'number') return aggregate._count;
+  return aggregate._count?.id ?? 0;
+}
+
+function groupCount(row: TimeEntryStatusGroupRow | TimeEntryAdvocateGroupRow): number {
+  if (typeof row._count === 'number') return row._count;
+  return row._count?.id ?? 0;
+}
+
+function uniqueAdvocateIds(rows: TimeEntryAdvocateGroupRow[]): string[] {
+  return [
+    ...new Set(
+      rows
+        .map((row) => toNullableString(row.advocateId))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ];
+}
+
+function buildAdvocateMap(advocates: AdvocateTimeRecord[]): Map<string, AdvocateTimeRecord> {
+  return new Map(advocates.map((advocate) => [advocate.id, advocate]));
+}
+
 export class TimeTrackingService {
   /**
    * Creates a time entry under strict tenant, matter, advocate, branch, and rate-card validation.
    */
-  static async createTimeEntry(db: any, input: TimeEntryCreateInput) {
+  static async createTimeEntry(db: TimeTrackingDbClient, input: TimeEntryCreateInput) {
     const tenantId = requiredString(input.tenantId, 'Tenant ID', 'TIME_ENTRY_TENANT_REQUIRED');
     const matterId = requiredString(input.matterId, 'Matter ID', 'TIME_ENTRY_MATTER_REQUIRED');
-    const advocateId = requiredString(input.advocateId, 'Advocate ID', 'TIME_ENTRY_ADVOCATE_REQUIRED');
+    const advocateId = requiredString(
+      input.advocateId,
+      'Advocate ID',
+      'TIME_ENTRY_ADVOCATE_REQUIRED',
+    );
 
     const entryDate = normalizeDate(input.entryDate, 'entry date') ?? new Date();
     const startTime = normalizeDate(input.startTime, 'start time');
@@ -814,7 +1012,7 @@ export class TimeTrackingService {
   }
 
   static async updateTimeEntry(
-    db: any,
+    db: TimeTrackingDbClient,
     params: {
       tenantId: string;
       timeEntryId: string;
@@ -823,7 +1021,11 @@ export class TimeTrackingService {
     },
   ) {
     const tenantId = requiredString(params.tenantId, 'Tenant ID', 'TIME_ENTRY_TENANT_REQUIRED');
-    const timeEntryId = requiredString(params.timeEntryId, 'Time entry ID', 'TIME_ENTRY_ID_REQUIRED');
+    const timeEntryId = requiredString(
+      params.timeEntryId,
+      'Time entry ID',
+      'TIME_ENTRY_ID_REQUIRED',
+    );
 
     const existing = await db.timeEntry.findFirst({
       where: {
@@ -834,24 +1036,23 @@ export class TimeTrackingService {
     });
 
     if (!existing) {
-      throw Object.assign(new Error('Time entry not found'), {
-        statusCode: 404,
-        code: 'TIME_ENTRY_NOT_FOUND',
-      });
+      throw serviceError('Time entry not found', 404, 'TIME_ENTRY_NOT_FOUND');
     }
 
     if (existing.isInvoiced) {
-      throw Object.assign(new Error('Invoiced time entries cannot be edited'), {
-        statusCode: 409,
-        code: 'TIME_ENTRY_ALREADY_INVOICED',
-      });
+      throw serviceError(
+        'Invoiced time entries cannot be edited',
+        409,
+        'TIME_ENTRY_ALREADY_INVOICED',
+      );
     }
 
     if (existing.status === 'APPROVED' && params.input.status === undefined) {
-      throw Object.assign(new Error('Approved time entries require an approval workflow change before editing'), {
-        statusCode: 409,
-        code: 'TIME_ENTRY_APPROVED_LOCKED',
-      });
+      throw serviceError(
+        'Approved time entries require an approval workflow change before editing',
+        409,
+        'TIME_ENTRY_APPROVED_LOCKED',
+      );
     }
 
     const matterId = toNullableString(params.input.matterId) ?? existing.matterId;
@@ -877,12 +1078,12 @@ export class TimeTrackingService {
     const startTime =
       params.input.startTime !== undefined
         ? normalizeDate(params.input.startTime, 'start time')
-        : existing.startTime ?? null;
+        : normalizeDate(existing.startTime ?? null, 'start time');
 
     const endTime =
       params.input.endTime !== undefined
         ? normalizeDate(params.input.endTime, 'end time')
-        : existing.endTime ?? null;
+        : normalizeDate(existing.endTime ?? null, 'end time');
 
     const duration = normalizeDuration({
       startTime,
@@ -899,7 +1100,7 @@ export class TimeTrackingService {
 
     const isBillable =
       params.input.isBillable !== undefined
-        ? normalizeBoolean(params.input.isBillable, existing.isBillable)
+        ? normalizeBoolean(params.input.isBillable, existing.isBillable === true)
         : existing.isBillable === true;
 
     const billingModel =
@@ -966,7 +1167,7 @@ export class TimeTrackingService {
     return compactTimeEntry(updated);
   }
 
-  static async submitTimeEntry(db: any, params: TimeEntryDecisionParams) {
+  static async submitTimeEntry(db: TimeTrackingDbClient, params: TimeEntryDecisionParams) {
     return this.transitionStatus(db, {
       ...params,
       nextStatus: 'SUBMITTED',
@@ -975,7 +1176,7 @@ export class TimeTrackingService {
     });
   }
 
-  static async approveTimeEntry(db: any, params: TimeEntryDecisionParams) {
+  static async approveTimeEntry(db: TimeTrackingDbClient, params: TimeEntryDecisionParams) {
     return this.transitionStatus(db, {
       ...params,
       nextStatus: 'APPROVED',
@@ -984,7 +1185,7 @@ export class TimeTrackingService {
     });
   }
 
-  static async rejectTimeEntry(db: any, params: TimeEntryDecisionParams) {
+  static async rejectTimeEntry(db: TimeTrackingDbClient, params: TimeEntryDecisionParams) {
     return this.transitionStatus(db, {
       ...params,
       nextStatus: 'REJECTED',
@@ -994,7 +1195,7 @@ export class TimeTrackingService {
   }
 
   private static async transitionStatus(
-    db: any,
+    db: TimeTrackingDbClient,
     params: TimeEntryDecisionParams & {
       nextStatus: TimeEntryStatus;
       action: 'UPDATE' | 'APPROVE' | 'REJECT';
@@ -1002,7 +1203,11 @@ export class TimeTrackingService {
     },
   ) {
     const tenantId = requiredString(params.tenantId, 'Tenant ID', 'TIME_ENTRY_TENANT_REQUIRED');
-    const timeEntryId = requiredString(params.timeEntryId, 'Time entry ID', 'TIME_ENTRY_ID_REQUIRED');
+    const timeEntryId = requiredString(
+      params.timeEntryId,
+      'Time entry ID',
+      'TIME_ENTRY_ID_REQUIRED',
+    );
 
     const existing = await db.timeEntry.findFirst({
       where: {
@@ -1013,24 +1218,26 @@ export class TimeTrackingService {
     });
 
     if (!existing) {
-      throw Object.assign(new Error('Time entry not found'), {
-        statusCode: 404,
-        code: 'TIME_ENTRY_NOT_FOUND',
-      });
+      throw serviceError('Time entry not found', 404, 'TIME_ENTRY_NOT_FOUND');
     }
 
     if (existing.isInvoiced) {
-      throw Object.assign(new Error('Invoiced time entries cannot change approval status'), {
-        statusCode: 409,
-        code: 'TIME_ENTRY_ALREADY_INVOICED',
-      });
+      throw serviceError(
+        'Invoiced time entries cannot change approval status',
+        409,
+        'TIME_ENTRY_ALREADY_INVOICED',
+      );
     }
 
-    if (params.nextStatus === 'APPROVED' && !['SUBMITTED', 'DRAFT', 'REJECTED'].includes(existing.status)) {
-      throw Object.assign(new Error('Time entry is not eligible for approval'), {
-        statusCode: 409,
-        code: 'TIME_ENTRY_APPROVAL_NOT_ALLOWED',
-      });
+    if (
+      params.nextStatus === 'APPROVED' &&
+      !['SUBMITTED', 'DRAFT', 'REJECTED'].includes(String(existing.status ?? ''))
+    ) {
+      throw serviceError(
+        'Time entry is not eligible for approval',
+        409,
+        'TIME_ENTRY_APPROVAL_NOT_ALLOWED',
+      );
     }
 
     const updated = await db.timeEntry.update({
@@ -1061,14 +1268,18 @@ export class TimeTrackingService {
   }
 
   static async getTimeEntryById(
-    db: any,
+    db: TimeTrackingDbClient,
     params: {
       tenantId: string;
       timeEntryId: string;
     },
   ) {
     const tenantId = requiredString(params.tenantId, 'Tenant ID', 'TIME_ENTRY_TENANT_REQUIRED');
-    const timeEntryId = requiredString(params.timeEntryId, 'Time entry ID', 'TIME_ENTRY_ID_REQUIRED');
+    const timeEntryId = requiredString(
+      params.timeEntryId,
+      'Time entry ID',
+      'TIME_ENTRY_ID_REQUIRED',
+    );
 
     const entry = await db.timeEntry.findFirst({
       where: {
@@ -1079,16 +1290,13 @@ export class TimeTrackingService {
     });
 
     if (!entry) {
-      throw Object.assign(new Error('Time entry not found'), {
-        statusCode: 404,
-        code: 'TIME_ENTRY_NOT_FOUND',
-      });
+      throw serviceError('Time entry not found', 404, 'TIME_ENTRY_NOT_FOUND');
     }
 
     return compactTimeEntry(entry);
   }
 
-  static async listTimeEntries(db: any, params: TimeEntryListParams) {
+  static async listTimeEntries(db: TimeTrackingDbClient, params: TimeEntryListParams) {
     const page = normalizePositiveInt(params.page, 1, 1000000);
     const limit = normalizePositiveInt(params.limit, 25, 100);
     const skip = (page - 1) * limit;
@@ -1127,16 +1335,16 @@ export class TimeTrackingService {
         hasPreviousPage: page > 1,
       },
       totals: {
-        entryCount: aggregate?._count?.id ?? total,
-        durationHours: aggregateNumber(aggregate?._sum?.durationHours).toFixed(2),
-        durationMinutes: aggregateNumber(aggregate?._sum?.durationMinutes),
-        billableAmount: aggregateNumber(aggregate?._sum?.billableAmount).toFixed(2),
+        entryCount: aggregateCount(aggregate) || total,
+        durationHours: aggregateNumber(aggregate._sum?.durationHours).toFixed(2),
+        durationMinutes: aggregateNumber(aggregate._sum?.durationMinutes),
+        billableAmount: aggregateNumber(aggregate._sum?.billableAmount).toFixed(2),
       },
     };
   }
 
   static async deleteDraftTimeEntry(
-    db: any,
+    db: TimeTrackingDbClient,
     params: {
       tenantId: string;
       timeEntryId: string;
@@ -1145,7 +1353,11 @@ export class TimeTrackingService {
     },
   ) {
     const tenantId = requiredString(params.tenantId, 'Tenant ID', 'TIME_ENTRY_TENANT_REQUIRED');
-    const timeEntryId = requiredString(params.timeEntryId, 'Time entry ID', 'TIME_ENTRY_ID_REQUIRED');
+    const timeEntryId = requiredString(
+      params.timeEntryId,
+      'Time entry ID',
+      'TIME_ENTRY_ID_REQUIRED',
+    );
 
     const existing = await db.timeEntry.findFirst({
       where: {
@@ -1156,24 +1368,23 @@ export class TimeTrackingService {
     });
 
     if (!existing) {
-      throw Object.assign(new Error('Time entry not found'), {
-        statusCode: 404,
-        code: 'TIME_ENTRY_NOT_FOUND',
-      });
+      throw serviceError('Time entry not found', 404, 'TIME_ENTRY_NOT_FOUND');
     }
 
     if (existing.status !== 'DRAFT') {
-      throw Object.assign(new Error('Only draft time entries can be deleted'), {
-        statusCode: 409,
-        code: 'TIME_ENTRY_DELETE_NOT_ALLOWED',
-      });
+      throw serviceError(
+        'Only draft time entries can be deleted',
+        409,
+        'TIME_ENTRY_DELETE_NOT_ALLOWED',
+      );
     }
 
     if (existing.isInvoiced) {
-      throw Object.assign(new Error('Invoiced time entries cannot be deleted'), {
-        statusCode: 409,
-        code: 'TIME_ENTRY_ALREADY_INVOICED',
-      });
+      throw serviceError(
+        'Invoiced time entries cannot be deleted',
+        409,
+        'TIME_ENTRY_ALREADY_INVOICED',
+      );
     }
 
     await db.timeEntry.delete({
@@ -1203,7 +1414,7 @@ export class TimeTrackingService {
   }
 
   static async getMatterTimeSummary(
-    db: any,
+    db: TimeTrackingDbClient,
     params: {
       tenantId: string;
       matterId: string;
@@ -1216,11 +1427,14 @@ export class TimeTrackingService {
 
     await assertTenantMatter(db, { tenantId, matterId });
 
+    const from = normalizeDate(params.from, 'from');
+    const to = normalizeDate(params.to, 'to');
+
     const where = buildListWhere({
       tenantId,
       matterId,
-      from: params.from ?? null,
-      to: params.to ?? null,
+      from,
+      to,
     });
 
     const [aggregate, byStatus, byAdvocate, recentEntries] = await Promise.all([
@@ -1245,7 +1459,7 @@ export class TimeTrackingService {
           durationHours: true,
           billableAmount: true,
         },
-      }),
+      }) as Promise<TimeEntryStatusGroupRow[]>,
       db.timeEntry.groupBy({
         by: ['advocateId'],
         where,
@@ -1256,7 +1470,7 @@ export class TimeTrackingService {
           durationHours: true,
           billableAmount: true,
         },
-      }),
+      }) as Promise<TimeEntryAdvocateGroupRow[]>,
       db.timeEntry.findMany({
         where,
         select: timeEntrySelect(),
@@ -1265,7 +1479,7 @@ export class TimeTrackingService {
       }),
     ]);
 
-    const advocateIds = byAdvocate.map((row: any) => row.advocateId).filter(Boolean);
+    const advocateIds = uniqueAdvocateIds(byAdvocate);
     const advocates = advocateIds.length
       ? await db.user.findMany({
           where: {
@@ -1282,27 +1496,27 @@ export class TimeTrackingService {
         })
       : [];
 
-    const advocateMap = new Map(advocates.map((advocate: any) => [advocate.id, advocate]));
+    const advocateMap = buildAdvocateMap(advocates);
 
     return {
       tenantId,
       matterId,
       totals: {
-        entryCount: aggregate?._count?.id ?? 0,
-        durationHours: aggregateNumber(aggregate?._sum?.durationHours).toFixed(2),
-        durationMinutes: aggregateNumber(aggregate?._sum?.durationMinutes),
-        billableAmount: aggregateNumber(aggregate?._sum?.billableAmount).toFixed(2),
+        entryCount: aggregateCount(aggregate),
+        durationHours: aggregateNumber(aggregate._sum?.durationHours).toFixed(2),
+        durationMinutes: aggregateNumber(aggregate._sum?.durationMinutes),
+        billableAmount: aggregateNumber(aggregate._sum?.billableAmount).toFixed(2),
       },
-      byStatus: byStatus.map((row: any) => ({
+      byStatus: byStatus.map((row) => ({
         status: row.status,
-        entryCount: row._count?.id ?? 0,
+        entryCount: groupCount(row),
         durationHours: aggregateNumber(row._sum?.durationHours).toFixed(2),
         billableAmount: aggregateNumber(row._sum?.billableAmount).toFixed(2),
       })),
-      byAdvocate: byAdvocate.map((row: any) => ({
+      byAdvocate: byAdvocate.map((row) => ({
         advocateId: row.advocateId,
-        advocate: advocateMap.get(row.advocateId) ?? null,
-        entryCount: row._count?.id ?? 0,
+        advocate: row.advocateId ? advocateMap.get(row.advocateId) ?? null : null,
+        entryCount: groupCount(row),
         durationHours: aggregateNumber(row._sum?.durationHours).toFixed(2),
         billableAmount: aggregateNumber(row._sum?.billableAmount).toFixed(2),
       })),
@@ -1312,7 +1526,7 @@ export class TimeTrackingService {
   }
 
   static async calculateEntryAmount(
-    db: any,
+    db: TimeTrackingDbClient,
     params: {
       tenantId: string;
       matterId: string;
@@ -1328,7 +1542,11 @@ export class TimeTrackingService {
   ) {
     const tenantId = requiredString(params.tenantId, 'Tenant ID', 'TIME_ENTRY_TENANT_REQUIRED');
     const matterId = requiredString(params.matterId, 'Matter ID', 'TIME_ENTRY_MATTER_REQUIRED');
-    const advocateId = requiredString(params.advocateId, 'Advocate ID', 'TIME_ENTRY_ADVOCATE_REQUIRED');
+    const advocateId = requiredString(
+      params.advocateId,
+      'Advocate ID',
+      'TIME_ENTRY_ADVOCATE_REQUIRED',
+    );
 
     await assertTenantMatter(db, { tenantId, matterId });
     const advocate = await assertTenantAdvocate(db, { tenantId, advocateId });
@@ -1338,13 +1556,15 @@ export class TimeTrackingService {
       durationMinutes: params.durationMinutes,
     });
 
+    const asOf = normalizeDate(params.asOf, 'as of') ?? new Date();
+
     const appliedRate = await resolveAppliedRate(db, {
       tenantId,
       matterId,
       advocate,
       appliedRate: params.appliedRate,
       roleKey: params.roleKey,
-      asOf: params.asOf ?? new Date(),
+      asOf,
     });
 
     const billingModel = normalizeBillingModel(params.billingModel);
@@ -1370,12 +1590,12 @@ export class TimeTrackingService {
   /**
    * Backward-compatible method aliases.
    */
-  static async create(db: any, input: TimeEntryCreateInput) {
+  static async create(db: TimeTrackingDbClient, input: TimeEntryCreateInput) {
     return this.createTimeEntry(db, input);
   }
 
   static async update(
-    db: any,
+    db: TimeTrackingDbClient,
     params: {
       tenantId: string;
       timeEntryId: string;
@@ -1386,12 +1606,12 @@ export class TimeTrackingService {
     return this.updateTimeEntry(db, params);
   }
 
-  static async list(db: any, params: TimeEntryListParams) {
+  static async list(db: TimeTrackingDbClient, params: TimeEntryListParams) {
     return this.listTimeEntries(db, params);
   }
 
   static async getById(
-    db: any,
+    db: TimeTrackingDbClient,
     params: {
       tenantId: string;
       timeEntryId: string;
@@ -1400,17 +1620,19 @@ export class TimeTrackingService {
     return this.getTimeEntryById(db, params);
   }
 
-  static async approve(db: any, params: TimeEntryDecisionParams) {
+  static async approve(db: TimeTrackingDbClient, params: TimeEntryDecisionParams) {
     return this.approveTimeEntry(db, params);
   }
 
-  static async reject(db: any, params: TimeEntryDecisionParams) {
+  static async reject(db: TimeTrackingDbClient, params: TimeEntryDecisionParams) {
     return this.rejectTimeEntry(db, params);
   }
 
-  static async submit(db: any, params: TimeEntryDecisionParams) {
+  static async submit(db: TimeTrackingDbClient, params: TimeEntryDecisionParams) {
     return this.submitTimeEntry(db, params);
   }
 }
 
 export default TimeTrackingService;
+
+
