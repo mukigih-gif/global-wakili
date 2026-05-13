@@ -26,7 +26,6 @@ export * from './court-hearing.service';
 export * from './statute-limit.service';
 
 export * from './MatterDashboardService';
-export * from './matter.dashboard';
 
 export * from './matter.controller';
 export * from './matter.dashboard.controller';
