@@ -7,6 +7,54 @@ import {
   prisma,
 } from '@global-wakili/database';
 
+const ZERO = new Prisma.Decimal(0);
+
+type WhtCertificateRow = {
+  id: string;
+  invoiceId: string | null;
+  certificateNumber: string | null;
+  amount: Prisma.Decimal;
+  certificateDate: Date | null;
+  status: string | null;
+};
+
+function money(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
+  if (value === null || value === undefined || value === '') return ZERO;
+
+  const parsed = new Prisma.Decimal(value);
+
+  return parsed.isFinite()
+    ? parsed.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+    : ZERO;
+}
+
+function takeLimit(value: number | undefined, fallback = 50, max = 100): number {
+  const parsed = Number(value ?? fallback);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+
+  return Math.min(Math.trunc(parsed), max);
+}
+
+function skipOffset(value: number | undefined): number {
+  const parsed = Number(value ?? 0);
+
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+
+  return Math.trunc(parsed);
+}
+
+function dateWindow(field: string, from?: Date, to?: Date) {
+  return from || to
+    ? {
+        [field]: {
+          ...(from ? { gte: from } : {}),
+          ...(to ? { lte: to } : {}),
+        },
+      }
+    : {};
+}
+
 export class PaymentDashboardService {
   async getDashboard(input: {
     tenantId: string;
@@ -14,29 +62,9 @@ export class PaymentDashboardService {
     to?: Date;
     branchId?: string;
   }) {
-    const receiptDateWhere =
-      input.from || input.to
-        ? {
-            receivedAt: {
-              ...(input.from ? { gte: input.from } : {}),
-              ...(input.to ? { lte: input.to } : {}),
-            },
-          }
-        : {};
-
-    const invoiceDateWhere =
-      input.from || input.to
-        ? {
-            issuedDate: {
-              ...(input.from ? { gte: input.from } : {}),
-              ...(input.to ? { lte: input.to } : {}),
-            },
-          }
-        : {};
-
     const receiptWhere = {
       tenantId: input.tenantId,
-      ...receiptDateWhere,
+      ...dateWindow('receivedAt', input.from, input.to),
       ...(input.branchId
         ? {
             matter: {
@@ -48,7 +76,7 @@ export class PaymentDashboardService {
 
     const invoiceWhere = {
       tenantId: input.tenantId,
-      ...invoiceDateWhere,
+      ...dateWindow('issuedDate', input.from, input.to),
       ...(input.branchId ? { branchId: input.branchId } : {}),
     };
 
@@ -70,18 +98,26 @@ export class PaymentDashboardService {
       unallocatedReceiptCount,
     ] = await Promise.all([
       prisma.paymentReceipt.count({ where: receiptWhere }),
+
       prisma.paymentReceipt.count({
         where: { ...receiptWhere, status: PaymentReceiptStatus.RECEIVED },
       }),
+
       prisma.paymentReceipt.count({
         where: { ...receiptWhere, status: PaymentReceiptStatus.ALLOCATED },
       }),
+
       prisma.paymentReceipt.count({
-        where: { ...receiptWhere, status: PaymentReceiptStatus.PARTIALLY_ALLOCATED },
+        where: {
+          ...receiptWhere,
+          status: PaymentReceiptStatus.PARTIALLY_ALLOCATED,
+        },
       }),
+
       prisma.paymentReceipt.count({
         where: { ...receiptWhere, status: PaymentReceiptStatus.REVERSED },
       }),
+
       prisma.paymentReceipt.aggregate({
         where: receiptWhere,
         _sum: {
@@ -89,41 +125,39 @@ export class PaymentDashboardService {
           unallocatedAmount: true,
         },
       }),
+
       prisma.paymentReceiptAllocation.aggregate({
         where: {
           tenantId: input.tenantId,
           allocationType: 'CASH',
-          ...(input.from || input.to
-            ? {
-                createdAt: {
-                  ...(input.from ? { gte: input.from } : {}),
-                  ...(input.to ? { lte: input.to } : {}),
-                },
-              }
-            : {}),
+          ...dateWindow('createdAt', input.from, input.to),
         },
         _sum: {
           amountApplied: true,
         },
       }),
+
       prisma.paymentRefund.count({
         where: {
           tenantId: input.tenantId,
           status: 'PENDING_APPROVAL',
         },
       }),
+
       prisma.paymentRefund.count({
         where: {
           tenantId: input.tenantId,
           status: 'APPROVED',
         },
       }),
+
       prisma.paymentRefund.count({
         where: {
           tenantId: input.tenantId,
           status: 'PAID',
         },
       }),
+
       prisma.paymentRefund.aggregate({
         where: {
           tenantId: input.tenantId,
@@ -132,6 +166,7 @@ export class PaymentDashboardService {
           amount: true,
         },
       }),
+
       prisma.invoice.aggregate({
         where: invoiceWhere,
         _sum: {
@@ -141,25 +176,20 @@ export class PaymentDashboardService {
           total: true,
         },
       }),
+
       prisma.withholdingTaxCertificate.aggregate({
         where: {
           tenantId: input.tenantId,
           status: {
             not: 'CANCELLED',
           },
-          ...(input.from || input.to
-            ? {
-                certificateDate: {
-                  ...(input.from ? { gte: input.from } : {}),
-                  ...(input.to ? { lte: input.to } : {}),
-                },
-              }
-            : {}),
+          ...dateWindow('certificateDate', input.from, input.to),
         },
         _sum: {
           amount: true,
         },
       }),
+
       prisma.invoice.aggregate({
         where: {
           tenantId: input.tenantId,
@@ -172,6 +202,7 @@ export class PaymentDashboardService {
           balanceDue: {
             gt: 0,
           },
+          ...(input.branchId ? { branchId: input.branchId } : {}),
         },
         _sum: {
           balanceDue: true,
@@ -180,9 +211,10 @@ export class PaymentDashboardService {
           id: true,
         },
       }),
+
       prisma.paymentReceipt.count({
         where: {
-          tenantId: input.tenantId,
+          ...receiptWhere,
           status: {
             not: PaymentReceiptStatus.REVERSED,
           },
@@ -193,13 +225,12 @@ export class PaymentDashboardService {
       }),
     ]);
 
-    const totalWhtExpected = invoiceTotals._sum.whtAmount ?? new Prisma.Decimal(0);
-    const totalWhtCertificatesReceived =
-      whtCertificateTotals._sum.amount ?? new Prisma.Decimal(0);
+    const totalWhtExpected = money(invoiceTotals._sum.whtAmount);
+    const totalWhtCertificatesReceived = money(whtCertificateTotals._sum.amount);
 
     const whtOutstanding = Prisma.Decimal.max(
       totalWhtExpected.minus(totalWhtCertificatesReceived),
-      new Prisma.Decimal(0),
+      ZERO,
     ).toDecimalPlaces(2);
 
     return {
@@ -211,13 +242,13 @@ export class PaymentDashboardService {
         reversed,
       },
       totals: {
-        receivedAmount: receiptTotals._sum.amount ?? new Prisma.Decimal(0),
-        allocatedAmount: allocationTotals._sum.amountApplied ?? new Prisma.Decimal(0),
-        unallocatedAmount: receiptTotals._sum.unallocatedAmount ?? new Prisma.Decimal(0),
-        refundedAmount: refundTotals._sum.amount ?? new Prisma.Decimal(0),
-        invoiceTotal: invoiceTotals._sum.total ?? new Prisma.Decimal(0),
-        invoiceCashBalanceDue: invoiceTotals._sum.balanceDue ?? new Prisma.Decimal(0),
-        invoiceCashPaidAmount: invoiceTotals._sum.paidAmount ?? new Prisma.Decimal(0),
+        receivedAmount: money(receiptTotals._sum.amount),
+        allocatedAmount: money(allocationTotals._sum.amountApplied),
+        unallocatedAmount: money(receiptTotals._sum.unallocatedAmount),
+        refundedAmount: money(refundTotals._sum.amount),
+        invoiceTotal: money(invoiceTotals._sum.total),
+        invoiceCashBalanceDue: money(invoiceTotals._sum.balanceDue),
+        invoiceCashPaidAmount: money(invoiceTotals._sum.paidAmount),
       },
       wht: {
         expectedAmount: totalWhtExpected,
@@ -226,11 +257,11 @@ export class PaymentDashboardService {
       },
       overdueCollections: {
         count: overdueInvoiceTotals._count.id,
-        balanceDue: overdueInvoiceTotals._sum.balanceDue ?? new Prisma.Decimal(0),
+        balanceDue: money(overdueInvoiceTotals._sum.balanceDue),
       },
       unallocatedReceipts: {
         count: unallocatedReceiptCount,
-        amount: receiptTotals._sum.unallocatedAmount ?? new Prisma.Decimal(0),
+        amount: money(receiptTotals._sum.unallocatedAmount),
       },
       refunds: {
         pendingApproval: refundsPending,
@@ -276,15 +307,14 @@ export class PaymentDashboardService {
           select: {
             id: true,
             title: true,
-            caseNumber: true,
           },
         },
       },
       orderBy: {
         receivedAt: 'desc',
       },
-      take: Math.min(input.take ?? 50, 100),
-      skip: input.skip ?? 0,
+      take: takeLimit(input.take),
+      skip: skipOffset(input.skip),
     });
   }
 
@@ -313,20 +343,6 @@ export class PaymentDashboardService {
         balanceDue: true,
         issuedDate: true,
         dueDate: true,
-        withholdingCertificates: {
-          where: {
-            status: {
-              not: 'CANCELLED',
-            },
-          },
-          select: {
-            id: true,
-            certificateNumber: true,
-            amount: true,
-            certificateDate: true,
-            status: true,
-          },
-        },
         client: {
           select: {
             id: true,
@@ -338,29 +354,69 @@ export class PaymentDashboardService {
           select: {
             id: true,
             title: true,
-            caseNumber: true,
           },
         },
       },
       orderBy: {
         issuedDate: 'desc',
       },
-      take: Math.min(input.take ?? 50, 100),
-      skip: input.skip ?? 0,
+      take: takeLimit(input.take),
+      skip: skipOffset(input.skip),
     });
 
+    const invoiceIds = invoices.map((invoice) => invoice.id);
+
+    const certificates: WhtCertificateRow[] = invoiceIds.length
+      ? await prisma.withholdingTaxCertificate.findMany({
+          where: {
+            tenantId: input.tenantId,
+            invoiceId: {
+              in: invoiceIds,
+            },
+            status: {
+              not: 'CANCELLED',
+            },
+          },
+          select: {
+            id: true,
+            invoiceId: true,
+            certificateNumber: true,
+            amount: true,
+            certificateDate: true,
+            status: true,
+          },
+          orderBy: {
+            certificateDate: 'desc',
+          },
+        })
+      : [];
+
+    const certificatesByInvoice = new Map<string, WhtCertificateRow[]>();
+
+    for (const certificate of certificates) {
+      if (!certificate.invoiceId) continue;
+
+      const rows = certificatesByInvoice.get(certificate.invoiceId) ?? [];
+      rows.push(certificate);
+      certificatesByInvoice.set(certificate.invoiceId, rows);
+    }
+
     return invoices.map((invoice) => {
-      const certificateAmount = invoice.withholdingCertificates.reduce(
-        (sum, certificate) => sum.plus(certificate.amount),
-        new Prisma.Decimal(0),
+      const invoiceCertificates = certificatesByInvoice.get(invoice.id) ?? [];
+
+      const certificateAmount = invoiceCertificates.reduce(
+        (sum: Prisma.Decimal, certificate: WhtCertificateRow) =>
+          sum.plus(money(certificate.amount)),
+        ZERO,
       );
 
       return {
         ...invoice,
+        withholdingTaxCertificates: invoiceCertificates,
         certificateAmount: certificateAmount.toDecimalPlaces(2),
         outstandingWhtAmount: Prisma.Decimal.max(
-          invoice.whtAmount.minus(certificateAmount),
-          new Prisma.Decimal(0),
+          money(invoice.whtAmount).minus(certificateAmount),
+          ZERO,
         ).toDecimalPlaces(2),
       };
     });
@@ -400,7 +456,6 @@ export class PaymentDashboardService {
           select: {
             id: true,
             title: true,
-            caseNumber: true,
           },
         },
         client: {
@@ -414,7 +469,7 @@ export class PaymentDashboardService {
       orderBy: {
         dueDate: 'asc',
       },
-      take: Math.min(input.take ?? 50, 100),
+      take: takeLimit(input.take),
     });
   }
 }

@@ -1,4 +1,4 @@
-// apps/api/src/modules/payments/payment.types.ts
+﻿// apps/api/src/modules/payments/payment.types.ts
 
 import {
   PaymentMethod,
@@ -84,7 +84,6 @@ export type PaymentReceiptWithRelations = Prisma.PaymentReceiptGetPayload<{
       select: {
         id: true;
         title: true;
-        caseNumber: true;
       };
     };
     invoice: {

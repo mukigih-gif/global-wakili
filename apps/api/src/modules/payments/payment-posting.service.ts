@@ -15,6 +15,157 @@ import {
 
 type TransactionClient = Prisma.TransactionClient;
 
+type FindFirstDelegate = {
+  findFirst: (args?: never) => Promise<unknown>;
+};
+
+function asFindFirstDelegate(delegate: unknown): FindFirstDelegate | null {
+  if (
+    delegate &&
+    typeof delegate === 'object' &&
+    'findFirst' in delegate &&
+    typeof (delegate as { findFirst?: unknown }).findFirst === 'function'
+  ) {
+    return delegate as FindFirstDelegate;
+  }
+
+  return null;
+}
+
+type BranchRef = {
+  id: string;
+};
+
+type MatterBranchRef = {
+  branchId: string | null;
+};
+
+type SystemAccountRef = {
+  id: string;
+};
+
+type PaymentJournalLine = {
+  tenantId: string;
+  journalId: string;
+  accountId: string;
+  clientId?: string | null;
+  matterId?: string | null;
+  branchId?: string | null;
+  reference?: string | null;
+  description?: string | null;
+  debit: Prisma.Decimal;
+  credit: Prisma.Decimal;
+};
+
+type DraftPaymentJournalLine = Omit<PaymentJournalLine, 'journalId'>;
+
+const ZERO = new Prisma.Decimal(0);
+
+function money(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
+  if (value === null || value === undefined || value === '') return ZERO;
+
+  const amount = new Prisma.Decimal(value);
+
+  if (!amount.isFinite()) return ZERO;
+
+  return amount.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+}
+
+function assertPositive(amount: Prisma.Decimal, message: string): void {
+  if (!amount.isFinite() || amount.lte(0)) {
+    throw Object.assign(new Error(message), {
+      statusCode: 422,
+      code: 'PAYMENT_POSTING_AMOUNT_INVALID',
+    });
+  }
+}
+
+function sumDebits(lines: DraftPaymentJournalLine[]): Prisma.Decimal {
+  return lines.reduce((sum, line) => sum.plus(money(line.debit)), ZERO);
+}
+
+function sumCredits(lines: DraftPaymentJournalLine[]): Prisma.Decimal {
+  return lines.reduce((sum, line) => sum.plus(money(line.credit)), ZERO);
+}
+
+function assertBalanced(lines: DraftPaymentJournalLine[], context: string): void {
+  if (lines.length < 2) {
+    throw Object.assign(new Error(`${context} requires at least two journal lines.`), {
+      statusCode: 422,
+      code: 'PAYMENT_POSTING_INCOMPLETE_JOURNAL',
+    });
+  }
+
+  const debitTotal = sumDebits(lines);
+  const creditTotal = sumCredits(lines);
+
+  if (!debitTotal.equals(creditTotal)) {
+    throw Object.assign(new Error(`${context} journal is not balanced.`), {
+      statusCode: 422,
+      code: 'PAYMENT_POSTING_UNBALANCED_JOURNAL',
+      details: {
+        debitTotal: debitTotal.toString(),
+        creditTotal: creditTotal.toString(),
+      },
+    });
+  }
+
+  if (debitTotal.lte(0)) {
+    throw Object.assign(new Error(`${context} journal total must be greater than zero.`), {
+      statusCode: 422,
+      code: 'PAYMENT_POSTING_ZERO_JOURNAL',
+    });
+  }
+}
+
+function normalizeLine(line: DraftPaymentJournalLine, journalId: string): PaymentJournalLine {
+  const debit = money(line.debit);
+  const credit = money(line.credit);
+
+  if (debit.gt(0) && credit.gt(0)) {
+    throw Object.assign(new Error('A journal line cannot have both debit and credit amounts.'), {
+      statusCode: 422,
+      code: 'PAYMENT_POSTING_DOUBLE_SIDED_LINE',
+      details: {
+        accountId: line.accountId,
+      },
+    });
+  }
+
+  if (debit.lt(0) || credit.lt(0)) {
+    throw Object.assign(new Error('Journal line debit/credit amounts cannot be negative.'), {
+      statusCode: 422,
+      code: 'PAYMENT_POSTING_NEGATIVE_LINE',
+      details: {
+        accountId: line.accountId,
+      },
+    });
+  }
+
+  if (debit.equals(0) && credit.equals(0)) {
+    throw Object.assign(new Error('Journal line cannot be zero-valued.'), {
+      statusCode: 422,
+      code: 'PAYMENT_POSTING_ZERO_LINE',
+      details: {
+        accountId: line.accountId,
+      },
+    });
+  }
+
+  return {
+    tenantId: line.tenantId,
+    journalId,
+    accountId: line.accountId,
+    clientId: line.clientId ?? null,
+    matterId: line.matterId ?? null,
+    branchId: line.branchId ?? null,
+    reference: line.reference ?? null,
+    description: line.description ?? null,
+    debit,
+    credit,
+  };
+}
+
 export class PaymentPostingService {
   async postReceipt(
     tx: TransactionClient,
@@ -43,16 +194,38 @@ export class PaymentPostingService {
     });
 
     if (!receipt) {
-      throw new Error('Payment receipt not found for posting.');
+      throw Object.assign(new Error('Payment receipt not found for posting.'), {
+        statusCode: 404,
+        code: 'PAYMENT_RECEIPT_NOT_FOUND_FOR_POSTING',
+      });
     }
 
+    const receiptAmount = money(receipt.amount);
+    assertPositive(receiptAmount, 'Payment receipt amount must be greater than zero.');
+
     const allocatedAmount = receipt.allocations.reduce(
-      (sum, allocation) => sum.plus(allocation.amountApplied),
-      new Prisma.Decimal(0),
+      (sum: Prisma.Decimal, allocation: any) => sum.plus(money(allocation.amountApplied)),
+      ZERO,
     );
 
-    const unallocatedAmount = receipt.amount.minus(allocatedAmount).toDecimalPlaces(2);
+    if (allocatedAmount.gt(receiptAmount)) {
+      throw Object.assign(new Error('Payment receipt allocations exceed receipt amount.'), {
+        statusCode: 422,
+        code: 'PAYMENT_ALLOCATIONS_EXCEED_RECEIPT',
+        details: {
+          receiptAmount: receiptAmount.toString(),
+          allocatedAmount: allocatedAmount.toString(),
+        },
+      });
+    }
 
+    const unallocatedAmount = receiptAmount.minus(allocatedAmount).toDecimalPlaces(2);
+
+    const branchId = await this.resolveReceiptBranchId(tx, {
+      tenantId: input.tenantId,
+      matterId: receipt.matterId,
+      allocations: receipt.allocations,
+    });
     const bankAccount = await this.ensureSystemAccount(tx, {
       tenantId: input.tenantId,
       code: '1000',
@@ -80,71 +253,65 @@ export class PaymentPostingService {
       normalBalance: BalanceSide.CREDIT,
     });
 
-    const creditLines: Prisma.JournalLineCreateWithoutJournalInput[] = [];
+    const lines: DraftPaymentJournalLine[] = [
+      {
+        tenantId: input.tenantId,
+        accountId: bankAccount.id,
+        clientId: receipt.clientId,
+        matterId: receipt.matterId,
+        branchId: null,
+        reference: receipt.receiptNumber,
+        description: `Office bank receipt ${receipt.receiptNumber}`,
+        debit: receiptAmount,
+        credit: ZERO,
+      },
+    ];
 
     if (allocatedAmount.gt(0)) {
-      creditLines.push({
+      lines.push({
         tenantId: input.tenantId,
         accountId: arAccount.id,
         clientId: receipt.clientId,
         matterId: receipt.matterId,
+        branchId: null,
         reference: receipt.receiptNumber,
         description: `Accounts receivable cleared ${receipt.receiptNumber}`,
-        debit: new Prisma.Decimal(0),
+        debit: ZERO,
         credit: allocatedAmount.toDecimalPlaces(2),
       });
     }
 
     if (unallocatedAmount.gt(0)) {
-      creditLines.push({
+      lines.push({
         tenantId: input.tenantId,
         accountId: clientDepositAccount.id,
         clientId: receipt.clientId,
         matterId: receipt.matterId,
+        branchId: null,
         reference: receipt.receiptNumber,
         description: `Unallocated client receipt ${receipt.receiptNumber}`,
-        debit: new Prisma.Decimal(0),
+        debit: ZERO,
         credit: unallocatedAmount,
       });
     }
 
-    if (creditLines.length === 0) {
-      throw new Error('Payment receipt posting has no credit leg.');
-    }
-
-    await tx.journalEntry.create({
-      data: {
-        tenantId: input.tenantId,
-        reference: `PAYMENT-RECEIPT-${receipt.id}`,
-        description: `Payment receipt ${receipt.receiptNumber}`,
-        date: receipt.receivedAt,
-        amount: receipt.amount,
-        postedById: input.postedById ?? null,
-        currency: receipt.currency,
-        exchangeRate: receipt.exchangeRate,
-        sourceModule: 'PAYMENTS',
-        sourceEntityType: 'PAYMENT_RECEIPT',
-        sourceEntityId: receipt.id,
-        matterId: receipt.matterId,
-        lines: {
-          create: [
-            {
-              tenantId: input.tenantId,
-              accountId: bankAccount.id,
-              clientId: receipt.clientId,
-              matterId: receipt.matterId,
-              reference: receipt.receiptNumber,
-              description: `Office bank receipt ${receipt.receiptNumber}`,
-              debit: receipt.amount,
-              credit: new Prisma.Decimal(0),
-            },
-            ...creditLines,
-          ],
-        },
-      },
+    await this.createJournalWithLines(tx, {
+      tenantId: input.tenantId,
+      reference: `PAYMENT-RECEIPT-${receipt.id}`,
+      description: `Payment receipt ${receipt.receiptNumber}`,
+      date: receipt.receivedAt,
+      amount: receiptAmount,
+      postedById: input.postedById ?? null,
+      currency: receipt.currency,
+      exchangeRate: receipt.exchangeRate,
+      sourceEntityType: 'PAYMENT_RECEIPT',
+      sourceEntityId: receipt.id,
+      reversalOfId: null,
+      matterId: receipt.matterId,
+      lines,
     });
 
-    if (!receipt.unallocatedAmount.eq(unallocatedAmount)) {
+    if (!money(receipt.unallocatedAmount).equals(unallocatedAmount)) {
       await tx.paymentReceipt.update({
         where: { id: receipt.id },
         data: { unallocatedAmount },
@@ -168,25 +335,51 @@ export class PaymentPostingService {
         matterId: true,
         currency: true,
         exchangeRate: true,
+        unallocatedAmount: true,
       },
     });
 
     if (!receipt) {
-      throw new Error('Payment receipt not found for allocation reclassification.');
+      throw Object.assign(new Error('Payment receipt not found for allocation reclassification.'), {
+        statusCode: 404,
+        code: 'PAYMENT_RECEIPT_NOT_FOUND_FOR_ALLOCATION_POSTING',
+      });
     }
+
+    const amount = money(input.amount);
+    assertPositive(amount, 'Payment allocation amount must be greater than zero.');
+
+    const sourceEntityId = this.allocationSourceEntityId(input.paymentReceiptId, input.invoiceId, amount);
 
     const existing = await tx.journalEntry.findFirst({
       where: {
         tenantId: input.tenantId,
         sourceModule: 'PAYMENTS',
         sourceEntityType: 'PAYMENT_ALLOCATION',
-        sourceEntityId: `${input.paymentReceiptId}:${input.invoiceId}:${input.amount.toFixed(2)}`,
+        sourceEntityId,
       },
       select: { id: true },
     });
 
     if (existing) return;
 
+    if (money(receipt.unallocatedAmount).lt(amount)) {
+      throw Object.assign(new Error('Payment receipt has insufficient unallocated amount.'), {
+        statusCode: 422,
+        code: 'PAYMENT_INSUFFICIENT_UNALLOCATED_AMOUNT',
+        details: {
+          paymentReceiptId: receipt.id,
+          available: money(receipt.unallocatedAmount).toString(),
+          requested: amount.toString(),
+        },
+      });
+    }
+
+    const branchId = await this.resolveReceiptBranchId(tx, {
+      tenantId: input.tenantId,
+      matterId: receipt.matterId,
+      allocations: [{ invoiceId: input.invoiceId }],
+    });
     const clientDepositAccount = await this.ensureSystemAccount(tx, {
       tenantId: input.tenantId,
       code: '2300',
@@ -205,52 +398,50 @@ export class PaymentPostingService {
       normalBalance: BalanceSide.DEBIT,
     });
 
-    await tx.journalEntry.create({
-      data: {
-        tenantId: input.tenantId,
-        reference: `PAYMENT-ALLOCATION-${receipt.id}-${input.invoiceId}`,
-        description: `Receipt allocation reclassification ${receipt.receiptNumber}`,
-        date: new Date(),
-        amount: input.amount,
-        postedById: input.allocatedById ?? null,
-        currency: receipt.currency,
-        exchangeRate: receipt.exchangeRate,
-        sourceModule: 'PAYMENTS',
-        sourceEntityType: 'PAYMENT_ALLOCATION',
-        sourceEntityId: `${input.paymentReceiptId}:${input.invoiceId}:${input.amount.toFixed(2)}`,
-        matterId: receipt.matterId,
-        lines: {
-          create: [
-            {
-              tenantId: input.tenantId,
-              accountId: clientDepositAccount.id,
-              clientId: receipt.clientId,
-              matterId: receipt.matterId,
-              reference: receipt.receiptNumber,
-              description: `Reduce unallocated receipt ${receipt.receiptNumber}`,
-              debit: input.amount,
-              credit: new Prisma.Decimal(0),
-            },
-            {
-              tenantId: input.tenantId,
-              accountId: arAccount.id,
-              clientId: receipt.clientId,
-              matterId: receipt.matterId,
-              reference: receipt.receiptNumber,
-              description: `Clear accounts receivable ${receipt.receiptNumber}`,
-              debit: new Prisma.Decimal(0),
-              credit: input.amount,
-            },
-          ],
+    await this.createJournalWithLines(tx, {
+      tenantId: input.tenantId,
+      reference: `PAYMENT-ALLOCATION-${receipt.id}-${input.invoiceId}`,
+      description: `Receipt allocation reclassification ${receipt.receiptNumber}`,
+      date: new Date(),
+      amount,
+      postedById: input.allocatedById ?? null,
+      currency: receipt.currency,
+      exchangeRate: receipt.exchangeRate,
+      sourceEntityType: 'PAYMENT_ALLOCATION',
+      sourceEntityId,
+      reversalOfId: null,
+      matterId: receipt.matterId,
+      lines: [
+        {
+          tenantId: input.tenantId,
+          accountId: clientDepositAccount.id,
+          clientId: receipt.clientId,
+          matterId: receipt.matterId,
+          branchId: null,
+          reference: receipt.receiptNumber,
+          description: `Reduce unallocated receipt ${receipt.receiptNumber}`,
+          debit: amount,
+          credit: ZERO,
         },
-      },
+        {
+          tenantId: input.tenantId,
+          accountId: arAccount.id,
+          clientId: receipt.clientId,
+          matterId: receipt.matterId,
+          branchId: null,
+          reference: receipt.receiptNumber,
+          description: `Clear accounts receivable ${receipt.receiptNumber}`,
+          debit: ZERO,
+          credit: amount,
+        },
+      ],
     });
 
     await tx.paymentReceipt.update({
       where: { id: receipt.id },
       data: {
         unallocatedAmount: {
-          decrement: input.amount,
+          decrement: amount,
         },
       },
     });
@@ -267,12 +458,15 @@ export class PaymentPostingService {
       reason: string;
     },
   ): Promise<void> {
+    const amount = money(input.amount);
+    const sourceEntityId = this.allocationSourceEntityId(input.paymentReceiptId, input.invoiceId, amount);
+
     const original = await tx.journalEntry.findFirst({
       where: {
         tenantId: input.tenantId,
         sourceModule: 'PAYMENTS',
         sourceEntityType: 'PAYMENT_ALLOCATION',
-        sourceEntityId: `${input.paymentReceiptId}:${input.invoiceId}:${input.amount.toFixed(2)}`,
+        sourceEntityId,
       },
       include: { lines: true },
     });
@@ -291,33 +485,37 @@ export class PaymentPostingService {
 
     if (existing) return;
 
-    await tx.journalEntry.create({
-      data: {
+    await this.createJournalWithLines(tx, {
+      tenantId: input.tenantId,
+      reference: `PAYMENT-ALLOCATION-REVERSAL-${original.id}`,
+      description: `Allocation reversal: ${input.reason}`,
+      date: new Date(),
+      amount: money(original.amount),
+      postedById: input.reversedById ?? null,
+      currency: original.currency,
+      exchangeRate: original.exchangeRate,
+      sourceEntityType: 'PAYMENT_ALLOCATION_REVERSAL',
+      sourceEntityId: original.id,
+      reversalOfId: original.id,
+      matterId: original.matterId,
+      lines: original.lines.map((line: any) => ({
         tenantId: input.tenantId,
-        reference: `PAYMENT-ALLOCATION-REVERSAL-${original.id}`,
-        description: `Allocation reversal: ${input.reason}`,
-        date: new Date(),
-        amount: original.amount,
-        postedById: input.reversedById ?? null,
-        currency: original.currency,
-        exchangeRate: original.exchangeRate,
-        sourceModule: 'PAYMENTS',
-        sourceEntityType: 'PAYMENT_ALLOCATION_REVERSAL',
-        sourceEntityId: original.id,
-        reversalOfId: original.id,
-        matterId: original.matterId,
-        lines: {
-          create: original.lines.map((line) => ({
-            tenantId: input.tenantId,
-            accountId: line.accountId,
-            clientId: line.clientId,
-            matterId: line.matterId,
-            branchId: line.branchId,
-            reference: line.reference,
-            description: `Reversal: ${line.description ?? ''}`.trim(),
-            debit: line.credit,
-            credit: line.debit,
-          })),
+        accountId: line.accountId,
+        clientId: line.clientId ?? null,
+        matterId: line.matterId ?? null,
+        branchId: line.branchId ?? null,
+        reference: line.reference ?? null,
+        description: `Reversal: ${line.description ?? ''}`.trim(),
+        debit: money(line.credit),
+        credit: money(line.debit),
+      })),
+    });
+
+    await tx.paymentReceipt.update({
+      where: { id: input.paymentReceiptId },
+      data: {
+        unallocatedAmount: {
+          increment: amount,
         },
       },
     });
@@ -351,38 +549,211 @@ export class PaymentPostingService {
 
     if (existingReversal) return;
 
-    await tx.journalEntry.create({
-      data: {
+    await this.createJournalWithLines(tx, {
+      tenantId: input.tenantId,
+      reference: `PAYMENT-RECEIPT-REVERSAL-${input.paymentReceiptId}`,
+      description: `Payment receipt reversal: ${input.reason}`,
+      date: input.reversalDate ?? new Date(),
+      amount: money(original.amount),
+      postedById: input.reversedById ?? null,
+      currency: original.currency,
+      exchangeRate: original.exchangeRate,
+      sourceEntityType: 'PAYMENT_RECEIPT_REVERSAL',
+      sourceEntityId: input.paymentReceiptId,
+      reversalOfId: original.id,
+      matterId: original.matterId,
+      lines: original.lines.map((line: any) => ({
         tenantId: input.tenantId,
-        reference: `PAYMENT-RECEIPT-REVERSAL-${input.paymentReceiptId}`,
-        description: `Payment receipt reversal: ${input.reason}`,
-        date: input.reversalDate ?? new Date(),
-        amount: original.amount,
-        postedById: input.reversedById ?? null,
-        currency: original.currency,
-        exchangeRate: original.exchangeRate,
-        sourceModule: 'PAYMENTS',
-        sourceEntityType: 'PAYMENT_RECEIPT_REVERSAL',
-        sourceEntityId: input.paymentReceiptId,
-        reversalOfId: original.id,
-        matterId: original.matterId,
-        lines: {
-          create: original.lines.map((line) => ({
-            tenantId: input.tenantId,
-            accountId: line.accountId,
-            clientId: line.clientId,
-            matterId: line.matterId,
-            branchId: line.branchId,
-            reference: line.reference,
-            description: `Reversal: ${line.description ?? ''}`.trim(),
-            debit: line.credit,
-            credit: line.debit,
-          })),
-        },
-      },
+        accountId: line.accountId,
+        clientId: line.clientId ?? null,
+        matterId: line.matterId ?? null,
+        branchId: line.branchId ?? null,
+        reference: line.reference ?? null,
+        description: `Reversal: ${line.description ?? ''}`.trim(),
+        debit: money(line.credit),
+        credit: money(line.debit),
+      })),
     });
   }
 
+  private async createJournalWithLines(
+    tx: TransactionClient,
+    input: {
+      tenantId: string;
+      reference: string;
+      description: string;
+      date: Date;
+      amount: Prisma.Decimal;
+      postedById?: string | null;
+      currency: string;
+      exchangeRate: Prisma.Decimal | number | string;
+      sourceEntityType: string;
+      sourceEntityId: string;
+      reversalOfId?: string | null;
+      matterId?: string | null;
+      lines: DraftPaymentJournalLine[];
+    },
+  ) {
+    const journalAmount = money(input.amount);
+    assertPositive(journalAmount, 'Payment journal amount must be greater than zero.');
+    assertBalanced(input.lines, input.reference);
+
+    const journal = await tx.journalEntry.create({
+      data: {
+        tenantId: input.tenantId,
+        reference: input.reference,
+        description: input.description,
+        date: input.date,
+        amount: journalAmount,
+        postedById: input.postedById ?? null,
+        currency: input.currency,
+        exchangeRate: new Prisma.Decimal(input.exchangeRate ?? 1).toDecimalPlaces(6),
+        sourceModule: 'PAYMENTS',
+        sourceEntityType: input.sourceEntityType,
+        sourceEntityId: input.sourceEntityId,
+        reversalOfId: input.reversalOfId ?? null,
+        matterId: input.matterId ?? null,
+      },
+      select: { id: true },
+    });
+
+    const normalizedLines = input.lines.map((line) => normalizeLine(line, journal.id));
+
+    await tx.journalLine.createMany({
+      data: normalizedLines,
+    });
+
+    return journal;
+  }
+
+  private allocationSourceEntityId(
+    paymentReceiptId: string,
+    invoiceId: string,
+    amount: Prisma.Decimal,
+  ): string {
+    return `${paymentReceiptId}:${invoiceId}:${money(amount).toFixed(2)}`;
+  }
+
+  private async resolveReceiptBranchId(
+    tx: TransactionClient,
+    receipt: {
+      tenantId: string;
+      matterId?: string | null;
+      allocations?: Array<{ invoiceId: string }>;
+    },
+  ): Promise<string | null> {
+    const invoiceIds = Array.from(
+      new Set(
+        (receipt.allocations ?? [])
+          .map((allocation) => allocation.invoiceId)
+          .filter(
+            (invoiceId): invoiceId is string =>
+              typeof invoiceId === 'string' && invoiceId.length > 0,
+          ),
+      ),
+    );
+
+    if (invoiceIds.length > 0) {
+      const invoices = await tx.invoice.findMany({
+        where: {
+          tenantId: receipt.tenantId,
+          id: {
+            in: invoiceIds,
+          },
+        },
+        select: {
+          branchId: true,
+        },
+      });
+
+      const invoiceBranchIds = Array.from(
+        new Set(
+          invoices
+            .map((invoice: { branchId: string | null }) => invoice.branchId)
+            .filter(
+              (branchId): branchId is string =>
+                typeof branchId === 'string' && branchId.length > 0,
+            ),
+        ),
+      );
+
+      if (invoiceBranchIds.length === 1) {
+        return invoiceBranchIds[0];
+      }
+
+      if (invoiceBranchIds.length > 1) {
+        throw Object.assign(
+          new Error(
+            'Payment receipt allocations span multiple invoice branches. Split receipt posting by branch before GL posting.',
+          ),
+          {
+            statusCode: 422,
+            code: 'PAYMENT_RECEIPT_MULTIPLE_BRANCH_ALLOCATIONS',
+            details: {
+              invoiceBranchIds,
+            },
+          },
+        );
+      }
+    }
+
+    const matterDelegate = asFindFirstDelegate((tx as unknown as { matter?: unknown }).matter);
+
+    if (receipt.matterId && matterDelegate) {
+      const matter = (await matterDelegate.findFirst({
+        where: {
+          tenantId: receipt.tenantId,
+          id: receipt.matterId,
+        },
+        select: {
+          branchId: true,
+        },
+      } as never)) as MatterBranchRef | null;
+
+      if (matter?.branchId) {
+        return matter.branchId;
+      }
+    }
+
+    const branchDelegate = asFindFirstDelegate((tx as unknown as { branch?: unknown }).branch);
+
+    if (!branchDelegate) {
+      return null;
+    }
+
+    const mainBranch =
+      ((await branchDelegate.findFirst({
+        where: {
+          tenantId: receipt.tenantId,
+          isMain: true,
+        },
+        select: {
+          id: true,
+        },
+      } as never)) as BranchRef | null) ??
+      ((await branchDelegate.findFirst({
+        where: {
+          tenantId: receipt.tenantId,
+          isDefault: true,
+        },
+        select: {
+          id: true,
+        },
+      } as never)) as BranchRef | null) ??
+      ((await branchDelegate.findFirst({
+        where: {
+          tenantId: receipt.tenantId,
+        },
+        orderBy: {
+          createdAt: 'asc',
+        },
+        select: {
+          id: true,
+        },
+      } as never)) as BranchRef | null);
+
+    return typeof mainBranch?.id === 'string' ? mainBranch.id : null;
+  }
   private async ensureSystemAccount(
     tx: TransactionClient,
     input: {
@@ -393,7 +764,7 @@ export class PaymentPostingService {
       subtype: AccountSubtype;
       normalBalance: BalanceSide;
     },
-  ) {
+  ): Promise<SystemAccountRef> {
     const existing = await tx.chartOfAccount.findUnique({
       where: {
         tenantId_code: {
@@ -409,7 +780,7 @@ export class PaymentPostingService {
 
     if (existing) {
       if (!existing.isSystem) {
-        return existing;
+        return { id: existing.id };
       }
 
       return tx.chartOfAccount.update({

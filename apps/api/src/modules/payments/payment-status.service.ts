@@ -4,18 +4,62 @@ import {
   InvoiceStatus,
   PaymentReceiptStatus,
   Prisma,
-  prisma,
 } from '@global-wakili/database';
 
+type TransactionClient = Prisma.TransactionClient;
+
+const ZERO = new Prisma.Decimal(0);
+
+function money(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
+  if (value === null || value === undefined || value === '') return ZERO;
+
+  const parsed = new Prisma.Decimal(value);
+
+  return parsed.isFinite()
+    ? parsed.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+    : ZERO;
+}
+
+function assertTenant(value: unknown): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw Object.assign(new Error('Tenant ID is required for payment status update.'), {
+      statusCode: 422,
+      code: 'PAYMENT_STATUS_TENANT_REQUIRED',
+    });
+  }
+
+  return value.trim();
+}
+
+export type InvoiceSettlementStatus = {
+  invoiceId: string;
+  total: Prisma.Decimal;
+  paidAmount: Prisma.Decimal;
+  cashAllocatedAmount: Prisma.Decimal;
+  whtExpectedAmount: Prisma.Decimal;
+  whtCertificateAmount: Prisma.Decimal;
+  whtOutstandingAmount: Prisma.Decimal;
+  cashBalanceDue: Prisma.Decimal;
+  commercialBalanceDue: Prisma.Decimal;
+  isCashSettled: boolean;
+  isCommerciallySettled: boolean;
+  invoiceStatus: InvoiceStatus;
+};
+
 export class PaymentStatusService {
-  async recomputeReceiptStatus(input: {
-    tenantId: string;
-    paymentReceiptId: string;
-  }) {
-    const receipt = await prisma.paymentReceipt.findFirst({
+  async refreshReceiptStatus(
+    tx: TransactionClient,
+    input: {
+      tenantId: string;
+      paymentReceiptId: string;
+    },
+  ) {
+    const tenantId = assertTenant(input.tenantId);
+
+    const receipt = await tx.paymentReceipt.findFirst({
       where: {
+        tenantId,
         id: input.paymentReceiptId,
-        tenantId: input.tenantId,
       },
       include: {
         allocations: true,
@@ -23,178 +67,210 @@ export class PaymentStatusService {
     });
 
     if (!receipt) {
-      throw new Error('Payment receipt not found.');
+      throw Object.assign(new Error('Payment receipt not found for status refresh.'), {
+        statusCode: 404,
+        code: 'PAYMENT_RECEIPT_NOT_FOUND_FOR_STATUS_REFRESH',
+      });
     }
 
     if (receipt.status === PaymentReceiptStatus.REVERSED) {
       return receipt;
     }
 
-    const allocatedAmount = receipt.allocations
-      .reduce((sum, allocation) => sum.plus(allocation.amountApplied), new Prisma.Decimal(0))
-      .toDecimalPlaces(2);
+    const totalAllocated = receipt.allocations.reduce(
+      (sum: Prisma.Decimal, allocation: { amountApplied: Prisma.Decimal }) =>
+        sum.plus(money(allocation.amountApplied)),
+      ZERO,
+    );
 
+    const receiptAmount = money(receipt.amount);
     const unallocatedAmount = Prisma.Decimal.max(
-      receipt.amount.minus(allocatedAmount),
-      new Prisma.Decimal(0),
+      receiptAmount.minus(totalAllocated),
+      ZERO,
     ).toDecimalPlaces(2);
 
-    const nextStatus =
-      allocatedAmount.eq(0)
+    const status =
+      totalAllocated.equals(0)
         ? PaymentReceiptStatus.RECEIVED
-        : allocatedAmount.lt(receipt.amount)
+        : totalAllocated.lt(receiptAmount)
           ? PaymentReceiptStatus.PARTIALLY_ALLOCATED
           : PaymentReceiptStatus.ALLOCATED;
 
-    return prisma.paymentReceipt.update({
+    return tx.paymentReceipt.update({
       where: {
         id: receipt.id,
       },
       data: {
-        status: nextStatus,
+        status,
         unallocatedAmount,
       },
     });
   }
 
-  async recomputeInvoiceStatus(input: {
-    tenantId: string;
-    invoiceId: string;
-  }) {
-    const invoice = await prisma.invoice.findFirst({
+  async refreshInvoiceStatus(
+    tx: TransactionClient,
+    input: {
+      tenantId: string;
+      invoiceId: string;
+    },
+  ): Promise<InvoiceSettlementStatus> {
+    const tenantId = assertTenant(input.tenantId);
+
+    const invoice = await tx.invoice.findFirst({
       where: {
+        tenantId,
         id: input.invoiceId,
-        tenantId: input.tenantId,
       },
-      include: {
-        paymentAllocations: true,
-        withholdingCertificates: true,
+      select: {
+        id: true,
+        total: true,
+        paidAmount: true,
+        balanceDue: true,
+        whtAmount: true,
+        status: true,
       },
     });
 
     if (!invoice) {
-      throw new Error('Invoice not found.');
+      throw Object.assign(new Error('Invoice not found for payment status refresh.'), {
+        statusCode: 404,
+        code: 'PAYMENT_INVOICE_NOT_FOUND_FOR_STATUS_REFRESH',
+      });
     }
 
     if (invoice.status === InvoiceStatus.CANCELLED) {
-      return invoice;
+      return {
+        invoiceId: invoice.id,
+        total: money(invoice.total),
+        paidAmount: money(invoice.paidAmount),
+        cashAllocatedAmount: money(invoice.paidAmount),
+        whtExpectedAmount: money(invoice.whtAmount),
+        whtCertificateAmount: ZERO,
+        whtOutstandingAmount: money(invoice.whtAmount),
+        cashBalanceDue: money(invoice.balanceDue),
+        commercialBalanceDue: money(invoice.balanceDue),
+        isCashSettled: false,
+        isCommerciallySettled: false,
+        invoiceStatus: InvoiceStatus.CANCELLED,
+      };
     }
 
-    const cashPaidAmount = invoice.paymentAllocations
-      .filter((allocation) => allocation.allocationType === 'CASH')
-      .reduce((sum, allocation) => sum.plus(allocation.amountApplied), new Prisma.Decimal(0))
-      .toDecimalPlaces(2);
+    const [cashAllocationAggregate, whtCertificateAggregate] = await Promise.all([
+      tx.paymentReceiptAllocation.aggregate({
+        where: {
+          tenantId,
+          invoiceId: invoice.id,
+          allocationType: 'CASH',
+        },
+        _sum: {
+          amountApplied: true,
+        },
+      }),
 
-    const nextStatus =
-      cashPaidAmount.gte(invoice.balanceDue) && invoice.balanceDue.gt(0)
+      tx.withholdingTaxCertificate.aggregate({
+        where: {
+          tenantId,
+          invoiceId: invoice.id,
+          status: {
+            not: 'CANCELLED',
+          },
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+    ]);
+
+    const total = money(invoice.total);
+    const cashAllocatedAmount = money(cashAllocationAggregate._sum.amountApplied);
+    const whtExpectedAmount = money(invoice.whtAmount);
+    const whtCertificateAmount = money(whtCertificateAggregate._sum.amount);
+
+    const cashBalanceDue = Prisma.Decimal.max(
+      total.minus(cashAllocatedAmount),
+      ZERO,
+    ).toDecimalPlaces(2);
+
+    const whtOutstandingAmount = Prisma.Decimal.max(
+      whtExpectedAmount.minus(whtCertificateAmount),
+      ZERO,
+    ).toDecimalPlaces(2);
+
+    const commercialBalanceDue = Prisma.Decimal.max(
+      cashBalanceDue.minus(whtCertificateAmount),
+      ZERO,
+    ).toDecimalPlaces(2);
+
+    const invoiceStatus =
+      commercialBalanceDue.equals(0)
         ? InvoiceStatus.PAID
-        : cashPaidAmount.gt(0)
+        : cashAllocatedAmount.gt(0) || whtCertificateAmount.gt(0)
           ? InvoiceStatus.PARTIALLY_PAID
           : InvoiceStatus.INVOICED;
 
-    return prisma.invoice.update({
+    await tx.invoice.update({
       where: {
         id: invoice.id,
       },
       data: {
-        paidAmount: cashPaidAmount,
-        status: nextStatus,
-        paidDate: nextStatus === InvoiceStatus.PAID ? new Date() : null,
+        paidAmount: cashAllocatedAmount,
+        balanceDue: cashBalanceDue,
+        status: invoiceStatus,
       },
     });
-  }
-
-  async getReceiptAllocationSummary(input: {
-    tenantId: string;
-    paymentReceiptId: string;
-  }) {
-    const receipt = await prisma.paymentReceipt.findFirst({
-      where: {
-        id: input.paymentReceiptId,
-        tenantId: input.tenantId,
-      },
-      include: {
-        allocations: true,
-      },
-    });
-
-    if (!receipt) {
-      throw new Error('Payment receipt not found.');
-    }
-
-    const allocatedAmount = receipt.allocations
-      .reduce((sum, allocation) => sum.plus(allocation.amountApplied), new Prisma.Decimal(0))
-      .toDecimalPlaces(2);
-
-    const unallocatedAmount = Prisma.Decimal.max(
-      receipt.amount.minus(allocatedAmount),
-      new Prisma.Decimal(0),
-    ).toDecimalPlaces(2);
-
-    return {
-      paymentReceiptId: receipt.id,
-      receiptNumber: receipt.receiptNumber,
-      status: receipt.status,
-      amount: receipt.amount,
-      allocatedAmount,
-      unallocatedAmount,
-      allocationCount: receipt.allocations.length,
-    };
-  }
-
-  async getInvoicePaymentSummary(input: {
-    tenantId: string;
-    invoiceId: string;
-  }) {
-    const invoice = await prisma.invoice.findFirst({
-      where: {
-        id: input.invoiceId,
-        tenantId: input.tenantId,
-      },
-      include: {
-        paymentAllocations: true,
-        withholdingCertificates: true,
-      },
-    });
-
-    if (!invoice) {
-      throw new Error('Invoice not found.');
-    }
-
-    const cashPaidAmount = invoice.paymentAllocations
-      .filter((allocation) => allocation.allocationType === 'CASH')
-      .reduce((sum, allocation) => sum.plus(allocation.amountApplied), new Prisma.Decimal(0))
-      .toDecimalPlaces(2);
-
-    const whtCertificateAmount = invoice.withholdingCertificates
-      .filter((certificate) => certificate.status !== 'CANCELLED')
-      .reduce((sum, certificate) => sum.plus(certificate.amount), new Prisma.Decimal(0))
-      .toDecimalPlaces(2);
-
-    const unpaidCashBalance = Prisma.Decimal.max(
-      invoice.balanceDue.minus(cashPaidAmount),
-      new Prisma.Decimal(0),
-    ).toDecimalPlaces(2);
-
-    const whtOutstanding = Prisma.Decimal.max(
-      invoice.whtAmount.minus(whtCertificateAmount),
-      new Prisma.Decimal(0),
-    ).toDecimalPlaces(2);
 
     return {
       invoiceId: invoice.id,
-      invoiceNumber: invoice.invoiceNumber,
-      status: invoice.status,
-      total: invoice.total,
-      balanceDue: invoice.balanceDue,
-      whtAmount: invoice.whtAmount,
-      cashPaidAmount,
-      unpaidCashBalance,
+      total,
+      paidAmount: cashAllocatedAmount,
+      cashAllocatedAmount,
+      whtExpectedAmount,
       whtCertificateAmount,
-      whtOutstanding,
-      isCashSettled: unpaidCashBalance.eq(0),
-      isWhtSettled: whtOutstanding.eq(0),
-      isCommerciallySettled: unpaidCashBalance.eq(0) && whtOutstanding.eq(0),
+      whtOutstandingAmount,
+      cashBalanceDue,
+      commercialBalanceDue,
+      isCashSettled: cashBalanceDue.equals(0),
+      isCommerciallySettled: commercialBalanceDue.equals(0) && whtOutstandingAmount.equals(0),
+      invoiceStatus,
+    };
+  }
+
+  async refreshReceiptAndInvoices(
+    tx: TransactionClient,
+    input: {
+      tenantId: string;
+      paymentReceiptId: string;
+      invoiceIds: string[];
+    },
+  ) {
+    const receipt = await this.refreshReceiptStatus(tx, {
+      tenantId: input.tenantId,
+      paymentReceiptId: input.paymentReceiptId,
+    });
+
+    const uniqueInvoiceIds = Array.from(
+      new Set(
+        input.invoiceIds.filter(
+          (invoiceId): invoiceId is string =>
+            typeof invoiceId === 'string' && invoiceId.length > 0,
+        ),
+      ),
+    );
+
+    const invoices = [];
+
+    for (const invoiceId of uniqueInvoiceIds) {
+      invoices.push(
+        await this.refreshInvoiceStatus(tx, {
+          tenantId: input.tenantId,
+          invoiceId,
+        }),
+      );
+    }
+
+    return {
+      receipt,
+      invoices,
     };
   }
 }
