@@ -1,7 +1,7 @@
 import { Prisma } from '@global-wakili/database';
 import type { Request } from 'express';
-import { TransactionEngine } from './transactionengine';
-import type { JournalPostingInput, PostingPolicyContext } from './finance.types';
+import { TransactionEngine } from './transaction-engine';
+import type { JournalPostingInput, PostingPolicyContext, TenantDbClient } from './finance.types';
 import { AccountBalanceService } from './account-balance.service';
 import { logAdminAction } from '../../utils/audit-logger';
 import { AuditSeverity } from '../../types/audit';
@@ -13,6 +13,51 @@ function toDecimal(value: Prisma.Decimal | number | string | null | undefined): 
   return new Prisma.Decimal(value);
 }
 
+type FinanceRequestDbClient = TenantDbClient & {
+  $transaction: <T>(
+    callback: (
+      tx: TenantDbClient & {
+        journalEntry: {
+          create: (args: unknown) => Promise<{ id: string }>;
+        };
+      },
+    ) => Promise<T>,
+  ) => Promise<T>;
+};
+
+type GeneralLedgerAccountBalanceDbClient = TenantDbClient & {
+  journalLine: {
+    aggregate: (args: unknown) => Promise<unknown>;
+  };
+  accountBalance: {
+    upsert: (args: unknown) => Promise<unknown>;
+    findMany: (args: unknown) => Promise<AccountBalanceRow[]>;
+  };
+};
+
+type AccountBalanceRow = {
+  accountId: string;
+  debitBalance?: Prisma.Decimal | number | string | null;
+  creditBalance?: Prisma.Decimal | number | string | null;
+  netBalance?: Prisma.Decimal | number | string | null;
+};
+
+type TrialBalanceAccountRow = {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  subtype: string | null;
+};
+
+type HistoricalTrialBalanceRow = {
+  accountId: string;
+  _sum?: {
+    debit?: Prisma.Decimal | number | string | null;
+    credit?: Prisma.Decimal | number | string | null;
+  } | null;
+};
+
 export class GeneralLedgerService {
   static async postJournal(
     req: Request,
@@ -22,11 +67,11 @@ export class GeneralLedgerService {
     const db = req.db;
     const tenantId = req.tenantId!;
 
-    let journal;
+    let journal: Awaited<ReturnType<typeof TransactionEngine.postJournalAtomically>>;
 
     try {
       journal = await TransactionEngine.postJournalAtomically(
-        db as any,
+        db as FinanceRequestDbClient,
         tenantId,
         input,
         context,
@@ -35,7 +80,7 @@ export class GeneralLedgerService {
 
       const accountIds = input.lines.map((line) => line.accountId);
 
-      void AccountBalanceService.rebuildMany(db as any, tenantId, accountIds).catch((error) => {
+      void AccountBalanceService.rebuildMany(db as GeneralLedgerAccountBalanceDbClient, tenantId, accountIds).catch((error) => {
         console.error(
           `[ASYNC_BALANCE_FAIL] failed to update balances for journal=${journal.id}`,
           error,
@@ -83,8 +128,8 @@ export class GeneralLedgerService {
     const db = req.db;
     const tenantId = req.tenantId!;
 
-    const balances = await AccountBalanceService.list(db as any, tenantId);
-    const accountIds = balances.map((balance: any) => balance.accountId);
+    const balances = await AccountBalanceService.list(db as GeneralLedgerAccountBalanceDbClient, tenantId);
+    const accountIds = balances.map((balance: AccountBalanceRow) => balance.accountId);
 
     const accounts = await db.chartOfAccount.findMany({
       where: {
@@ -103,8 +148,8 @@ export class GeneralLedgerService {
       },
     });
 
-    return accounts.map((account: any) => {
-      const balance = balances.find((item: any) => item.accountId === account.id);
+    return (accounts as TrialBalanceAccountRow[]).map((account: TrialBalanceAccountRow) => {
+      const balance = balances.find((item: AccountBalanceRow) => item.accountId === account.id);
 
       return {
         ...account,
@@ -134,7 +179,7 @@ export class GeneralLedgerService {
       },
     });
 
-    const accountIds = grouped.map((row: any) => row.accountId);
+    const accountIds = (grouped as HistoricalTrialBalanceRow[]).map((row) => row.accountId);
 
     const accounts = await db.chartOfAccount.findMany({
       where: {
@@ -153,8 +198,8 @@ export class GeneralLedgerService {
       },
     });
 
-    return accounts.map((account: any) => {
-      const row = grouped.find((item: any) => item.accountId === account.id);
+    return (accounts as TrialBalanceAccountRow[]).map((account: TrialBalanceAccountRow) => {
+      const row = (grouped as HistoricalTrialBalanceRow[]).find((item) => item.accountId === account.id);
       const debit = toDecimal(row?._sum?.debit);
       const credit = toDecimal(row?._sum?.credit);
 

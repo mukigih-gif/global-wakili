@@ -16,6 +16,29 @@ function toDecimal(value: Prisma.Decimal | number | string | null | undefined): 
   return new Prisma.Decimal(value);
 }
 
+type AccountingPeriodRecord = {
+  status: string;
+};
+
+type AccountingPeriodDelegate = {
+  findUnique: (args: unknown) => Promise<AccountingPeriodRecord | null>;
+};
+
+function getAccountingPeriodDelegate(db: TenantDbClient): AccountingPeriodDelegate | null {
+  const candidate = (db as TenantDbClient & { accountingPeriod?: unknown }).accountingPeriod;
+
+  if (
+    candidate &&
+    typeof candidate === 'object' &&
+    'findUnique' in candidate &&
+    typeof (candidate as { findUnique?: unknown }).findUnique === 'function'
+  ) {
+    return candidate as AccountingPeriodDelegate;
+  }
+
+  return null;
+}
+
 const TRUST_SUBTYPES = new Set([
   'TRUST_BANK',
   'TRUST_LIABILITY',
@@ -52,46 +75,55 @@ export class PostingPolicyService {
       const month = input.date.getMonth() + 1;
       const year = input.date.getFullYear();
 
-      const accountingPeriod = await db.accountingPeriod.findUnique({
+      const accountingPeriodDelegate = getAccountingPeriodDelegate(db);
+
+      if (!accountingPeriodDelegate) {
+        issues.push({
+          code: 'MISSING_PERIOD',
+          message: 'Accounting period delegate is not available for posting policy validation.',
+        });
+      } else {
+        const accountingPeriod = await accountingPeriodDelegate.findUnique({
+          where: {
+            tenantId_month_year: {
+              tenantId,
+              month,
+              year,
+            },
+          },
+          select: {
+            status: true,
+          },
+        });
+
+        if (!accountingPeriod) {
+          issues.push({
+            code: 'MISSING_PERIOD',
+            message: 'No accounting period exists for the supplied journal date.',
+          });
+        } else if (accountingPeriod.status === 'CLOSED' || accountingPeriod.status === 'LOCKED') {
+          issues.push({
+            code: 'PERIOD_LOCKED',
+            message: 'The accounting period for this journal date is closed or locked.',
+          });
+        }
+      }
+    }
+
+    const accounts: Array<{ id: string; subtype: string | null; currency: string | null }> =
+      await db.chartOfAccount.findMany({
         where: {
-          tenantId_month_year: {
-            tenantId,
-            month,
-            year,
+          tenantId,
+          id: {
+            in: [...new Set(input.lines.map((line) => line.accountId))],
           },
         },
         select: {
           id: true,
-          status: true,
+          subtype: true,
+          currency: true,
         },
       });
-
-      if (!accountingPeriod) {
-        issues.push({
-          code: 'MISSING_PERIOD',
-          message: 'No accounting period exists for the supplied journal date.',
-        });
-      } else if (accountingPeriod.status === 'CLOSED' || accountingPeriod.status === 'LOCKED') {
-        issues.push({
-          code: 'PERIOD_LOCKED',
-          message: 'The accounting period for this journal date is closed or locked.',
-        });
-      }
-    }
-
-    const accounts = await db.chartOfAccount.findMany({
-      where: {
-        tenantId,
-        id: {
-          in: [...new Set(input.lines.map((line) => line.accountId))],
-        },
-      },
-      select: {
-        id: true,
-        subtype: true,
-        currency: true,
-      },
-    });
 
     let containsTrustAccount = false;
     let containsOfficeAccount = false;
@@ -139,8 +171,8 @@ export class PostingPolicyService {
     if (input.currency) {
       const distinctCurrencies = new Set(
         accounts
-          .map((account) => account.currency)
-          .filter((currency): currency is string => Boolean(currency)),
+          .map((account: { currency: string | null }) => account.currency)
+          .filter((currency: string | null): currency is string => Boolean(currency)),
       );
 
       if (distinctCurrencies.size > 1) {
@@ -152,6 +184,7 @@ export class PostingPolicyService {
 
       if (distinctCurrencies.size === 1) {
         const [accountCurrency] = [...distinctCurrencies];
+
         if (accountCurrency && accountCurrency !== input.currency) {
           issues.push({
             code: 'MULTI_CURRENCY_POLICY_VIOLATION',
@@ -161,6 +194,7 @@ export class PostingPolicyService {
       }
 
       const exchangeRate = toDecimal(input.exchangeRate ?? 0);
+
       if (exchangeRate.lte(0)) {
         issues.push({
           code: 'INVALID_EXCHANGE_RATE',
@@ -205,3 +239,5 @@ export class PostingPolicyService {
     return result;
   }
 }
+
+export default PostingPolicyService;

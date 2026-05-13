@@ -1,85 +1,211 @@
-import { Decimal } from '@prisma/client/runtime/library';
+// apps/api/src/modules/finance/client-ledger.service.ts
+
+import { Prisma } from '@global-wakili/database';
+
+type ClientLedgerJournalLineAggregateResult = {
+  _sum?: {
+    debit?: Prisma.Decimal | number | string | null;
+    credit?: Prisma.Decimal | number | string | null;
+  } | null;
+};
+
+type ClientLedgerAccountRow = {
+  id: string;
+  code: string;
+  name: string;
+  type: string;
+  subtype: string | null;
+};
+
+type ClientLedgerJournalRow = {
+  id: string;
+  date: Date | null;
+  reference: string | null;
+  description: string | null;
+  sourceModule: string | null;
+  sourceEntityType: string | null;
+  sourceEntityId: string | null;
+};
+
+type ClientLedgerLineRow = {
+  id: string;
+  debit: Prisma.Decimal | number | string | null;
+  credit: Prisma.Decimal | number | string | null;
+  reference: string | null;
+  description: string | null;
+  journal: ClientLedgerJournalRow | null;
+  account: ClientLedgerAccountRow | null;
+};
+
+type ClientLedgerDbClient = {
+  journalLine: {
+    aggregate: (args: unknown) => Promise<ClientLedgerJournalLineAggregateResult>;
+    findMany: (args: unknown) => Promise<ClientLedgerLineRow[]>;
+  };
+};
+
+type ClientLedgerContext = {
+  tenantId: string;
+  req: {
+    db: ClientLedgerDbClient;
+  };
+};
+
+type ClientLedgerParams = {
+  clientId: string;
+  matterId?: string;
+  limit?: number;
+  offset?: number;
+  startDate?: Date;
+};
+
+function requiredString(value: unknown, label: string, code: string): string {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw Object.assign(new Error(`${label} is required`), {
+      statusCode: 422,
+      code,
+    });
+  }
+
+  return value.trim();
+}
+
+function toDecimal(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
+  if (value === null || value === undefined) return new Prisma.Decimal(0);
+  return new Prisma.Decimal(value);
+}
 
 export class ClientLedgerService {
   /**
-   * 📖 GET HARDENED CLIENT LEDGER
-   * Pulls from the General Ledger to ensure 100% accuracy with the firm's books.
+   * Client ledger view backed by JournalLine.
+   *
+   * Current schema notes:
+   * - JournalLine has `clientId`, `matterId`, `debit`, `credit`, and relation `journal`.
+   * - ChartOfAccount does not have `isTrust`; trust classification belongs to account type/subtype.
+   * - JournalLine has no `createdAt`, so ordering is by journal date then line id.
    */
-  static async getLedger(
-    context: { tenantId: string; req: any }, 
-    params: { 
-      clientId: string; 
-      matterId?: string; 
-      limit?: number; 
-      offset?: number;
-      startDate?: Date;
-    }
-  ) {
+  static async getLedger(context: ClientLedgerContext, params: ClientLedgerParams) {
     const db = context.req.db;
-    const limit = params.limit || 50;
-    const offset = params.offset || 0;
+    const tenantId = requiredString(context.tenantId, 'Tenant ID', 'FINANCE_TENANT_REQUIRED');
+    const clientId = requiredString(params.clientId, 'Client ID', 'CLIENT_LEDGER_CLIENT_REQUIRED');
 
-    // 1. CALCULATE OPENING BALANCE (Balance Brought Forward)
-    // We sum all transactions before the first record of the current page/filter
+    const limit = Math.min(Math.max(Number(params.limit ?? 50), 1), 200);
+    const offset = Math.max(Number(params.offset ?? 0), 0);
+
+    const whereBase = {
+      tenantId,
+      clientId,
+      ...(params.matterId ? { matterId: params.matterId } : {}),
+    };
+
     const openingBalanceAgg = await db.journalLine.aggregate({
       where: {
-        tenantId: context.tenantId,
-        clientId: params.clientId,
-        ...(params.matterId && { matterId: params.matterId }),
-        journalEntry: {
-          createdAt: params.startDate ? { lt: params.startDate } : undefined,
-          // If using offset pagination, logic would sum everything before the 'offset'
-        }
+        ...whereBase,
+        ...(params.startDate
+          ? {
+              journal: {
+                date: {
+                  lt: params.startDate,
+                },
+              },
+            }
+          : {}),
       },
-      _sum: { debit: true, credit: true }
+      _sum: {
+        debit: true,
+        credit: true,
+      },
     });
 
-    const bbf = new Decimal(openingBalanceAgg._sum.credit || 0)
-      .minus(openingBalanceAgg._sum.debit || 0);
+    const openingBalance = toDecimal(openingBalanceAgg._sum?.debit).minus(
+      toDecimal(openingBalanceAgg._sum?.credit),
+    );
 
-    // 2. FETCH LEDGER ENTRIES
     const entries = await db.journalLine.findMany({
       where: {
-        tenantId: context.tenantId,
-        clientId: params.clientId,
-        ...(params.matterId && { matterId: params.matterId }),
-        journalEntry: params.startDate ? { createdAt: { gte: params.startDate } } : undefined,
+        ...whereBase,
+        ...(params.startDate
+          ? {
+              journal: {
+                date: {
+                  gte: params.startDate,
+                },
+              },
+            }
+          : {}),
       },
       include: {
-        journalEntry: true,
-        account: { select: { name: true, isTrust: true } },
+        journal: {
+          select: {
+            id: true,
+            date: true,
+            reference: true,
+            description: true,
+            sourceModule: true,
+            sourceEntityType: true,
+            sourceEntityId: true,
+          },
+        },
+        account: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+            type: true,
+            subtype: true,
+          },
+        },
       },
-      orderBy: { journalEntry: { createdAt: 'asc' } },
+      orderBy: [{ journal: { date: 'asc' } }, { id: 'asc' }],
       take: limit,
       skip: offset,
     });
 
-    // 3. GENERATE RUNNING BALANCE
-    let runningBalance = bbf;
+    let runningBalance = openingBalance;
 
-    const ledger = entries.map((line) => {
-      // Trust Accounting Logic: Credit increases liability (Deposit), Debit decreases it (Payment)
-      const amount = line.credit.greaterThan(0) ? line.credit : line.debit.negated();
-      runningBalance = runningBalance.add(amount);
+    const ledger = entries.map((line: ClientLedgerLineRow) => {
+      const debit = toDecimal(line.debit);
+      const credit = toDecimal(line.credit);
+
+      runningBalance = runningBalance.plus(debit).minus(credit);
 
       return {
         id: line.id,
-        date: line.journalEntry.createdAt,
-        reference: line.journalEntry.reference,
-        description: line.journalEntry.description,
-        account: line.account.name,
-        isTrust: line.account.isTrust,
-        debit: line.debit,
-        credit: line.credit,
-        runningBalance: new Decimal(runningBalance),
+        date: line.journal?.date ?? null,
+        journalId: line.journal?.id ?? null,
+        reference: line.reference ?? line.journal?.reference ?? null,
+        description: line.description ?? line.journal?.description ?? null,
+        account: line.account
+          ? {
+              id: line.account.id,
+              code: line.account.code,
+              name: line.account.name,
+              type: line.account.type,
+              subtype: line.account.subtype,
+            }
+          : null,
+        debit,
+        credit,
+        runningBalance: new Prisma.Decimal(runningBalance),
+        sourceModule: line.journal?.sourceModule ?? null,
+        sourceEntityType: line.journal?.sourceEntityType ?? null,
+        sourceEntityId: line.journal?.sourceEntityId ?? null,
       };
     });
 
     return {
-      openingBalance: bbf,
+      openingBalance,
       entries: ledger,
       closingBalance: runningBalance,
-      metadata: { limit, offset }
+      metadata: {
+        limit,
+        offset,
+        clientId,
+        matterId: params.matterId ?? null,
+        startDate: params.startDate ?? null,
+      },
     };
   }
 }
+
+export default ClientLedgerService;
