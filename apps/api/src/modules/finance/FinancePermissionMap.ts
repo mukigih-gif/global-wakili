@@ -1,36 +1,37 @@
 // apps/api/src/modules/finance/FinancePermissionMap.ts
 
 import type { NextFunction, Request, Response } from 'express';
+import { PERMISSIONS, toPermissionString } from '../../config/permissions';
 
 export const FINANCE_PERMISSIONS = {
-  viewDashboard: 'finance:dashboard:view',
+  viewDashboard: toPermissionString(PERMISSIONS.finance.viewDashboard),
 
-  viewAccount: 'finance:account:view',
-  createAccount: 'finance:account:create',
-  updateAccount: 'finance:account:update',
+  viewAccount: toPermissionString(PERMISSIONS.finance.viewAccount),
+  createAccount: toPermissionString(PERMISSIONS.finance.createAccount),
+  updateAccount: toPermissionString(PERMISSIONS.finance.updateAccount),
 
-  viewJournal: 'finance:journal:view',
-  postJournal: 'finance:journal:post',
-  approveJournal: 'finance:journal:approve',
-  reverseJournal: 'finance:journal:reverse',
+  viewJournal: toPermissionString(PERMISSIONS.finance.viewJournal),
+  postJournal: toPermissionString(PERMISSIONS.finance.postJournal),
+  approveJournal: toPermissionString(PERMISSIONS.finance.approveJournal),
+  reverseJournal: toPermissionString(PERMISSIONS.finance.reverseJournal),
 
-  viewReports: 'finance:reports:view',
-  exportReports: 'finance:reports:export',
+  viewReports: toPermissionString(PERMISSIONS.finance.viewReports),
+  exportReports: toPermissionString(PERMISSIONS.finance.exportReport),
 
-  viewTrialBalance: 'finance:trial-balance:view',
-  viewBalanceSheet: 'finance:balance-sheet:view',
-  viewCashflow: 'finance:cashflow:view',
-  viewStatement: 'finance:statement:view',
+  viewTrialBalance: toPermissionString(PERMISSIONS.finance.viewTrialBalance),
+  viewBalanceSheet: toPermissionString(PERMISSIONS.finance.viewBalanceSheet),
+  viewCashflow: toPermissionString(PERMISSIONS.finance.viewCashflow),
+  viewStatement: toPermissionString(PERMISSIONS.finance.viewStatement),
 
-  closePeriod: 'finance:period:close',
-  viewPeriod: 'finance:period:view',
+  closePeriod: toPermissionString(PERMISSIONS.finance.closePeriod),
+  viewPeriod: toPermissionString(PERMISSIONS.finance.viewPeriod),
 
-  runReconciliation: 'finance:reconciliation:run',
-  viewReconciliation: 'finance:reconciliation:view',
+  runReconciliation: toPermissionString(PERMISSIONS.finance.runReconciliation),
+  viewReconciliation: toPermissionString(PERMISSIONS.finance.viewReconciliation),
 
-  fiscalizeEtims: 'finance:etims:fiscalize',
-  viewTax: 'finance:tax:view',
-  manageTax: 'finance:tax:manage',
+  fiscalizeEtims: toPermissionString(PERMISSIONS.finance.fiscalizeEtims),
+  viewTax: toPermissionString(PERMISSIONS.finance.viewTax),
+  manageTax: toPermissionString(PERMISSIONS.finance.manageTax),
 
   manageFinance: 'finance:*',
 } as const;
