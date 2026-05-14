@@ -38,17 +38,35 @@ export const FINANCE_PERMISSIONS = {
 export type FinancePermission =
   (typeof FINANCE_PERMISSIONS)[keyof typeof FINANCE_PERMISSIONS];
 
+type FinanceRequestUser = {
+  permissions?: unknown;
+  roles?: unknown;
+  role?: unknown;
+  isSuperAdmin?: unknown;
+  isSystemAdmin?: unknown;
+};
+
+type FinancePermissionRequest = Request & {
+  user?: FinanceRequestUser;
+  permissions?: unknown;
+};
+
+function financeRequest(req: Request): FinancePermissionRequest {
+  return req as FinancePermissionRequest;
+}
+
 function getUserPermissions(req: Request): string[] {
-  const user = req.user ?? (req as any).user;
+  const financeReq = financeRequest(req);
+  const user = financeReq.user;
 
   return [
     ...(Array.isArray(user?.permissions) ? user.permissions : []),
-    ...(Array.isArray((req as any).permissions) ? (req as any).permissions : []),
+    ...(Array.isArray(financeReq.permissions) ? financeReq.permissions : []),
   ].map(String);
 }
 
 function isSuperUser(req: Request): boolean {
-  const user = req.user ?? (req as any).user;
+  const user = financeRequest(req).user;
   const roles = Array.isArray(user?.roles) ? user.roles.map(String) : [];
   const role = user?.role ? String(user.role) : '';
 
@@ -133,3 +151,11 @@ export const FINANCE_PERMISSION_GROUPS = {
     FINANCE_PERMISSIONS.fiscalizeEtims,
   ],
 } as const;
+const FinancePermissionMap = {
+  FINANCE_PERMISSIONS,
+  FINANCE_PERMISSION_GROUPS,
+  hasFinancePermission,
+  requireFinancePermission,
+};
+
+export default FinancePermissionMap;

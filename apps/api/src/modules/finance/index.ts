@@ -19,13 +19,13 @@ export * from './account-balance.service';
 export * from './exchange-rate.service';
 export * from './journal.service';
 
-export * from './TransactionEngine';
+export * from './transaction-engine';
 export * from './GeneralLedgerService';
-export * from './TrialBalanceService';
-export * from './BalanceSheetService';
-export * from './CashflowService';
+export * from './trial-balance.service';
+export * from './balance-sheet.service';
+export * from './cashflow.service';
 export * from './ReportingService';
-export * from './StatementService';
+export * from './statement.service';
 export * from './PeriodCloseService';
 export * from './ReportExporter';
 

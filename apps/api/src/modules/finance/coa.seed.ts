@@ -84,6 +84,16 @@ export const LEGAL_CHART_OF_ACCOUNTS_SEED: ChartOfAccountSeed[] = [
     description: 'Unused advance retainers received from clients',
   },
   {
+    code: '2030',
+    name: 'Client Deposits',
+    type: 'LIABILITY',
+    subtype: 'CLIENT_DEPOSITS',
+    allowManualPosting: false,
+    isSystem: true,
+    isActive: true,
+    description: 'Client deposits and unapplied client funds pending allocation or refund',
+  },
+  {
     code: '2100',
     name: 'VAT Output',
     type: 'LIABILITY',
@@ -153,15 +163,15 @@ export const LEGAL_CHART_OF_ACCOUNTS_SEED: ChartOfAccountSeed[] = [
     isActive: true,
     description: 'Temporary balancing account for controlled exception handling only',
   },
-  {
+    {
     code: '4000',
     name: 'Legal Fees Income',
-    type: 'INCOME',
+    type: 'REVENUE',
     subtype: 'LEGAL_FEES_INCOME',
     allowManualPosting: false,
     isSystem: true,
     isActive: true,
-    description: 'Income recognized from professional legal services',
+    description: 'Revenue recognized from professional legal services',
   },
   {
     code: '5000',

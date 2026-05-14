@@ -1,11 +1,23 @@
-import type { Prisma } from '@global-wakili/database';
-import { LEGAL_CHART_OF_ACCOUNTS_SEED, type ChartOfAccountSeed } from './coa.seed';
+// apps/api/src/modules/finance/coa.service.ts
 
-type CoaDbClient = {
+import { LEGAL_CHART_OF_ACCOUNTS_SEED } from './coa.seed';
+
+export type CoaAccountResult = {
+  id: string;
+  code: string;
+  name: string;
+};
+
+type CoaSystemAccountResult = {
+  id: string;
+  subtype: string | null;
+};
+
+export type CoaDbClient = {
   chartOfAccount: {
-    findMany: Function;
-    findUnique: Function;
-    upsert: Function;
+    findMany: (args: unknown) => Promise<CoaSystemAccountResult[]>;
+    findUnique: (args: unknown) => Promise<unknown>;
+    upsert: (args: unknown) => Promise<CoaAccountResult>;
   };
 };
 
@@ -73,11 +85,7 @@ export class CoaService {
     };
   }
 
-  static async findByCode(
-    db: CoaDbClient,
-    tenantId: string,
-    code: string,
-  ) {
+  static async findByCode(db: CoaDbClient, tenantId: string, code: string) {
     return db.chartOfAccount.findUnique({
       where: {
         tenantId_code: {
@@ -88,10 +96,7 @@ export class CoaService {
     });
   }
 
-  static async findSystemAccounts(
-    db: CoaDbClient,
-    tenantId: string,
-  ) {
+  static async findSystemAccounts(db: CoaDbClient, tenantId: string) {
     return db.chartOfAccount.findMany({
       where: {
         tenantId,
@@ -118,20 +123,30 @@ export class CoaService {
       },
     });
 
-    const mapping = new Map(
+    const mapping = new Map<string, string>(
       accounts
         .filter((account: { subtype: string | null }) => Boolean(account.subtype))
-        .map((account: { id: string; subtype: string | null }) => [account.subtype as string, account.id]),
+        .map((account: { id: string; subtype: string | null }) => [
+          account.subtype as string,
+          account.id,
+        ]),
     );
 
     const requiredSubtypes = [
       'OFFICE_BANK',
       'TRUST_BANK',
       'TRUST_LIABILITY',
+      'CLIENT_DEPOSITS',
       'ACCOUNTS_RECEIVABLE',
       'ACCOUNTS_PAYABLE',
+      'DISBURSEMENT_ASSET',
+      'RETAINER_LIABILITY',
       'VAT_OUTPUT',
       'VAT_INPUT',
+      'PAYE_LIABILITY',
+      'NSSF_LIABILITY',
+      'SHIF_LIABILITY',
+      'HOUSING_LEVY_LIABILITY',
       'LEGAL_FEES_INCOME',
       'GENERAL_EXPENSE',
       'SUSPENSE',
@@ -147,6 +162,10 @@ export class CoaService {
       });
     }
 
-    return Object.fromEntries(requiredSubtypes.map((subtype) => [subtype, mapping.get(subtype)!]));
+    return Object.fromEntries(
+      requiredSubtypes.map((subtype) => [subtype, mapping.get(subtype)!]),
+    ) as Record<string, string>;
   }
 }
+
+export default CoaService;
