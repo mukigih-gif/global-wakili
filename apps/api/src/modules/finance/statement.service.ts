@@ -104,7 +104,7 @@ export class StatementService {
           },
         },
       },
-      orderBy: [{ journal: { date: 'asc' } }, { createdAt: 'asc' }],
+      orderBy: [{ journal: { date: 'asc' } }, { id: 'asc' }],
     });
 
     let runningBalance = openingBalance;
