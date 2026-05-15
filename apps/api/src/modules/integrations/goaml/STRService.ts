@@ -1,13 +1,42 @@
+// apps/api/src/modules/integrations/goaml/STRService.ts
+
 import type { Request } from 'express';
 import { Prisma } from '@global-wakili/database';
 import { GoAMLClient, type GoAMLSTRPayload } from './goAMLClient';
 import { logAdminAction } from '../../../utils/audit-logger';
-import { AuditSeverity } from '../../../types/audit';
+import { AuditAction, AuditSeverity } from '../../../types/audit';
 import { NotificationService } from '../../notifications/NotificationService';
 
 function toNumber(value: Prisma.Decimal | number | string | null | undefined): number {
   if (value === null || value === undefined) return 0;
   return Number(value);
+}
+
+function requireTenantId(req: Request): string {
+  if (!req.tenantId || !req.tenantId.trim()) {
+    throw Object.assign(new Error('Tenant context is required for goAML operation.'), {
+      statusCode: 401,
+      code: 'GOAML_TENANT_CONTEXT_REQUIRED',
+    });
+  }
+
+  return req.tenantId.trim();
+}
+
+function extractRegulatorAck(rawResponse: Record<string, unknown> | null | undefined): string | null {
+  if (!rawResponse || typeof rawResponse !== 'object') return null;
+
+  const candidates = [
+    rawResponse.regulatorAck,
+    rawResponse.acknowledgement,
+    rawResponse.acknowledgment,
+    rawResponse.ack,
+    rawResponse.reference,
+  ];
+
+  const match = candidates.find((value) => typeof value === 'string' && value.trim().length > 0);
+
+  return typeof match === 'string' ? match : null;
 }
 
 type TenantGoAMLConfig = {
@@ -45,9 +74,16 @@ type CompliancePayload = {
     gatewayStatus?: string | null;
     rejectionReason?: string | null;
     lastSyncedAt?: string | null;
+    regulatorAck?: string | null;
     rawSubmitResponse?: Record<string, unknown> | null;
     rawStatusResponse?: Record<string, unknown> | null;
   };
+};
+
+type NotificationUser = {
+  id: string;
+  email: string | null;
+  name: string | null;
 };
 
 function mapGatewayStatusToAmlStatus(gatewayStatus: string): string {
@@ -203,6 +239,7 @@ export class STRService {
     }
 
     const existingPayload = (report.payload ?? {}) as CompliancePayload;
+    const regulatorAck = extractRegulatorAck(result.rawResponse ?? null);
 
     await db.complianceReport.update({
       where: { id: params.complianceReportId },
@@ -210,6 +247,7 @@ export class STRService {
         referenceNumber: result.submissionReference,
         status: mapGatewayStatusToAmlStatus(result.status),
         submittedAt: new Date(),
+        regulatorAck,
         payload: {
           ...existingPayload,
           goaml: {
@@ -217,6 +255,7 @@ export class STRService {
             submissionReference: result.submissionReference,
             gatewayStatus: result.status,
             rejectionReason: null,
+            regulatorAck,
             lastSyncedAt: new Date().toISOString(),
             rawSubmitResponse: result.rawResponse ?? null,
           },
@@ -224,7 +263,10 @@ export class STRService {
       },
     });
 
-    return result;
+    return {
+      ...result,
+      regulatorAck,
+    };
   }
 
   static async syncReportStatus(
@@ -245,6 +287,7 @@ export class STRService {
         id: true,
         reportType: true,
         referenceNumber: true,
+        regulatorAck: true,
         payload: true,
       },
     });
@@ -265,12 +308,14 @@ export class STRService {
 
     const result = await GoAMLClient.getSubmissionStatus(config, report.referenceNumber);
     const existingPayload = (report.payload ?? {}) as CompliancePayload;
+    const regulatorAck =
+      extractRegulatorAck(result.rawResponse ?? null) ?? report.regulatorAck ?? null;
 
     await db.complianceReport.update({
       where: { id: report.id },
       data: {
         status: mapGatewayStatusToAmlStatus(result.status),
-        regulatorAck: result.regulatorAck ?? null,
+        regulatorAck,
         payload: {
           ...existingPayload,
           goaml: {
@@ -278,6 +323,7 @@ export class STRService {
             submissionReference: result.submissionReference,
             gatewayStatus: result.status,
             rejectionReason: result.rejectionReason ?? null,
+            regulatorAck,
             lastSyncedAt: new Date().toISOString(),
             rawStatusResponse: result.rawResponse ?? null,
           },
@@ -289,11 +335,12 @@ export class STRService {
       complianceReportId: report.id,
       reportType: report.reportType,
       ...result,
+      regulatorAck,
     };
   }
 
   static async submitReportFromRequest(req: Request, complianceReportId: string) {
-    const tenantId = req.tenantId!;
+    const tenantId = requireTenantId(req);
 
     const result = await this.submitReport(req.db, {
       tenantId,
@@ -304,13 +351,16 @@ export class STRService {
     await logAdminAction({
       req,
       tenantId,
-      action: 'GOAML_REPORT_SUBMITTED',
+      action: AuditAction.UPDATE,
       severity: result.success ? AuditSeverity.INFO : AuditSeverity.HIGH,
       entityId: complianceReportId,
       payload: {
+        eventCode: 'GOAML_REPORT_SUBMITTED',
         complianceReportId,
         submissionReference: result.submissionReference,
         status: result.status,
+        regulatorAck: result.regulatorAck ?? null,
+        requestId: req.id ?? null,
       },
     });
 
@@ -318,7 +368,7 @@ export class STRService {
   }
 
   static async syncReportStatusFromRequest(req: Request, complianceReportId: string) {
-    const tenantId = req.tenantId!;
+    const tenantId = requireTenantId(req);
 
     const result = await this.syncReportStatus(req.db, {
       tenantId,
@@ -328,24 +378,26 @@ export class STRService {
     await logAdminAction({
       req,
       tenantId,
-      action: 'GOAML_STATUS_SYNCED',
+      action: AuditAction.UPDATE,
       severity:
         result.status === 'REJECTED' || result.status === 'FAILED'
           ? AuditSeverity.HIGH
           : AuditSeverity.INFO,
       entityId: complianceReportId,
       payload: {
+        eventCode: 'GOAML_STATUS_SYNCED',
         complianceReportId,
         submissionReference: result.submissionReference,
         status: result.status,
         rejectionReason: result.rejectionReason ?? null,
         regulatorAck: result.regulatorAck ?? null,
+        requestId: req.id ?? null,
       },
     });
 
     if (result.status === 'REJECTED' || result.status === 'FAILED') {
       try {
-        const complianceUsers = await req.db.user.findMany({
+        const complianceUsers: NotificationUser[] = await req.db.user.findMany({
           where: {
             tenantId,
             status: 'ACTIVE',
@@ -358,7 +410,6 @@ export class STRService {
           select: {
             id: true,
             email: true,
-            phoneNumber: true,
             name: true,
           },
         });
@@ -369,10 +420,10 @@ export class STRService {
             category: 'compliance',
             priority: 'critical',
             channels: ['email', 'portal'],
-            recipients: complianceUsers.map((user: any) => ({
+            recipients: complianceUsers.map((user) => ({
               recipientId: user.id,
               email: user.email ?? null,
-              phoneNumber: user.phoneNumber ?? null,
+              phoneNumber: null,
               name: user.name ?? null,
             })),
             template: {
@@ -384,8 +435,8 @@ export class STRService {
             },
             entityType: 'ComplianceReport',
             entityId: complianceReportId,
-            requestId: req.id,
             metadata: {
+              requestId: req.id ?? null,
               goamlStatus: result.status,
               submissionReference: result.submissionReference,
               rejectionReason: result.rejectionReason ?? null,
@@ -401,3 +452,5 @@ export class STRService {
     return result;
   }
 }
+
+export default STRService;
