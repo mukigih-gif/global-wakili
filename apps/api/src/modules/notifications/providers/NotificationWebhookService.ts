@@ -4,10 +4,22 @@ type NotificationWebhookStatus =
   | 'BOUNCED'
   | 'SENT';
 
+function requireWebhookTenantId(tenantId: string | null | undefined): string {
+  if (!tenantId || !tenantId.trim()) {
+    throw Object.assign(new Error('Tenant context is required for notification provider webhook.'), {
+      statusCode: 401,
+      code: 'NOTIFICATION_WEBHOOK_TENANT_REQUIRED',
+    });
+  }
+
+  return tenantId.trim();
+}
+
 export class NotificationWebhookService {
   static async updateProviderStatus(
     db: any,
     params: {
+      tenantId: string;
       providerMessageId: string;
       provider?: string | null;
       status: NotificationWebhookStatus;
@@ -15,8 +27,11 @@ export class NotificationWebhookService {
       timestamp?: Date;
     },
   ) {
+    const tenantId = requireWebhookTenantId(params.tenantId);
+
     const notification = await db.notification.findFirst({
       where: {
+        tenantId,
         providerMessageId: params.providerMessageId,
         ...(params.provider ? { provider: params.provider } : {}),
       },
@@ -31,6 +46,7 @@ export class NotificationWebhookService {
         statusCode: 404,
         code: 'NOTIFICATION_PROVIDER_MESSAGE_NOT_FOUND',
         details: {
+          tenantId,
           providerMessageId: params.providerMessageId,
           provider: params.provider ?? null,
         },
