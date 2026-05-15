@@ -407,12 +407,15 @@ export class NotificationDeliveryService {
   static async updateProviderStatus(
     db: NotificationDbClient,
     params: {
+      tenantId: string;
       providerMessageId: string;
       provider?: string | null;
       status: NotificationStatus;
       metadata?: Record<string, unknown> | null;
     },
   ) {
+    assertTenant(params.tenantId);
+
     if (!params.providerMessageId?.trim()) {
       throw Object.assign(new Error('Provider message ID is required'), {
         statusCode: 422,
@@ -422,6 +425,7 @@ export class NotificationDeliveryService {
 
     const notification = await db.notification.findFirst({
       where: {
+        tenantId: params.tenantId,
         providerMessageId: params.providerMessageId,
         ...(params.provider ? { provider: params.provider } : {}),
       },
