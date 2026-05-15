@@ -1,10 +1,23 @@
+// apps/api/src/modules/integrations/kra/TaxEngineService.ts
+
 import type { Request } from 'express';
 import { VATService } from './VATService';
 import { PAYEService } from './PAYEService';
 import { WHTService } from './WHTService';
 import { CorporateTaxService } from './CorporateTaxService';
 import { logAdminAction } from '../../../utils/audit-logger';
-import { AuditSeverity } from '../../../types/audit';
+import { AuditAction, AuditSeverity } from '../../../types/audit';
+
+function requireTenantId(req: Request): string {
+  if (!req.tenantId || !req.tenantId.trim()) {
+    throw Object.assign(new Error('Tenant context is required for KRA tax dashboard.'), {
+      statusCode: 401,
+      code: 'KRA_TENANT_CONTEXT_REQUIRED',
+    });
+  }
+
+  return req.tenantId.trim();
+}
 
 export class TaxEngineService {
   static async generateTaxDashboard(
@@ -45,8 +58,10 @@ export class TaxEngineService {
       payrollBatchId?: string;
     },
   ) {
+    const tenantId = requireTenantId(req);
+
     const result = await this.generateTaxDashboard(req.db, {
-      tenantId: req.tenantId!,
+      tenantId,
       startDate: params.startDate,
       endDate: params.endDate,
       payrollBatchId: params.payrollBatchId,
@@ -54,16 +69,20 @@ export class TaxEngineService {
 
     await logAdminAction({
       req,
-      tenantId: req.tenantId!,
-      action: 'TAX_DASHBOARD_GENERATED',
+      tenantId,
+      action: AuditAction.READ,
       severity: AuditSeverity.INFO,
       payload: {
+        eventCode: 'TAX_DASHBOARD_GENERATED',
         startDate: params.startDate.toISOString(),
         endDate: params.endDate.toISOString(),
         payrollBatchId: params.payrollBatchId ?? null,
+        requestId: req.id ?? null,
       },
     });
 
     return result;
   }
 }
+
+export default TaxEngineService;
