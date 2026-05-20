@@ -122,4 +122,34 @@ export type NotificationDbClient = {
   auditLog: {
     create: Function;
   };
+  notificationDeliveryAttempt: {
+    create: Function;
+    findFirst: Function;
+    findMany: Function;
+    update: Function;
+    updateMany: Function;
+  };
+  notificationWebhookEvent: {
+    create: Function;
+    findFirst: Function;
+    findMany: Function;
+    update: Function;
+    updateMany: Function;
+  };
+  notificationPreference: {
+    create: Function;
+    findFirst: Function;
+    findMany: Function;
+    update: Function;
+    updateMany: Function;
+    upsert: Function;
+  };
+  notificationTemplate: {
+    create: Function;
+    findFirst: Function;
+    findMany: Function;
+    update: Function;
+    updateMany: Function;
+    upsert: Function;
+  };
 };

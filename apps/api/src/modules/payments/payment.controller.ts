@@ -1,6 +1,6 @@
 // apps/api/src/modules/payments/payment.controller.ts
 
-import type { Request, Response, NextFunction } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 
 import {
   allocatePaymentSchema,
@@ -8,35 +8,78 @@ import {
   listPaymentReceiptsQuerySchema,
   reversePaymentReceiptSchema,
 } from './payment.validators';
+
 import {
   PaymentDashboardService,
   paymentDashboardService,
 } from './payment.dashboard';
+
 import {
   PaymentReversalService,
   paymentReversalService,
 } from './payment-reversal.service';
+
 import {
   PaymentService,
   paymentService,
 } from './payment.service';
+
 import {
   RefundService,
   refundService,
 } from './refund.service';
 
-function getTenantId(req: Request): string {
-  const tenantId = req.tenantId ?? (req as any).tenantId ?? req.headers['x-tenant-id'];
+type PaymentRequestContext = Request & {
+  tenantId?: string;
+  user?: {
+    id?: string;
+    sub?: string;
+  };
+};
 
-  if (!tenantId || Array.isArray(tenantId)) {
-    throw new Error('Tenant context is required.');
+function getTenantId(req: Request): string {
+  const paymentReq = req as PaymentRequestContext;
+  const tenantId = paymentReq.tenantId ?? req.headers['x-tenant-id'];
+
+  if (typeof tenantId !== 'string' || !tenantId.trim()) {
+    throw Object.assign(new Error('Tenant context is required.'), {
+      statusCode: 401,
+      code: 'PAYMENTS_TENANT_CONTEXT_REQUIRED',
+    });
   }
 
-  return tenantId;
+  return tenantId.trim();
 }
 
 function getUserId(req: Request): string | null {
-  return req.user?.id ?? (req as any).user?.id ?? null;
+  const paymentReq = req as PaymentRequestContext;
+  const candidate = paymentReq.user?.id ?? paymentReq.user?.sub ?? null;
+
+  return typeof candidate === 'string' && candidate.trim() ? candidate.trim() : null;
+}
+
+function optionalPositiveInt(value: unknown): number | undefined {
+  if (value === undefined || value === null || value === '') return undefined;
+
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed < 0) return undefined;
+
+  return Math.trunc(parsed);
+}
+
+function requireAuthenticatedUser(req: Request, action: string): string {
+  const userId = getUserId(req);
+
+  if (!userId) {
+    throw Object.assign(new Error(`Authenticated user is required to ${action}.`), {
+      statusCode: 401,
+      code: 'PAYMENTS_AUTHENTICATED_USER_REQUIRED',
+      details: { action },
+    });
+  }
+
+  return userId;
 }
 
 export class PaymentController {
@@ -47,7 +90,7 @@ export class PaymentController {
     private readonly dashboard: PaymentDashboardService = paymentDashboardService,
   ) {}
 
-  listReceipts = async (req: Request, res: Response, next: NextFunction) => {
+  listReceipts = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const tenantId = getTenantId(req);
       const query = listPaymentReceiptsQuerySchema.parse(req.query);
@@ -66,10 +109,14 @@ export class PaymentController {
     }
   };
 
-  getReceipt = async (req: Request, res: Response, next: NextFunction) => {
+  getReceipt = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const tenantId = getTenantId(req);
-      const receipt = await this.payments.getReceiptById(tenantId, req.params.paymentReceiptId);
+
+      const receipt = await this.payments.getReceiptById(
+        tenantId,
+        req.params.paymentReceiptId,
+      );
 
       res.status(200).json({
         success: true,
@@ -80,7 +127,7 @@ export class PaymentController {
     }
   };
 
-  createReceipt = async (req: Request, res: Response, next: NextFunction) => {
+  createReceipt = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const tenantId = getTenantId(req);
       const createdById = getUserId(req);
@@ -101,7 +148,7 @@ export class PaymentController {
     }
   };
 
-  allocateReceipt = async (req: Request, res: Response, next: NextFunction) => {
+  allocateReceipt = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const tenantId = getTenantId(req);
       const allocatedById = getUserId(req);
@@ -123,15 +170,10 @@ export class PaymentController {
     }
   };
 
-  reverseReceipt = async (req: Request, res: Response, next: NextFunction) => {
+  reverseReceipt = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const tenantId = getTenantId(req);
-      const reversedById = getUserId(req);
-
-      if (!reversedById) {
-        throw new Error('Authenticated user is required to reverse payment receipt.');
-      }
-
+      const reversedById = requireAuthenticatedUser(req, 'reverse payment receipt');
       const body = reversePaymentReceiptSchema.parse(req.body);
 
       const receipt = await this.reversals.reversePaymentReceipt({
@@ -150,7 +192,7 @@ export class PaymentController {
     }
   };
 
-  createRefund = async (req: Request, res: Response, next: NextFunction) => {
+  createRefund = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const tenantId = getTenantId(req);
       const requestedById = getUserId(req);
@@ -173,14 +215,10 @@ export class PaymentController {
     }
   };
 
-  approveRefund = async (req: Request, res: Response, next: NextFunction) => {
+  approveRefund = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const tenantId = getTenantId(req);
-      const approvedById = getUserId(req);
-
-      if (!approvedById) {
-        throw new Error('Authenticated user is required to approve refund.');
-      }
+      const approvedById = requireAuthenticatedUser(req, 'approve refund');
 
       const refund = await this.refunds.approveRefund({
         tenantId,
@@ -197,14 +235,10 @@ export class PaymentController {
     }
   };
 
-  payRefund = async (req: Request, res: Response, next: NextFunction) => {
+  payRefund = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const tenantId = getTenantId(req);
-      const paidById = getUserId(req);
-
-      if (!paidById) {
-        throw new Error('Authenticated user is required to pay refund.');
-      }
+      const paidById = requireAuthenticatedUser(req, 'pay refund');
 
       const refund = await this.refunds.payRefund({
         tenantId,
@@ -222,14 +256,10 @@ export class PaymentController {
     }
   };
 
-  rejectRefund = async (req: Request, res: Response, next: NextFunction) => {
+  rejectRefund = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const tenantId = getTenantId(req);
-      const rejectedById = getUserId(req);
-
-      if (!rejectedById) {
-        throw new Error('Authenticated user is required to reject refund.');
-      }
+      const rejectedById = requireAuthenticatedUser(req, 'reject refund');
 
       const refund = await this.refunds.rejectRefund({
         tenantId,
@@ -247,7 +277,7 @@ export class PaymentController {
     }
   };
 
-  dashboardSummary = async (req: Request, res: Response, next: NextFunction) => {
+  dashboardSummary = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const tenantId = getTenantId(req);
 
@@ -263,14 +293,19 @@ export class PaymentController {
       next(error);
     }
   };
-  whtExposure = async (req: Request, res: Response, next: NextFunction) => {
+
+  unallocatedReceipts = async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> => {
     try {
       const tenantId = getTenantId(req);
 
-      const data = await this.dashboard.getWhtCertificateExposure({
+      const data = await this.dashboard.getUnallocatedReceipts({
         tenantId,
-        take: req.query.take ? Number(req.query.take) : undefined,
-        skip: req.query.skip ? Number(req.query.skip) : undefined,
+        take: optionalPositiveInt(req.query.take),
+        skip: optionalPositiveInt(req.query.skip),
       });
 
       res.status(200).json({
@@ -281,14 +316,15 @@ export class PaymentController {
       next(error);
     }
   };
-  unallocatedReceipts = async (req: Request, res: Response, next: NextFunction) => {
+
+  whtExposure = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
       const tenantId = getTenantId(req);
 
-      const data = await this.dashboard.getUnallocatedReceipts({
+      const data = await this.dashboard.getWhtCertificateExposure({
         tenantId,
-        take: req.query.take ? Number(req.query.take) : undefined,
-        skip: req.query.skip ? Number(req.query.skip) : undefined,
+        take: optionalPositiveInt(req.query.take),
+        skip: optionalPositiveInt(req.query.skip),
       });
 
       res.status(200).json({
@@ -308,13 +344,14 @@ export const getReceipt = paymentController.getReceipt;
 export const createReceipt = paymentController.createReceipt;
 export const allocateReceipt = paymentController.allocateReceipt;
 export const reverseReceipt = paymentController.reverseReceipt;
+
 export const createRefund = paymentController.createRefund;
 export const approveRefund = paymentController.approveRefund;
 export const payRefund = paymentController.payRefund;
 export const rejectRefund = paymentController.rejectRefund;
+
 export const dashboardSummary = paymentController.dashboardSummary;
 export const unallocatedReceipts = paymentController.unallocatedReceipts;
 export const whtExposure = paymentController.whtExposure;
-export const paymentController = new PaymentController();
 
 export default paymentController;

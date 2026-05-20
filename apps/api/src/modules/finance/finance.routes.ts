@@ -2,7 +2,7 @@
 
 import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
-import { bindPlatformModuleEnforcement } from '../../middleware/platform/module-enforcement';
+import { bindPlatformModuleEnforcement } from '../../middleware/platform-access.middleware';
 import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
 import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 import { validate } from '../../middleware/validate';
@@ -281,109 +281,7 @@ router.get('/health', (req: Request, res: Response) => {
     requestId: req.id,
     timestamp: new Date().toISOString(),
   });
-const vatMonthlyQuerySchema = z.object({
-  year: z.coerce.number().int().min(2000).max(2100),
-  month: z.coerce.number().int().min(1).max(12),
 });
-
-const vatRangeQuerySchema = z.object({
-  from: z.coerce.date(),
-  to: z.coerce.date(),
-}).refine((value) => value.to > value.from, {
-  message: 'to must be after from',
-  path: ['to'],
-});
-
-const vatAdjustmentBodySchema = z.object({
-  adjustmentDate: z.coerce.date(),
-  type: z.enum(['OUTPUT_VAT', 'INPUT_VAT', 'VAT_PAYABLE', 'VAT_REFUND', 'OTHER']),
-  amount: decimalLike,
-  reason: z.string().trim().min(1).max(2000),
-  reference: z.string().trim().max(255).optional().nullable(),
-  metadata: z.record(z.unknown()).optional(),
-});
-
-const whtCalculationBodySchema = z.object({
-  invoiceId: z.string().trim().min(1).optional(),
-  vendorBillId: z.string().trim().min(1).optional(),
-  baseAmount: decimalLike.optional().nullable(),
-  rate: decimalLike.optional().nullable(),
-  rateCode: z.string().trim().max(100).optional().nullable(),
-  partyResident: z.boolean().optional().nullable(),
-  category: z.string().trim().max(100).optional().nullable(),
-}).refine((value) => value.invoiceId || value.vendorBillId || value.baseAmount, {
-  message: 'invoiceId, vendorBillId, or baseAmount is required',
-});
-
-const whtCertificateBodySchema = z.object({
-  invoiceId: z.string().trim().min(1).optional().nullable(),
-  vendorBillId: z.string().trim().min(1).optional().nullable(),
-  paymentReceiptId: z.string().trim().min(1).optional().nullable(),
-  supplierId: z.string().trim().min(1).optional().nullable(),
-  clientId: z.string().trim().min(1).optional().nullable(),
-  certificateNumber: z.string().trim().max(100).optional().nullable(),
-  certificateDate: z.coerce.date(),
-  baseAmount: decimalLike,
-  withholdingRate: decimalLike,
-  withholdingAmount: decimalLike.optional().nullable(),
-  reference: z.string().trim().max(255).optional().nullable(),
-  metadata: z.record(z.unknown()).optional(),
-});
-
-const whtReportQuerySchema = z.object({
-  from: z.coerce.date(),
-  to: z.coerce.date(),
-  take: z.coerce.number().int().min(1).max(500).optional(),
-  skip: z.coerce.number().int().min(0).optional(),
-}).refine((value) => value.to > value.from, {
-  message: 'to must be after from',
-  path: ['to'],
-});
-
-const reconciliationBodySchema = z.object({
-  type: z.enum(['BANK', 'TRUST', 'OFFICE', 'FULL', 'THREE_WAY']).optional(),
-  periodStart: z.coerce.date().optional().nullable(),
-  periodEnd: z.coerce.date().optional().nullable(),
-  bankAccountId: z.string().trim().min(1).optional().nullable(),
-  trustAccountId: z.string().trim().min(1).optional().nullable(),
-  matterId: z.string().trim().min(1).optional().nullable(),
-  metadata: z.record(z.unknown()).optional(),
-});
-
-const reconciliationQuerySchema = z.object({
-  type: z.string().trim().max(100).optional(),
-  status: z.string().trim().max(100).optional(),
-  take: z.coerce.number().int().min(1).max(100).optional(),
-  skip: z.coerce.number().int().min(0).optional(),
-});
-
-const etimsFiscalizeBodySchema = z.object({
-  force: z.boolean().optional(),
-});
-
-const financePostingBodySchema = z.object({
-  source: z.enum([
-    'BILLING_INVOICE',
-    'PAYMENT_RECEIPT',
-    'CREDIT_NOTE',
-    'RETAINER_RECEIPT',
-    'RETAINER_APPLICATION',
-    'PAYROLL_BATCH',
-    'VENDOR_BILL',
-    'VENDOR_PAYMENT',
-    'VAT_ADJUSTMENT',
-    'WHT_CERTIFICATE',
-  ]),
-  sourceId: z.string().trim().min(1),
-  force: z.boolean().optional(),
-  metadata: z.record(z.unknown()).optional(),
-});
-
-const reasonBodySchema = z.object({
-  reason: z.string().trim().min(1).max(2000),
-});
-});
-
 router.get('/', (req: Request, res: Response) => {
   res.status(200).json({
     success: true,

@@ -6,17 +6,24 @@ import type {
 } from './finance.types';
 import { PostingPolicyService } from './posting-policy.service';
 import { FinanceIdempotencyService } from './idempotency.service';
-import { AppError } from '../../utils/AppError';
 
-export class UnbalancedJournalError extends AppError {
+export class UnbalancedJournalError extends Error {
+  statusCode = 400;
+  code = 'UNBALANCED_JOURNAL_COMMIT';
+
   constructor(message: string) {
-    super(message, 400, 'UNBALANCED_JOURNAL_COMMIT');
+    super(message);
+    this.name = 'UnbalancedJournalError';
   }
 }
 
-export class PeriodClosedError extends AppError {
+export class PeriodClosedError extends Error {
+  statusCode = 403;
+  code = 'PERIOD_CLOSED';
+
   constructor(message: string) {
-    super(message, 403, 'PERIOD_CLOSED');
+    super(message);
+    this.name = 'PeriodClosedError';
   }
 }
 
@@ -27,9 +34,27 @@ function toDecimal(value: Prisma.Decimal | number | string | null | undefined): 
   return new Prisma.Decimal(value);
 }
 
+type JournalEntryCreateResult = {
+  id: string;
+};
+
+type JournalEntryCreateDelegate = {
+  create: (args: unknown) => Promise<JournalEntryCreateResult>;
+};
+
+type FinanceJournalTransactionClient = TenantDbClient & {
+  journalEntry: JournalEntryCreateDelegate;
+};
+
+type TransactionCapableFinanceDbClient = TenantDbClient & {
+  $transaction: <T>(
+    callback: (tx: FinanceJournalTransactionClient) => Promise<T>,
+  ) => Promise<T>;
+};
+
 export class TransactionEngine {
   static async postJournalAtomically(
-    db: TenantDbClient & { $transaction: Function },
+    db: TransactionCapableFinanceDbClient,
     tenantId: string,
     input: JournalPostingInput,
     context: PostingPolicyContext = {},
@@ -57,10 +82,13 @@ export class TransactionEngine {
     }
 
     if (totals.debit.equals(0) && totals.credit.equals(0)) {
-      throw new AppError('Journal cannot be zero value', 400, 'ZERO_VALUE_JOURNAL');
+      throw Object.assign(new Error('Journal cannot be zero value'), {
+        statusCode: 400,
+        code: 'ZERO_VALUE_JOURNAL',
+      });
     }
 
-    return db.$transaction(async (tx: TenantDbClient & { journalEntry: any; journalLine: any }) => {
+    return db.$transaction(async (tx) => {
       console.info(
         `[TX_START] tenant=${tenantId} ref=${input.reference} lines=${input.lines.length}`,
       );

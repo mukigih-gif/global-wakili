@@ -1,36 +1,37 @@
 // apps/api/src/modules/finance/FinancePermissionMap.ts
 
 import type { NextFunction, Request, Response } from 'express';
+import { PERMISSIONS, toPermissionString } from '../../config/permissions';
 
 export const FINANCE_PERMISSIONS = {
-  viewDashboard: 'finance:dashboard:view',
+  viewDashboard: toPermissionString(PERMISSIONS.finance.viewDashboard),
 
-  viewAccount: 'finance:account:view',
-  createAccount: 'finance:account:create',
-  updateAccount: 'finance:account:update',
+  viewAccount: toPermissionString(PERMISSIONS.finance.viewAccount),
+  createAccount: toPermissionString(PERMISSIONS.finance.createAccount),
+  updateAccount: toPermissionString(PERMISSIONS.finance.updateAccount),
 
-  viewJournal: 'finance:journal:view',
-  postJournal: 'finance:journal:post',
-  approveJournal: 'finance:journal:approve',
-  reverseJournal: 'finance:journal:reverse',
+  viewJournal: toPermissionString(PERMISSIONS.finance.viewJournal),
+  postJournal: toPermissionString(PERMISSIONS.finance.postJournal),
+  approveJournal: toPermissionString(PERMISSIONS.finance.approveJournal),
+  reverseJournal: toPermissionString(PERMISSIONS.finance.reverseJournal),
 
-  viewReports: 'finance:reports:view',
-  exportReports: 'finance:reports:export',
+  viewReports: toPermissionString(PERMISSIONS.finance.viewReports),
+  exportReports: toPermissionString(PERMISSIONS.finance.exportReport),
 
-  viewTrialBalance: 'finance:trial-balance:view',
-  viewBalanceSheet: 'finance:balance-sheet:view',
-  viewCashflow: 'finance:cashflow:view',
-  viewStatement: 'finance:statement:view',
+  viewTrialBalance: toPermissionString(PERMISSIONS.finance.viewTrialBalance),
+  viewBalanceSheet: toPermissionString(PERMISSIONS.finance.viewBalanceSheet),
+  viewCashflow: toPermissionString(PERMISSIONS.finance.viewCashflow),
+  viewStatement: toPermissionString(PERMISSIONS.finance.viewStatement),
 
-  closePeriod: 'finance:period:close',
-  viewPeriod: 'finance:period:view',
+  closePeriod: toPermissionString(PERMISSIONS.finance.closePeriod),
+  viewPeriod: toPermissionString(PERMISSIONS.finance.viewPeriod),
 
-  runReconciliation: 'finance:reconciliation:run',
-  viewReconciliation: 'finance:reconciliation:view',
+  runReconciliation: toPermissionString(PERMISSIONS.finance.runReconciliation),
+  viewReconciliation: toPermissionString(PERMISSIONS.finance.viewReconciliation),
 
-  fiscalizeEtims: 'finance:etims:fiscalize',
-  viewTax: 'finance:tax:view',
-  manageTax: 'finance:tax:manage',
+  fiscalizeEtims: toPermissionString(PERMISSIONS.finance.fiscalizeEtims),
+  viewTax: toPermissionString(PERMISSIONS.finance.viewTax),
+  manageTax: toPermissionString(PERMISSIONS.finance.manageTax),
 
   manageFinance: 'finance:*',
 } as const;
@@ -38,17 +39,35 @@ export const FINANCE_PERMISSIONS = {
 export type FinancePermission =
   (typeof FINANCE_PERMISSIONS)[keyof typeof FINANCE_PERMISSIONS];
 
+type FinanceRequestUser = {
+  permissions?: unknown;
+  roles?: unknown;
+  role?: unknown;
+  isSuperAdmin?: unknown;
+  isSystemAdmin?: unknown;
+};
+
+type FinancePermissionRequest = Request & {
+  user?: FinanceRequestUser;
+  permissions?: unknown;
+};
+
+function financeRequest(req: Request): FinancePermissionRequest {
+  return req as FinancePermissionRequest;
+}
+
 function getUserPermissions(req: Request): string[] {
-  const user = req.user ?? (req as any).user;
+  const financeReq = financeRequest(req);
+  const user = financeReq.user;
 
   return [
     ...(Array.isArray(user?.permissions) ? user.permissions : []),
-    ...(Array.isArray((req as any).permissions) ? (req as any).permissions : []),
+    ...(Array.isArray(financeReq.permissions) ? financeReq.permissions : []),
   ].map(String);
 }
 
 function isSuperUser(req: Request): boolean {
-  const user = req.user ?? (req as any).user;
+  const user = financeRequest(req).user;
   const roles = Array.isArray(user?.roles) ? user.roles.map(String) : [];
   const role = user?.role ? String(user.role) : '';
 
@@ -133,3 +152,11 @@ export const FINANCE_PERMISSION_GROUPS = {
     FINANCE_PERMISSIONS.fiscalizeEtims,
   ],
 } as const;
+const FinancePermissionMap = {
+  FINANCE_PERMISSIONS,
+  FINANCE_PERMISSION_GROUPS,
+  hasFinancePermission,
+  requireFinancePermission,
+};
+
+export default FinancePermissionMap;

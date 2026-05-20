@@ -15,12 +15,34 @@ function define(resource: string, action: string, description: string): Permissi
 export const PERMISSIONS = {
   finance: {
     viewDashboard: define('finance', 'view_dashboard', 'View finance dashboard'),
-    viewStatement: define('finance', 'view_statement', 'View finance statements'),
+
+    viewAccount: define('finance', 'view_account', 'View chart of accounts'),
+    createAccount: define('finance', 'create_account', 'Create chart of accounts'),
+    updateAccount: define('finance', 'update_account', 'Update chart of accounts'),
+
+    viewJournal: define('finance', 'view_journal', 'View journal entries'),
     createJournal: define('finance', 'create_journal', 'Create journal entries'),
+    postJournal: define('finance', 'post_journal', 'Post journal entries'),
     approveJournal: define('finance', 'approve_journal', 'Approve journal entries'),
     reverseJournal: define('finance', 'reverse_journal', 'Reverse journal entries'),
-    closePeriod: define('finance', 'close_period', 'Close accounting periods'),
+
+    viewReports: define('finance', 'view_reports', 'View finance reports'),
     exportReport: define('finance', 'export_report', 'Export finance reports'),
+
+    viewTrialBalance: define('finance', 'view_trial_balance', 'View trial balance'),
+    viewBalanceSheet: define('finance', 'view_balance_sheet', 'View balance sheet'),
+    viewCashflow: define('finance', 'view_cashflow', 'View cashflow reports'),
+    viewStatement: define('finance', 'view_statement', 'View finance statements'),
+
+    viewPeriod: define('finance', 'view_period', 'View accounting periods'),
+    closePeriod: define('finance', 'close_period', 'Close accounting periods'),
+
+    runReconciliation: define('finance', 'run_reconciliation', 'Run finance reconciliations'),
+    viewReconciliation: define('finance', 'view_reconciliation', 'View finance reconciliations'),
+
+    fiscalizeEtims: define('finance', 'fiscalize_etims', 'Fiscalize invoices through eTIMS'),
+    viewTax: define('finance', 'view_tax', 'View finance tax records and reports'),
+    manageTax: define('finance', 'manage_tax', 'Manage finance tax records and filings'),
   },
 
   queues: {

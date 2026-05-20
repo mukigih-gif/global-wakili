@@ -9,9 +9,20 @@ import { NotificationReportService } from './NotificationReportService';
 import { NotificationCapabilityService } from './NotificationCapabilityService';
 import { NotificationAuditService } from './NotificationAuditService';
 
+function requireTenantId(req: Request): string {
+  if (!req.tenantId || !req.tenantId.trim()) {
+    throw Object.assign(new Error('Tenant context is required for notification operation.'), {
+      statusCode: 401,
+      code: 'NOTIFICATION_TENANT_CONTEXT_REQUIRED',
+    });
+  }
+
+  return req.tenantId.trim();
+}
 export const sendNotification = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = requireTenantId(req);
   const result = await NotificationDeliveryService.sendNow(req.db, {
-    tenantId: req.tenantId!,
+    tenantId,
     recipients: req.body.recipients,
     channels: req.body.channels,
     category: req.body.category ?? 'system_alert',
@@ -26,7 +37,7 @@ export const sendNotification = asyncHandler(async (req: Request, res: Response)
   });
 
   await NotificationAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
+    tenantId,
     userId: req.user?.sub ?? null,
     action: 'SEND_REQUESTED',
     requestId: req.id,
@@ -42,8 +53,9 @@ export const sendNotification = asyncHandler(async (req: Request, res: Response)
 });
 
 export const queueNotification = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = requireTenantId(req);
   const result = await NotificationQueueService.enqueue({
-    tenantId: req.tenantId!,
+    tenantId,
     recipients: req.body.recipients,
     channels: req.body.channels,
     category: req.body.category ?? 'system_alert',
@@ -58,7 +70,7 @@ export const queueNotification = asyncHandler(async (req: Request, res: Response
   });
 
   await NotificationAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
+    tenantId,
     userId: req.user?.sub ?? null,
     action: 'QUEUE_REQUESTED',
     requestId: req.id,
@@ -71,8 +83,9 @@ export const queueNotification = asyncHandler(async (req: Request, res: Response
 });
 
 export const searchNotifications = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = requireTenantId(req);
   const result = await NotificationReportService.search(req.db, {
-    tenantId: req.tenantId!,
+    tenantId,
     query: req.query.query ? String(req.query.query) : null,
     page: req.query.page ? Number(req.query.page) : undefined,
     limit: req.query.limit ? Number(req.query.limit) : undefined,
@@ -90,7 +103,7 @@ export const searchNotifications = asyncHandler(async (req: Request, res: Respon
   });
 
   await NotificationAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
+    tenantId,
     userId: req.user?.sub ?? null,
     action: 'SEARCHED',
     requestId: req.id,
@@ -105,14 +118,15 @@ export const searchNotifications = asyncHandler(async (req: Request, res: Respon
 });
 
 export const getNotificationDashboard = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = requireTenantId(req);
   const dashboard = await NotificationDashboardService.getDashboard(req.db, {
-    tenantId: req.tenantId!,
+    tenantId,
     from: req.query.from ? String(req.query.from) : null,
     to: req.query.to ? String(req.query.to) : null,
   });
 
   await NotificationAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
+    tenantId,
     userId: req.user?.sub ?? null,
     action: 'DASHBOARD_VIEWED',
     requestId: req.id,
@@ -124,14 +138,15 @@ export const getNotificationDashboard = asyncHandler(async (req: Request, res: R
 });
 
 export const getNotificationReportSummary = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = requireTenantId(req);
   const report = await NotificationReportService.getSummary(req.db, {
-    tenantId: req.tenantId!,
+    tenantId,
     from: req.query.from ? String(req.query.from) : null,
     to: req.query.to ? String(req.query.to) : null,
   });
 
   await NotificationAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
+    tenantId,
     userId: req.user?.sub ?? null,
     action: 'REPORT_VIEWED',
     requestId: req.id,
@@ -143,14 +158,15 @@ export const getNotificationReportSummary = asyncHandler(async (req: Request, re
 });
 
 export const markNotificationRead = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = requireTenantId(req);
   const result = await NotificationDeliveryService.markRead(req.db, {
-    tenantId: req.tenantId!,
+    tenantId,
     notificationId: req.params.notificationId,
     userId: req.user?.sub ?? null,
   });
 
   await NotificationAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
+    tenantId,
     userId: req.user?.sub ?? null,
     notificationId: req.params.notificationId,
     action: 'READ',
@@ -163,7 +179,9 @@ export const markNotificationRead = asyncHandler(async (req: Request, res: Respo
 });
 
 export const updateProviderWebhookStatus = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = requireTenantId(req);
   const result = await NotificationDeliveryService.updateProviderStatus(req.db, {
+    tenantId,
     providerMessageId: req.body.providerMessageId,
     provider: req.body.provider ?? null,
     status: req.body.status,
@@ -171,7 +189,7 @@ export const updateProviderWebhookStatus = asyncHandler(async (req: Request, res
   });
 
   await NotificationAuditService.logAction(req.db, {
-    tenantId: result.tenantId,
+    tenantId,
     userId: req.user?.sub ?? null,
     notificationId: result.id,
     action: 'WEBHOOK_STATUS_UPDATED',
@@ -188,10 +206,11 @@ export const updateProviderWebhookStatus = asyncHandler(async (req: Request, res
 });
 
 export const getNotificationCapabilities = asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = requireTenantId(req);
   const result = NotificationCapabilityService.getSummary();
 
   await NotificationAuditService.logAction(req.db, {
-    tenantId: req.tenantId!,
+    tenantId,
     userId: req.user?.sub ?? null,
     action: 'CAPABILITY_VIEWED',
     requestId: req.id,

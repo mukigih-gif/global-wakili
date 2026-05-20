@@ -2,7 +2,73 @@
 
 import { Prisma, prisma } from '@global-wakili/database';
 
-type DbClient = typeof prisma | Prisma.TransactionClient | any;
+type DbClient = typeof prisma | Prisma.TransactionClient | Record<string, unknown>;
+
+type VatAmountSourceRow = {
+  taxAmount?: Prisma.Decimal | number | string | null;
+  vatAmount?: Prisma.Decimal | number | string | null;
+};
+
+type VatAdjustmentRow = {
+  type?: string | null;
+  amount?: Prisma.Decimal | number | string | null;
+};
+
+type VatExposureInvoiceLineRow = {
+  id: string;
+  description?: string | null;
+  subTotal?: Prisma.Decimal | number | string | null;
+  amount?: Prisma.Decimal | number | string | null;
+  taxRate?: Prisma.Decimal | number | string | null;
+  taxAmount?: Prisma.Decimal | number | string | null;
+  vatAmount?: Prisma.Decimal | number | string | null;
+  totalAmount?: Prisma.Decimal | number | string | null;
+};
+
+type JsonObject = Record<string, unknown>;
+
+type PrismaFindManyDelegate<TRow> = {
+  findMany: (args: unknown) => Promise<TRow[]>;
+};
+
+type PrismaFindFirstDelegate<TRow> = {
+  findFirst: (args: unknown) => Promise<TRow | null>;
+};
+
+type PrismaCreateDelegate<TRow = unknown> = {
+  create: (args: unknown) => Promise<TRow>;
+};
+
+type PrismaUpdateDelegate<TRow = unknown> = {
+  update: (args: unknown) => Promise<TRow>;
+};
+
+type VatExposureInvoiceRow = {
+  id: string;
+  invoiceNumber?: string | null;
+  status?: string | null;
+  taxAmount?: Prisma.Decimal | number | string | null;
+  vatAmount?: Prisma.Decimal | number | string | null;
+  totalAmount?: Prisma.Decimal | number | string | null;
+  grandTotal?: Prisma.Decimal | number | string | null;
+  lines?: VatExposureInvoiceLineRow[] | null;
+};
+
+type VatAdjustmentExistingRow = {
+  metadata?: unknown;
+};
+
+type VatInvoiceDelegate =
+  PrismaFindManyDelegate<VatAmountSourceRow> &
+  PrismaFindFirstDelegate<VatExposureInvoiceRow>;
+
+type VatVendorBillDelegate = PrismaFindManyDelegate<VatAmountSourceRow>;
+
+type VatAdjustmentDelegate =
+  PrismaFindManyDelegate<VatAdjustmentRow> &
+  PrismaFindFirstDelegate<VatAdjustmentExistingRow> &
+  PrismaCreateDelegate &
+  PrismaUpdateDelegate;
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -45,12 +111,27 @@ export type VatSummaryResult = {
   generatedAt: Date;
 };
 
-function optionalDelegate(db: DbClient, name: string) {
-  return db[name] ?? null;
+type VatExposureLine = {
+  lineId: string;
+  description: string | null;
+  taxableAmount: Prisma.Decimal;
+  taxRate: Prisma.Decimal;
+  vatAmount: Prisma.Decimal;
+  totalAmount: Prisma.Decimal;
+};
+
+function optionalDelegate<TDelegate extends object>(db: DbClient, name: string): TDelegate | null {
+  const modelDelegate = (db as Record<string, unknown>)[name];
+
+  if (!modelDelegate || typeof modelDelegate !== 'object') {
+    return null;
+  }
+
+  return modelDelegate as TDelegate;
 }
 
-function delegate(db: DbClient, name: string) {
-  const modelDelegate = db[name];
+function delegate<TDelegate extends object>(db: DbClient, name: string): TDelegate {
+  const modelDelegate = (db as Record<string, unknown>)[name];
 
   if (!modelDelegate) {
     throw Object.assign(
@@ -63,13 +144,13 @@ function delegate(db: DbClient, name: string) {
     );
   }
 
-  return modelDelegate;
+  return modelDelegate as TDelegate;
 }
 
 function money(value: unknown): Prisma.Decimal {
   if (value === null || value === undefined || value === '') return ZERO;
 
-  const parsed = new Prisma.Decimal(value as any);
+  const parsed = new Prisma.Decimal(value as Prisma.Decimal | number | string);
 
   if (!parsed.isFinite()) return ZERO;
 
@@ -106,9 +187,9 @@ function dateRangeWhere(from: Date, to: Date, field: string) {
   };
 }
 
-function asRecord(value: unknown): Record<string, any> {
+function asRecord(value: unknown): JsonObject {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  return value as Record<string, any>;
+  return value as JsonObject;
 }
 
 export class VATService {
@@ -132,9 +213,9 @@ export class VATService {
   }
 
   async getVatSummary(input: VatDateRangeInput): Promise<VatSummaryResult> {
-    const invoice = optionalDelegate(prisma, 'invoice');
-    const vendorBill = optionalDelegate(prisma, 'vendorBill');
-    const vatAdjustment = optionalDelegate(prisma, 'vatAdjustment');
+    const invoice = optionalDelegate<VatInvoiceDelegate>(prisma, 'invoice');
+    const vendorBill = optionalDelegate<VatVendorBillDelegate>(prisma, 'vendorBill');
+    const vatAdjustment = optionalDelegate<VatAdjustmentDelegate>(prisma, 'vatAdjustment');
 
     const [invoices, vendorBills, adjustments] = await Promise.all([
       invoice
@@ -197,16 +278,16 @@ export class VATService {
     ]);
 
     const invoiceOutputVat = invoices.reduce(
-      (sum: Prisma.Decimal, row: any) => sum.plus(money(row.taxAmount ?? row.vatAmount)),
+      (sum: Prisma.Decimal, row: VatAmountSourceRow) => sum.plus(money(row.taxAmount ?? row.vatAmount)),
       ZERO,
     );
 
     const vendorInputVat = vendorBills.reduce(
-      (sum: Prisma.Decimal, row: any) => sum.plus(money(row.taxAmount ?? row.vatAmount)),
+      (sum: Prisma.Decimal, row: VatAmountSourceRow) => sum.plus(money(row.taxAmount ?? row.vatAmount)),
       ZERO,
     );
 
-    const adjustmentsTotal = adjustments.reduce((sum: Prisma.Decimal, row: any) => {
+    const adjustmentsTotal = (adjustments as VatAdjustmentRow[]).reduce((sum: Prisma.Decimal, row: VatAdjustmentRow) => {
       const amount = money(row.amount);
       const type = String(row.type ?? '').toUpperCase();
 
@@ -235,7 +316,7 @@ export class VATService {
     tenantId: string;
     invoiceId: string;
   }) {
-    const invoice = delegate(prisma, 'invoice');
+    const invoice = delegate<VatInvoiceDelegate>(prisma, 'invoice');
 
     const existing = await invoice.findFirst({
       where: {
@@ -256,7 +337,7 @@ export class VATService {
 
     const lines = Array.isArray(existing.lines) ? existing.lines : [];
 
-    const lineSummary = lines.map((line: any) => ({
+    const lineSummary: VatExposureLine[] = (lines as VatExposureInvoiceLineRow[]).map((line: VatExposureInvoiceLineRow) => ({
       lineId: line.id,
       description: line.description ?? null,
       taxableAmount: money(line.subTotal ?? line.amount ?? 0),
@@ -266,7 +347,10 @@ export class VATService {
     }));
 
     const outputVat = lineSummary.length
-      ? lineSummary.reduce((sum, line) => sum.plus(line.vatAmount), ZERO)
+      ? lineSummary.reduce(
+    (sum: Prisma.Decimal, line: VatExposureLine) => sum.plus(line.vatAmount),
+    ZERO,
+  )
       : money(existing.taxAmount ?? existing.vatAmount ?? 0);
 
     return {
@@ -298,7 +382,7 @@ export class VATService {
       });
     }
 
-    const vatAdjustment = optionalDelegate(prisma, 'vatAdjustment');
+    const vatAdjustment = optionalDelegate<VatAdjustmentDelegate>(prisma, 'vatAdjustment');
 
     if (!vatAdjustment) {
       return {
@@ -348,7 +432,7 @@ export class VATService {
       });
     }
 
-    const vatAdjustment = delegate(prisma, 'vatAdjustment');
+    const vatAdjustment = delegate<VatAdjustmentDelegate>(prisma, 'vatAdjustment');
 
     const existing = await vatAdjustment.findFirst({
       where: {
@@ -394,7 +478,7 @@ export class VATService {
     take?: number;
     skip?: number;
   }) {
-    const vatAdjustment = optionalDelegate(prisma, 'vatAdjustment');
+    const vatAdjustment = optionalDelegate<VatAdjustmentDelegate>(prisma, 'vatAdjustment');
 
     if (!vatAdjustment) return [];
 

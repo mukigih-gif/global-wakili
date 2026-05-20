@@ -1,3 +1,5 @@
+import type { NotificationDbClient } from '../notification.types';
+
 export type NotificationTemplateKey =
   | 'TRUST_OVERDRAW_ALERT'
   | 'TRUST_LEDGER_MISMATCH_ALERT'
@@ -31,6 +33,81 @@ export type NotificationTemplateDefinition = {
   smsBody?: string;
 };
 
+
+type SchemaTemplateChannel = 'SYSTEM_ALERT' | 'EMAIL' | 'SMS' | 'PUSH' | 'IN_APP';
+
+type NotificationTemplateRow = {
+  id?: string;
+  tenantId?: string | null;
+  key: string;
+  name?: string | null;
+  description?: string | null;
+  category?: string | null;
+  channel?: SchemaTemplateChannel | string | null;
+  subject?: string | null;
+  body?: string | null;
+  smsContent?: string | null;
+  systemTitle?: string | null;
+  systemMessage?: string | null;
+  variables?: Record<string, unknown> | null;
+  status?: string | null;
+  version?: number | null;
+  isSystem?: boolean | null;
+  metadata?: Record<string, unknown> | null;
+};
+
+function isNotificationTemplateKey(key: string): key is NotificationTemplateKey {
+  return Object.prototype.hasOwnProperty.call(TEMPLATE_REGISTRY, key);
+}
+
+function normalizeSchemaTemplateChannel(
+  channel?: SchemaTemplateChannel | string | null,
+  fallbackChannels: Array<'email' | 'sms' | 'portal'> = ['email', 'sms', 'portal'],
+): Array<'email' | 'sms' | 'portal'> {
+  if (!channel) return fallbackChannels;
+
+  if (channel === 'EMAIL') return ['email'];
+  if (channel === 'SMS') return ['sms'];
+  if (channel === 'SYSTEM_ALERT' || channel === 'IN_APP') return ['portal'];
+
+  return fallbackChannels;
+}
+
+function normalizeSchemaPriority(
+  metadata: Record<string, unknown> | null | undefined,
+  fallback: 'low' | 'normal' | 'high' | 'critical',
+): 'low' | 'normal' | 'high' | 'critical' {
+  const priority = metadata?.defaultPriority;
+
+  if (
+    priority === 'low' ||
+    priority === 'normal' ||
+    priority === 'high' ||
+    priority === 'critical'
+  ) {
+    return priority;
+  }
+
+  return fallback;
+}
+
+function rowToTemplateDefinition(
+  row: NotificationTemplateRow,
+  fallback?: NotificationTemplateDefinition,
+): NotificationTemplateDefinition {
+  const key = isNotificationTemplateKey(row.key) ? row.key : 'CUSTOM';
+
+  return {
+    key,
+    category: (row.category ?? fallback?.category ?? 'system_alert') as NotificationTemplateDefinition['category'],
+    defaultPriority: normalizeSchemaPriority(row.metadata, fallback?.defaultPriority ?? 'normal'),
+    channels: normalizeSchemaTemplateChannel(row.channel, fallback?.channels),
+    subject: row.subject ?? fallback?.subject,
+    textBody: row.body ?? row.systemMessage ?? fallback?.textBody,
+    htmlBody: row.body ?? fallback?.htmlBody,
+    smsBody: row.smsContent ?? fallback?.smsBody,
+  };
+}
 const TEMPLATE_REGISTRY: Record<NotificationTemplateKey, NotificationTemplateDefinition> = {
   TRUST_OVERDRAW_ALERT: {
     key: 'TRUST_OVERDRAW_ALERT',
@@ -174,5 +251,97 @@ export class NotificationTemplateRegistry {
 
   static list(): NotificationTemplateDefinition[] {
     return Object.values(TEMPLATE_REGISTRY);
+  }
+
+  static async getSchemaAware(
+    db: NotificationDbClient,
+    params: {
+      tenantId?: string | null;
+      key: NotificationTemplateKey | string;
+    },
+  ): Promise<NotificationTemplateDefinition> {
+    const fallback = isNotificationTemplateKey(params.key)
+      ? this.get(params.key)
+      : TEMPLATE_REGISTRY.CUSTOM;
+
+    const tenantId = params.tenantId?.trim() || null;
+
+    const tenantRow = tenantId
+      ? ((await db.notificationTemplate.findFirst({
+          where: {
+            tenantId,
+            key: String(params.key),
+            status: 'ACTIVE',
+          },
+          orderBy: [{ version: 'desc' }],
+        })) as NotificationTemplateRow | null)
+      : null;
+
+    const systemRow = (await db.notificationTemplate.findFirst({
+      where: {
+        tenantId: null,
+        key: String(params.key),
+        status: 'ACTIVE',
+      },
+      orderBy: [{ version: 'desc' }],
+    })) as NotificationTemplateRow | null;
+
+    const row = tenantRow ?? systemRow;
+
+    if (!row) {
+      return fallback;
+    }
+
+    return rowToTemplateDefinition(row, fallback);
+  }
+
+  static async listSchemaAware(
+    db: NotificationDbClient,
+    tenantId?: string | null,
+  ): Promise<NotificationTemplateDefinition[]> {
+    const effectiveTenantId = tenantId?.trim() || null;
+
+    const rows = (await db.notificationTemplate.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          ...(effectiveTenantId ? [{ tenantId: effectiveTenantId }] : []),
+          { tenantId: null },
+        ],
+      },
+      orderBy: [
+        { key: 'asc' },
+        { version: 'desc' },
+      ],
+    })) as NotificationTemplateRow[];
+
+    if (!rows.length) {
+      return this.list();
+    }
+
+    const byKey = new Map<string, NotificationTemplateDefinition>();
+
+    for (const row of rows) {
+      const existing = byKey.get(row.key);
+      const rowIsTenantSpecific = Boolean(effectiveTenantId && row.tenantId === effectiveTenantId);
+
+      if (existing && !rowIsTenantSpecific) {
+        continue;
+      }
+
+      const fallback = isNotificationTemplateKey(row.key)
+        ? TEMPLATE_REGISTRY[row.key]
+        : TEMPLATE_REGISTRY.CUSTOM;
+
+      byKey.set(row.key, rowToTemplateDefinition(row, fallback));
+    }
+
+    for (const template of this.list()) {
+      if (!byKey.has(template.key)) {
+        byKey.set(template.key, template);
+      }
+    }
+
+    return Array.from(byKey.values());
   }
 }

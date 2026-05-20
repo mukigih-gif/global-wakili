@@ -1,6 +1,6 @@
 import { Prisma } from '@global-wakili/database';
 import type { Request } from 'express';
-import { TrialBalanceService } from './trialbalanceservice';
+import { TrialBalanceService } from './trial-balance.service';
 
 function toDecimal(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
   if (value === null || value === undefined) {

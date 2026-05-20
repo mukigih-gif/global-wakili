@@ -4,7 +4,8 @@ type CapabilityStatus =
   | 'ACTIVE'
   | 'PENDING_SCHEMA'
   | 'PENDING_CROSS_MODULE'
-  | 'PENDING_PROVIDER';
+  | 'PENDING_PROVIDER'
+  | 'PENDING_INTEGRATION';
 
 type CapabilityRisk = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
@@ -30,19 +31,27 @@ export class NotificationCapabilityService {
       },
       {
         key: 'notifications.email',
-        status: 'ACTIVE',
+        status: 'PENDING_PROVIDER',
         risk: 'HIGH',
         requiredForCloseout: true,
         description:
-          'Email delivery is bridged through notifications/providers/EmailService.',
+          'Email delivery currently uses a foundation provider adapter and remains pending production provider configuration.',
+        notes: [
+          'Current adapter returns simulated provider acceptance for development/foundation workflows.',
+          'Production SMTP/API credentials and provider-specific delivery confirmation are deferred to Notifications N2C.',
+        ],
       },
       {
         key: 'notifications.sms',
-        status: 'ACTIVE',
+        status: 'PENDING_PROVIDER',
         risk: 'HIGH',
         requiredForCloseout: true,
         description:
-          'SMS delivery is bridged through notifications/providers/SMSService.',
+          'SMS delivery currently uses a foundation provider adapter and remains pending production SMS gateway configuration.',
+        notes: [
+          'Current adapter returns simulated provider acceptance for development/foundation workflows.',
+          'Production SMS gateway credentials and provider-specific delivery confirmation are deferred to Notifications N2C.',
+        ],
       },
       {
         key: 'notifications.delivery_order',
@@ -70,27 +79,41 @@ export class NotificationCapabilityService {
       },
       {
         key: 'notifications.provider_webhooks',
-        status: 'ACTIVE',
+        status: 'PENDING_PROVIDER',
         risk: 'HIGH',
         requiredForCloseout: true,
         description:
-          'Provider webhook status updates can update Notification delivery state.',
+          'Provider webhook status updates are tenant-scoped, but provider-specific authentication/signature verification remains pending production provider configuration.',
+        notes: [
+          'Tenant-scoped callback lookup is active after Notifications N1.',
+          'Provider-specific webhook secrets/signature verification are deferred to Notifications N2C.',
+        ],
       },
       {
         key: 'notifications.preferences',
-        status: 'PENDING_SCHEMA',
+        status: 'ACTIVE',
         risk: 'MEDIUM',
         requiredForCloseout: false,
         description:
-          'No NotificationPreference model exists; current filtering uses User.emailNotifications and User.smsNotifications.',
+          'NotificationPreference schema is present and runtime preference filtering is wired through NotificationPreferenceService while preserving User.emailNotifications and User.smsNotifications as safe fallback.',
+        notes: [
+          'N2B added the NotificationPreference persistence model.',
+          'N2C wired schema-aware preference lookup and delivery-time channel filtering.',
+          'User.emailNotifications and User.smsNotifications remain preserved as fallback compatibility controls.',
+        ],
       },
       {
         key: 'notifications.templates',
-        status: 'PENDING_SCHEMA',
+        status: 'ACTIVE',
         risk: 'MEDIUM',
         requiredForCloseout: false,
         description:
-          'No NotificationTemplate model exists; current templates are code registry / request payload based.',
+          'NotificationTemplate schema is present and schema-aware template loading is wired through NotificationTemplateRegistry while preserving the static registry and request payload path as safe fallback.',
+        notes: [
+          'N2B added the NotificationTemplate persistence model.',
+          'N2C added tenant/system schema-aware template lookup with deterministic tenant override behavior.',
+          'The static registry remains preserved as fallback.',
+        ],
       },
       {
         key: 'notifications.worker_processor',
@@ -117,13 +140,20 @@ export class NotificationCapabilityService {
     return {
       module: 'notifications',
       generatedAt: new Date(),
-      status: 'ENTERPRISE_DELIVERY_ORCHESTRATION_ACTIVE',
+      status: 'N2C_RUNTIME_INTEGRATION_ACTIVE_PROVIDER_AND_WORKER_PENDING',
       deliveryOrder: ['SYSTEM_ALERT', 'EMAIL', 'SMS'],
+      providerMode: {
+        systemAlert: 'LOCAL_SYSTEM_RECORD',
+        email: 'SIMULATED_PROVIDER_PENDING_PRODUCTION_CONFIGURATION',
+        sms: 'SIMULATED_PROVIDER_PENDING_PRODUCTION_CONFIGURATION',
+      },
+      workerMode: 'ENQUEUE_ONLY_PENDING_NOTIFICATION_WORKER',
       active: capabilities.filter((item) => item.status === 'ACTIVE').length,
       pendingSchema: capabilities.filter((item) => item.status === 'PENDING_SCHEMA').length,
       pendingCrossModule: capabilities.filter((item) => item.status === 'PENDING_CROSS_MODULE')
         .length,
       pendingProvider: capabilities.filter((item) => item.status === 'PENDING_PROVIDER').length,
+      pendingIntegration: capabilities.filter((item) => item.status === 'PENDING_INTEGRATION').length,
       requiredForCloseoutRemaining: capabilities.filter(
         (item) => item.requiredForCloseout && item.status !== 'ACTIVE',
       ),

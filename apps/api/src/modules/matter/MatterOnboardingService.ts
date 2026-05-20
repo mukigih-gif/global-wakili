@@ -2,13 +2,16 @@
 
 import type { Request } from 'express';
 import { getRequestUserId, requireTenantId } from '../../utils/request-identity';
+import { MatterAuditService } from './MatterAuditService';
+import { MatterConflictService } from './MatterConflictService';
 import { MatterService } from './MatterService';
 import { MatterWorkflowService } from './MatterWorkflowService';
-import { MatterConflictService } from './MatterConflictService';
-import { MatterAuditService } from './MatterAuditService';
-import type { MatterInput } from './matter.types';
+import type { MatterInput, TenantMatterDbClient } from './matter.types';
 
-type ConflictBlockPolicy = 'CRITICAL_ONLY' | 'HIGH_AND_CRITICAL' | 'MANUAL_REVIEW_ONLY';
+type ConflictBlockPolicy =
+  | 'CRITICAL_ONLY'
+  | 'HIGH_AND_CRITICAL'
+  | 'MANUAL_REVIEW_ONLY';
 
 type MatterOnboardingInput = {
   matter: Record<string, unknown>;
@@ -21,14 +24,16 @@ type MatterOnboardingInput = {
   allowHighRiskConflictOverride?: boolean;
 };
 
+type WorkflowTemplate = {
+  matterType: string;
+  workflowType: string;
+  recommendedStages: string[];
+  requiredArtifacts: string[];
+};
+
 type MatterOnboardingResult = {
   matter: unknown;
-  workflowTemplate: {
-    matterType: string;
-    workflowType: string;
-    recommendedStages: string[];
-    requiredArtifacts: string[];
-  };
+  workflowTemplate: WorkflowTemplate;
   conflictResult: Awaited<ReturnType<typeof MatterConflictService.runConflictCheck>> | null;
   onboarding: {
     status: 'COMPLETED';
@@ -37,6 +42,29 @@ type MatterOnboardingResult = {
     conflictPolicy: ConflictBlockPolicy;
     notes: string | null;
   };
+};
+
+type MatterOnboardingDbClient = TenantMatterDbClient & {
+  $transaction?: <T>(callback: (tx: MatterOnboardingDbClient) => Promise<T>) => Promise<T>;
+
+  /**
+   * Preserve compatibility with request-scoped / tenant-scoped Prisma extensions
+   * without weakening the known delegates required by Matter onboarding.
+   */
+  [delegateName: string]: unknown;
+};
+
+type CreatedOnboardedMatterRecord = {
+  id: string;
+  tenantId?: string | null;
+  title?: string | null;
+  category?: string | null;
+  clientId?: string | null;
+  leadAdvocateId?: string | null;
+  status?: string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+  [key: string]: unknown;
 };
 
 function toNullableString(value: unknown): string | null {
@@ -64,6 +92,10 @@ function requiredString(value: unknown, label: string, code: string): string {
   return normalized;
 }
 
+function requiredNullableString(value: unknown, label: string, code: string): string {
+  return requiredString(value, label, code);
+}
+
 function normalizeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
 
@@ -76,6 +108,7 @@ function normalizeStringArray(value: unknown): string[] {
     if (!normalized) continue;
 
     const key = normalized.toLowerCase();
+
     if (seen.has(key)) continue;
 
     seen.add(key);
@@ -85,7 +118,7 @@ function normalizeStringArray(value: unknown): string[] {
   return result;
 }
 
-function normalizeDateInput(value: unknown): Date | string | null {
+function normalizeDateInput(value: unknown): Date | null {
   if (value === null || value === undefined || value === '') return null;
 
   if (value instanceof Date) {
@@ -109,7 +142,7 @@ function normalizeDateInput(value: unknown): Date | string | null {
       });
     }
 
-    return value;
+    return parsed;
   }
 
   return null;
@@ -122,6 +155,29 @@ function normalizeNumberInput(value: unknown): string | number | null {
     const parsed = Number(value);
 
     if (Number.isFinite(parsed)) return value.trim();
+  }
+
+  return null;
+}
+
+function normalizeProgressPercent(value: unknown): number | null {
+  const normalized = normalizeNumberInput(value);
+
+  if (typeof normalized === 'number') {
+    if (normalized < 0) return 0;
+    if (normalized > 100) return 100;
+
+    return normalized;
+  }
+
+  if (typeof normalized === 'string') {
+    const parsed = Number(normalized);
+
+    if (!Number.isFinite(parsed)) return null;
+    if (parsed < 0) return 0;
+    if (parsed > 100) return 100;
+
+    return parsed;
   }
 
   return null;
@@ -153,7 +209,7 @@ function getMatterObject(input: MatterOnboardingInput): Record<string, unknown> 
 }
 
 function getTransientMetadata(payload: Record<string, unknown>): Record<string, unknown> {
-  return asRecord(payload['metadata']);
+  return asRecord(payload.metadata);
 }
 
 function resolveMatterCategory(payload: Record<string, unknown>): string {
@@ -171,6 +227,15 @@ function resolveMatterCategory(payload: Record<string, unknown>): string {
 function resolveLeadAdvocateId(payload: Record<string, unknown>): string | null {
   return (
     toNullableString(payload.leadAdvocateId) ??
+    toNullableString(payload.assignedLawyerId) ??
+    toNullableString(payload.assigneeId) ??
+    null
+  );
+}
+
+function resolveAssignedLawyerId(payload: Record<string, unknown>): string | null {
+  return (
+    toNullableString(payload.assignedLawyerId) ??
     toNullableString(payload.assigneeId) ??
     null
   );
@@ -191,12 +256,7 @@ function resolveOriginatorId(
 function buildOnboardingMetadata(params: {
   matterPayload: Record<string, unknown>;
   category: string;
-  workflowTemplate: {
-    matterType: string;
-    workflowType: string;
-    recommendedStages: string[];
-    requiredArtifacts: string[];
-  };
+  workflowTemplate: WorkflowTemplate;
   completedAt: string;
   notes?: string | null;
   conflictLevel?: string | null;
@@ -207,11 +267,18 @@ function buildOnboardingMetadata(params: {
 
   return MatterWorkflowService.normalizeMetadata({
     ...transientMetadata,
-    matterType: params.category,
-    category: params.category,
+
+    /**
+     * Workflow and onboarding context only.
+     *
+     * Do not use metadata as the authoritative source for schema-backed Matter
+     * fields such as caseNumber, category, riskLevel, leadAdvocateId, or
+     * statuteOfLimitationsDate. Those are mapped directly in MatterInput below.
+     */
     workflowType: params.workflowTemplate.workflowType,
     progressStage: params.workflowTemplate.recommendedStages[0] ?? 'INTAKE',
     progressPercent: 0,
+
     onboarding: {
       completedAt: params.completedAt,
       completedById: params.userId ?? null,
@@ -220,13 +287,26 @@ function buildOnboardingMetadata(params: {
       requiredArtifacts: params.workflowTemplate.requiredArtifacts,
       conflictLevel: params.conflictLevel ?? 'NONE',
       conflictSummary: params.conflictSummary ?? null,
+      resolvedMatterType: params.workflowTemplate.matterType,
+      resolvedCategory: params.category,
     },
+
     originatorId: resolveOriginatorId(
       params.matterPayload,
       transientMetadata,
       params.userId ?? null,
     ),
   });
+}
+
+function getObjectConfig<T extends Record<string, unknown>>(
+  value: unknown,
+): T | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as T;
 }
 
 function buildMatterCreateInput(params: {
@@ -240,72 +320,71 @@ function buildMatterCreateInput(params: {
 
   const title = requiredString(payload.title, 'Matter title', 'MATTER_TITLE_REQUIRED');
   const clientId = requiredString(payload.clientId, 'Client ID', 'MATTER_CLIENT_REQUIRED');
+  const branchId = requiredNullableString(payload.branchId, 'Matter branch', 'MATTER_BRANCH_REQUIRED');
 
-  const leadAdvocateId = resolveLeadAdvocateId(payload);
+  const resolvedLeadAdvocateId = resolveLeadAdvocateId(payload);
+  const leadAdvocateId = requiredNullableString(
+    resolvedLeadAdvocateId,
+    'Lead advocate',
+    'MATTER_LEAD_ADVOCATE_REQUIRED',
+  );
+  const assignedLawyerId = resolveAssignedLawyerId(payload);
   const originatorId = resolveOriginatorId(payload, transientMetadata, params.userId ?? null);
 
-  const estimatedValue = normalizeNumberInput(payload.estimatedValue);
-  const progressPercent = normalizeNumberInput(payload.progressPercent);
-
   return {
+    /**
+     * Physical identity/reference columns.
+     */
+    matterCode: toNullableString(payload.matterCode),
+    caseNumber: toNullableString(payload.caseNumber),
     matterReference: toNullableString(payload.matterReference),
-    matterType: params.category,
 
+    /**
+     * Physical Matter identity/categorisation columns.
+     */
     title,
-    clientId,
-    branchId: toNullableString(payload.branchId),
-    description: toNullableString(payload.description),
-
     category: params.category,
-    riskLevel: toNullableString(payload.riskLevel) ?? toNullableString(transientMetadata.riskLevel),
-    status: toNullableString(payload.status) as MatterInput['status'] | undefined,
+    description: toNullableString(payload.description),
+    riskLevel: toNullableString(payload.riskLevel) ?? toNullableString(transientMetadata.riskLevel) ?? 'LOW',
 
+    /**
+     * Tenant-owned relations and responsibility roles.
+     */
+    clientId,
+    branchId,
+    originatorId,
+    partnerId: toNullableString(payload.partnerId),
+    assigneeId: toNullableString(payload.assigneeId),
+    leadAdvocateId,
+    assignedLawyerId,
+
+    /**
+     * Status, lifecycle, and legal dates.
+     */
+    status: toNullableString(payload.status) as MatterInput['status'] | undefined,
     openedDate: normalizeDateInput(payload.openedDate),
-    closedDate: normalizeDateInput(payload.closedDate),
     closeDate: normalizeDateInput(payload.closeDate),
+    closedDate: normalizeDateInput(payload.closedDate),
     archivedDate: normalizeDateInput(payload.archivedDate),
     statuteOfLimitationsDate: normalizeDateInput(payload.statuteOfLimitationsDate),
 
-    leadAdvocateId,
-    originatorId,
-    assigneeId: toNullableString(payload.assigneeId),
-
+    /**
+     * Financial and progress fields.
+     */
     billingModel: toNullableString(payload.billingModel) as MatterInput['billingModel'] | undefined,
     currency: toNullableString(payload.currency),
-    estimatedValue,
-
-    progressPercent:
-      typeof progressPercent === 'number'
-        ? progressPercent
-        : typeof progressPercent === 'string'
-          ? Number(progressPercent)
-          : null,
+    estimatedValue: normalizeNumberInput(payload.estimatedValue),
+    progressPercent: normalizeProgressPercent(payload.progressPercent),
     progressStage: toNullableString(payload.progressStage) as MatterInput['progressStage'] | null,
 
-    billing:
-      payload.billing && typeof payload.billing === 'object' && !Array.isArray(payload.billing)
-        ? (payload.billing as MatterInput['billing'])
-        : null,
-
-    documents:
-      payload.documents && typeof payload.documents === 'object' && !Array.isArray(payload.documents)
-        ? (payload.documents as MatterInput['documents'])
-        : null,
-
-    calendar:
-      payload.calendar && typeof payload.calendar === 'object' && !Array.isArray(payload.calendar)
-        ? (payload.calendar as MatterInput['calendar'])
-        : null,
-
-    invoice:
-      payload.invoice && typeof payload.invoice === 'object' && !Array.isArray(payload.invoice)
-        ? (payload.invoice as MatterInput['invoice'])
-        : null,
-
-    reports:
-      payload.reports && typeof payload.reports === 'object' && !Array.isArray(payload.reports)
-        ? (payload.reports as MatterInput['reports'])
-        : null,
+    /**
+     * Operational context. MatterService keeps these in metadata.
+     */
+    billing: getObjectConfig<NonNullable<MatterInput['billing']>>(payload.billing),
+    documents: getObjectConfig<NonNullable<MatterInput['documents']>>(payload.documents),
+    calendar: getObjectConfig<NonNullable<MatterInput['calendar']>>(payload.calendar),
+    invoice: getObjectConfig<NonNullable<MatterInput['invoice']>>(payload.invoice),
+    reports: getObjectConfig<NonNullable<MatterInput['reports']>>(payload.reports),
 
     metadata: params.metadata,
   };
@@ -347,8 +426,8 @@ function conflictBlockCode(conflictLevel?: string | null): string {
 }
 
 async function runInTransaction<T>(
-  db: any,
-  callback: (tx: any) => Promise<T>,
+  db: MatterOnboardingDbClient,
+  callback: (tx: MatterOnboardingDbClient) => Promise<T>,
 ): Promise<T> {
   if (typeof db?.$transaction === 'function') {
     return db.$transaction(callback);
@@ -360,14 +439,9 @@ async function runInTransaction<T>(
 async function logMatterOnboardingAudit(
   req: Request,
   params: {
-    createdMatter: any;
+    createdMatter: CreatedOnboardedMatterRecord;
     conflictResult: Awaited<ReturnType<typeof MatterConflictService.runConflictCheck>> | null;
-    workflowTemplate: {
-      matterType: string;
-      workflowType: string;
-      recommendedStages: string[];
-      requiredArtifacts: string[];
-    };
+    workflowTemplate: WorkflowTemplate;
   },
 ) {
   await MatterAuditService.logCreate(req, params.createdMatter);
@@ -401,7 +475,7 @@ export class MatterOnboardingService {
 
     const completedAt = new Date().toISOString();
 
-    const transactionResult = await runInTransaction(req.db, async (tx: any) => {
+    const transactionResult = await runInTransaction(req.db, async (tx) => {
       const conflictResult = runConflictCheck
         ? await MatterConflictService.runConflictCheck(tx, {
             tenantId,
@@ -466,7 +540,7 @@ export class MatterOnboardingService {
     });
 
     await logMatterOnboardingAudit(req, {
-      createdMatter: transactionResult.createdMatter,
+      createdMatter: transactionResult.createdMatter as CreatedOnboardedMatterRecord,
       conflictResult: transactionResult.conflictResult,
       workflowTemplate,
     });

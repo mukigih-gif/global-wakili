@@ -2,7 +2,75 @@
 
 import { Prisma, prisma } from '@global-wakili/database';
 
-type DbClient = typeof prisma | Prisma.TransactionClient | any;
+type DbClient = typeof prisma | Prisma.TransactionClient | Record<string, unknown>;
+
+type JsonObject = Record<string, unknown>;
+
+type WhtDecimalInput = Prisma.Decimal | number | string;
+
+type WhtSourceRecord = {
+  id?: string;
+  professionalFeesAmount?: WhtDecimalInput | null;
+  legalFeesAmount?: WhtDecimalInput | null;
+  serviceAmount?: WhtDecimalInput | null;
+  subTotal?: WhtDecimalInput | null;
+  taxableAmount?: WhtDecimalInput | null;
+  totalAmount?: WhtDecimalInput | null;
+};
+
+type WhtCertificateRow = {
+  withholdingAmount?: WhtDecimalInput | null;
+  metadata?: unknown;
+};
+
+type WhtReceiptExposureRow = {
+  whtAmount?: WhtDecimalInput | null;
+  withholdingTaxAmount?: WhtDecimalInput | null;
+  whtExposure?: WhtDecimalInput | null;
+};
+
+type TaxConfigurationRow = {
+  id: string;
+  code?: string | null;
+  rate?: WhtDecimalInput | null;
+};
+
+type NumberSequenceRow = {
+  nextValue: number | string | Prisma.Decimal;
+};
+
+type PrismaFindManyDelegate<TRow> = {
+  findMany: (args: unknown) => Promise<TRow[]>;
+};
+
+type PrismaFindFirstDelegate<TRow> = {
+  findFirst: (args: unknown) => Promise<TRow | null>;
+};
+
+type PrismaCreateDelegate<TRow = unknown> = {
+  create: (args: unknown) => Promise<TRow>;
+};
+
+type PrismaUpdateDelegate<TRow = unknown> = {
+  update: (args: unknown) => Promise<TRow>;
+};
+
+type PrismaUpsertDelegate<TRow = unknown> = {
+  upsert: (args: unknown) => Promise<TRow>;
+};
+
+type WhtInvoiceDelegate = PrismaFindFirstDelegate<WhtSourceRecord>;
+type WhtVendorBillDelegate = PrismaFindFirstDelegate<WhtSourceRecord>;
+
+type WhtCertificateDelegate =
+  PrismaFindManyDelegate<WhtCertificateRow> &
+  PrismaFindFirstDelegate<WhtCertificateRow> &
+  PrismaCreateDelegate &
+  PrismaUpdateDelegate;
+
+type WhtPaymentReceiptDelegate = PrismaFindManyDelegate<WhtReceiptExposureRow>;
+type WhtTaxConfigurationDelegate = PrismaFindFirstDelegate<TaxConfigurationRow>;
+type WhtNumberSequenceDelegate = PrismaUpsertDelegate<NumberSequenceRow>;
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -41,12 +109,18 @@ export type WhtCertificateInput = {
   metadata?: Record<string, unknown>;
 };
 
-function optionalDelegate(db: DbClient, name: string) {
-  return db[name] ?? null;
+function optionalDelegate<TDelegate extends object>(db: DbClient, name: string): TDelegate | null {
+  const modelDelegate = (db as Record<string, unknown>)[name];
+
+  if (!modelDelegate || typeof modelDelegate !== 'object') {
+    return null;
+  }
+
+  return modelDelegate as TDelegate;
 }
 
-function delegate(db: DbClient, name: string) {
-  const modelDelegate = db[name];
+function delegate<TDelegate extends object>(db: DbClient, name: string): TDelegate {
+  const modelDelegate = (db as Record<string, unknown>)[name];
 
   if (!modelDelegate) {
     throw Object.assign(
@@ -59,13 +133,13 @@ function delegate(db: DbClient, name: string) {
     );
   }
 
-  return modelDelegate;
+  return modelDelegate as TDelegate;
 }
 
 function money(value: unknown): Prisma.Decimal {
   if (value === null || value === undefined || value === '') return ZERO;
 
-  const parsed = new Prisma.Decimal(value as any);
+  const parsed = new Prisma.Decimal(value as WhtDecimalInput);
 
   if (!parsed.isFinite()) return ZERO;
 
@@ -75,7 +149,7 @@ function money(value: unknown): Prisma.Decimal {
 function rate(value: unknown): Prisma.Decimal {
   if (value === null || value === undefined || value === '') return ZERO;
 
-  const parsed = new Prisma.Decimal(value as any);
+  const parsed = new Prisma.Decimal(value as WhtDecimalInput);
 
   if (!parsed.isFinite() || parsed.lt(0)) return ZERO;
 
@@ -86,9 +160,9 @@ function rate(value: unknown): Prisma.Decimal {
   return parsed.toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
 }
 
-function asRecord(value: unknown): Record<string, any> {
+function asRecord(value: unknown): JsonObject {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
-  return value as Record<string, any>;
+  return value as JsonObject;
 }
 
 export class WHTService {
@@ -99,7 +173,7 @@ export class WHTService {
   async calculate(input: WhtCalculationInput) {
     const resolvedRate = await this.resolveRate(input);
 
-    let sourceRecord: any = null;
+    let sourceRecord: WhtSourceRecord | null = null;
     let baseAmount = money(input.baseAmount);
 
     if (input.invoiceId) {
@@ -169,7 +243,7 @@ export class WHTService {
       });
     }
 
-    const whtCertificate = optionalDelegate(prisma, 'whtCertificate');
+    const whtCertificate = optionalDelegate<WhtCertificateDelegate>(prisma, 'withholdingTaxCertificate');
     const certificateNumber =
       input.certificateNumber ?? await this.allocateCertificateNumber(input.tenantId);
 
@@ -185,7 +259,7 @@ export class WHTService {
         reference: input.reference ?? null,
         metadata: {
           ...(input.metadata ?? {}),
-          warning: 'whtCertificate delegate not available; returned derived certificate only.',
+          warning: 'withholdingTaxCertificate delegate not available; returned derived certificate only.',
         },
       };
     }
@@ -204,7 +278,6 @@ export class WHTService {
         withholdingRate,
         withholdingAmount,
         reference: input.reference ?? null,
-        status: 'ISSUED',
         createdById: input.actorId,
         metadata: input.metadata ?? {},
       },
@@ -218,8 +291,8 @@ export class WHTService {
     take?: number;
     skip?: number;
   }) {
-    const whtCertificate = optionalDelegate(prisma, 'whtCertificate');
-    const paymentReceipt = optionalDelegate(prisma, 'paymentReceipt');
+    const whtCertificate = optionalDelegate<WhtCertificateDelegate>(prisma, 'withholdingTaxCertificate');
+    const paymentReceipt = optionalDelegate<WhtPaymentReceiptDelegate>(prisma, 'paymentReceipt');
 
     const [certificates, receipts] = await Promise.all([
       whtCertificate
@@ -229,9 +302,6 @@ export class WHTService {
               certificateDate: {
                 gte: input.from,
                 lt: input.to,
-              },
-              status: {
-                notIn: ['VOID', 'CANCELLED'],
               },
             },
             orderBy: {
@@ -265,12 +335,12 @@ export class WHTService {
     ]);
 
     const certificateWht = certificates.reduce(
-      (sum: Prisma.Decimal, row: any) => sum.plus(money(row.withholdingAmount)),
+      (sum: Prisma.Decimal, row: WhtCertificateRow) => sum.plus(money(row.withholdingAmount)),
       ZERO,
     );
 
     const receiptWht = receipts.reduce(
-      (sum: Prisma.Decimal, row: any) =>
+      (sum: Prisma.Decimal, row: WhtReceiptExposureRow) =>
         sum.plus(money(row.whtAmount ?? row.withholdingTaxAmount ?? row.whtExposure)),
       ZERO,
     );
@@ -303,7 +373,7 @@ export class WHTService {
       });
     }
 
-    const whtCertificate = delegate(prisma, 'whtCertificate');
+    const whtCertificate = delegate<WhtCertificateDelegate>(prisma, 'withholdingTaxCertificate');
 
     const existing = await whtCertificate.findFirst({
       where: {
@@ -341,7 +411,7 @@ export class WHTService {
   }
 
   private async getInvoice(tenantId: string, invoiceId: string) {
-    const invoice = delegate(prisma, 'invoice');
+    const invoice = delegate<WhtInvoiceDelegate>(prisma, 'invoice');
 
     const existing = await invoice.findFirst({
       where: {
@@ -361,7 +431,7 @@ export class WHTService {
   }
 
   private async getVendorBill(tenantId: string, vendorBillId: string) {
-    const vendorBill = delegate(prisma, 'vendorBill');
+    const vendorBill = delegate<WhtVendorBillDelegate>(prisma, 'vendorBill');
 
     const existing = await vendorBill.findFirst({
       where: {
@@ -392,7 +462,7 @@ export class WHTService {
       };
     }
 
-    const taxConfiguration = optionalDelegate(prisma, 'taxConfiguration');
+    const taxConfiguration = optionalDelegate<WhtTaxConfigurationDelegate>(prisma, 'taxConfiguration');
 
     if (taxConfiguration) {
       const config = await taxConfiguration.findFirst({
@@ -438,7 +508,7 @@ export class WHTService {
   }
 
   private async allocateCertificateNumber(tenantId: string) {
-    const numberSequence = optionalDelegate(prisma, 'numberSequence');
+    const numberSequence = optionalDelegate<WhtNumberSequenceDelegate>(prisma, 'numberSequence');
 
     if (!numberSequence) {
       return `WHT-${new Date().getFullYear()}-${Date.now()}`;

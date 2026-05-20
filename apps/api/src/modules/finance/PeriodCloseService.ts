@@ -1,7 +1,7 @@
 import { Prisma } from '@global-wakili/database';
 import type { Request } from 'express';
 import { logAdminAction } from '../../utils/audit-logger';
-import { AuditSeverity } from '../../types/audit';
+import { AuditAction, AuditSeverity } from '../../types/audit';
 
 function endOfMonth(year: number, month: number): Date {
   return new Date(year, month, 0, 23, 59, 59, 999);
@@ -68,6 +68,18 @@ export class PeriodCloseService {
 
     const asOfDate = endOfMonth(params.year, params.month);
 
+    if (asOfDate.getTime() > Date.now()) {
+      throw Object.assign(new Error('Cannot close a future accounting period'), {
+        statusCode: 409,
+        code: 'ACCOUNTING_PERIOD_FUTURE_CLOSE_BLOCKED',
+        details: {
+          month: params.month,
+          year: params.year,
+          asOfDate: asOfDate.toISOString(),
+        },
+      });
+    }
+
     const grouped = await db.journalLine.groupBy({
       by: ['accountId'],
       where: {
@@ -121,21 +133,19 @@ export class PeriodCloseService {
       },
     });
 
-    void Promise.resolve(
-      logAdminAction({
-        req,
-        tenantId,
-        action: 'ACCOUNTING_PERIOD_CLOSED',
-        severity: AuditSeverity.HIGH,
-        entityId: updated.id,
-        payload: {
-          month: params.month,
-          year: params.year,
-          reason: params.reason ?? null,
-        },
-      }),
-    ).catch((auditError) => {
-      console.error('[AUDIT_CRITICAL_FAIL] failed to log period close', auditError);
+    await logAdminAction({
+      req,
+      tenantId,
+      action: AuditAction.UPDATE,
+      severity: AuditSeverity.HIGH,
+      entityId: updated.id,
+      payload: {
+        eventCode: 'ACCOUNTING_PERIOD_CLOSED',
+        month: params.month,
+        year: params.year,
+        reason: params.reason ?? null,
+        closedById: userId,
+      },
     });
 
     return updated;

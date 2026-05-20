@@ -1,13 +1,26 @@
+// apps/api/src/modules/integrations/etims/eTimsService.ts
+
 import type { Request } from 'express';
 import { Prisma } from '@global-wakili/database';
 import { ETimsClient, type ETimsInvoicePayload } from './eTimsClient';
 import { logAdminAction } from '../../../utils/audit-logger';
-import { AuditSeverity } from '../../../types/audit';
+import { AuditAction, AuditSeverity } from '../../../types/audit';
 import { NotificationService } from '../../notifications/NotificationService';
 
 function toNumber(value: Prisma.Decimal | number | string | null | undefined): number {
   if (value === null || value === undefined) return 0;
   return Number(value);
+}
+
+function requireTenantId(req: Request): string {
+  if (!req.tenantId || !req.tenantId.trim()) {
+    throw Object.assign(new Error('Tenant context is required for eTIMS operation.'), {
+      statusCode: 401,
+      code: 'ETIMS_TENANT_CONTEXT_REQUIRED',
+    });
+  }
+
+  return req.tenantId.trim();
 }
 
 type TenantEtimsConfig = {
@@ -16,6 +29,12 @@ type TenantEtimsConfig = {
   taxpayerPin?: string | null;
   apiKey?: string | null;
   apiSecret?: string | null;
+};
+
+type NotificationUser = {
+  id: string;
+  email: string | null;
+  name: string | null;
 };
 
 export class ETimsService {
@@ -39,7 +58,11 @@ export class ETimsService {
     };
   }
 
-  static async buildInvoicePayload(db: any, tenantId: string, invoiceId: string): Promise<ETimsInvoicePayload> {
+  static async buildInvoicePayload(
+    db: any,
+    tenantId: string,
+    invoiceId: string,
+  ): Promise<ETimsInvoicePayload> {
     const invoice = await db.invoice.findFirst({
       where: {
         tenantId,
@@ -155,7 +178,6 @@ export class ETimsService {
     }
 
     const result = await ETimsClient.getSubmissionStatus(config, invoice.etimsReference);
-
     const accepted = result.status === 'ACCEPTED';
 
     await db.invoice.update({
@@ -178,7 +200,7 @@ export class ETimsService {
   }
 
   static async submitInvoiceFromRequest(req: Request, invoiceId: string) {
-    const tenantId = req.tenantId!;
+    const tenantId = requireTenantId(req);
 
     const result = await this.submitInvoice(req.db, {
       tenantId,
@@ -189,13 +211,15 @@ export class ETimsService {
     await logAdminAction({
       req,
       tenantId,
-      action: 'ETIMS_INVOICE_SUBMITTED',
+      action: AuditAction.UPDATE,
       severity: result.success ? AuditSeverity.INFO : AuditSeverity.HIGH,
       entityId: invoiceId,
       payload: {
+        eventCode: 'ETIMS_INVOICE_SUBMITTED',
         invoiceId,
         etimsReference: result.submissionId,
         status: result.status,
+        requestId: req.id ?? null,
       },
     });
 
@@ -203,7 +227,7 @@ export class ETimsService {
   }
 
   static async syncInvoiceStatusFromRequest(req: Request, invoiceId: string) {
-    const tenantId = req.tenantId!;
+    const tenantId = requireTenantId(req);
 
     const result = await this.syncInvoiceStatus(req.db, {
       tenantId,
@@ -213,24 +237,26 @@ export class ETimsService {
     await logAdminAction({
       req,
       tenantId,
-      action: 'ETIMS_STATUS_SYNCED',
+      action: AuditAction.UPDATE,
       severity:
         result.status === 'REJECTED' || result.status === 'FAILED'
           ? AuditSeverity.HIGH
           : AuditSeverity.INFO,
       entityId: invoiceId,
       payload: {
+        eventCode: 'ETIMS_STATUS_SYNCED',
         invoiceId,
         etimsReference: result.submissionId,
         status: result.status,
         receiptNumber: result.receiptNumber ?? null,
         rejectionReason: result.rejectionReason ?? null,
+        requestId: req.id ?? null,
       },
     });
 
     if (result.status === 'REJECTED' || result.status === 'FAILED') {
       try {
-        const financeUsers = await req.db.user.findMany({
+        const financeUsers: NotificationUser[] = await req.db.user.findMany({
           where: {
             tenantId,
             status: 'ACTIVE',
@@ -243,7 +269,6 @@ export class ETimsService {
           select: {
             id: true,
             email: true,
-            phoneNumber: true,
             name: true,
           },
         });
@@ -254,10 +279,10 @@ export class ETimsService {
             category: 'compliance',
             priority: 'high',
             channels: ['email', 'portal'],
-            recipients: financeUsers.map((user: any) => ({
+            recipients: financeUsers.map((user) => ({
               recipientId: user.id,
               email: user.email ?? null,
-              phoneNumber: user.phoneNumber ?? null,
+              phoneNumber: null,
               name: user.name ?? null,
             })),
             template: {
@@ -269,8 +294,8 @@ export class ETimsService {
             },
             entityType: 'Invoice',
             entityId: invoiceId,
-            requestId: req.id,
             metadata: {
+              requestId: req.id ?? null,
               etimsStatus: result.status,
               etimsReference: result.submissionId,
               rejectionReason: result.rejectionReason ?? null,
@@ -285,3 +310,5 @@ export class ETimsService {
     return result;
   }
 }
+
+export default ETimsService;

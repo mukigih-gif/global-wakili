@@ -1,7 +1,7 @@
 import type { Request } from 'express';
-import { TrialBalanceService } from './trialbalanceservice';
-import { BalanceSheetService } from './balancesheetservice';
-import { CashflowService } from './cashflowservice';
+import { TrialBalanceService } from './trial-balance.service';
+import { BalanceSheetService } from './balance-sheet.service';
+import { CashflowService } from './cashflow.service';
 
 export class ReportingService {
   static async getTrialBalanceReport(req: Request, asOfDate?: Date) {

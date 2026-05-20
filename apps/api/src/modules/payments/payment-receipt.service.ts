@@ -18,6 +18,12 @@ import {
 
 type TransactionClient = Prisma.TransactionClient;
 
+type ReceiptNumberCandidate = PaymentReceiptNumberAllocation & {
+  receiptNumber: string;
+};
+
+const MAX_RECEIPT_NUMBER_ATTEMPTS = 10;
+
 export class PaymentReceiptService {
   async listReceipts(input: ListPaymentReceiptsInput): Promise<PaymentReceiptWithRelations[]> {
     const take = Math.min(
@@ -71,7 +77,10 @@ export class PaymentReceiptService {
     });
 
     if (!receipt) {
-      throw new Error('Payment receipt not found.');
+      throw Object.assign(new Error('Payment receipt not found.'), {
+        statusCode: 404,
+        code: 'PAYMENT_RECEIPT_NOT_FOUND',
+      });
     }
 
     return receipt;
@@ -83,33 +92,52 @@ export class PaymentReceiptService {
   ) {
     const amount = this.money(input.amount);
     const receivedAt = input.receivedAt ?? new Date();
-
-    const receiptNumber = await this.allocateReceiptNumber(tx, {
-      tenantId: input.tenantId,
-      receivedAt,
-    });
-
     const normalized = await this.normalizeReceiptParties(tx, input);
 
-    return tx.paymentReceipt.create({
-      data: {
+    for (let attempt = 0; attempt < MAX_RECEIPT_NUMBER_ATTEMPTS; attempt += 1) {
+      const allocation = await this.allocateReceiptNumber(tx, {
         tenantId: input.tenantId,
-        receiptNumber: receiptNumber.receiptNumber,
-        clientId: normalized.clientId,
-        matterId: normalized.matterId,
-        invoiceId: normalized.invoiceId,
-        amount,
-        unallocatedAmount: amount,
-        currency: input.currency ?? PAYMENT_DEFAULTS.currency,
-        exchangeRate: input.exchangeRate
-          ? new Prisma.Decimal(input.exchangeRate).toDecimalPlaces(6)
-          : new Prisma.Decimal(PAYMENT_DEFAULTS.exchangeRate),
-        method: input.method,
-        reference: input.reference ?? null,
-        description: input.description ?? null,
-        status: PaymentReceiptStatus.RECEIVED,
         receivedAt,
-        createdById: input.createdById ?? null,
+        prefix: PAYMENT_DEFAULTS.receiptPrefix,
+      });
+
+      try {
+        return await tx.paymentReceipt.create({
+          data: {
+            tenantId: input.tenantId,
+            receiptNumber: allocation.receiptNumber,
+            clientId: normalized.clientId,
+            matterId: normalized.matterId,
+            invoiceId: normalized.invoiceId,
+            amount,
+            unallocatedAmount: amount,
+            currency: input.currency ?? PAYMENT_DEFAULTS.currency,
+            exchangeRate: input.exchangeRate
+              ? new Prisma.Decimal(input.exchangeRate).toDecimalPlaces(6)
+              : new Prisma.Decimal(PAYMENT_DEFAULTS.exchangeRate),
+            method: input.method,
+            reference: input.reference ?? null,
+            description: input.description ?? null,
+            status: PaymentReceiptStatus.RECEIVED,
+            receivedAt,
+            createdById: input.createdById ?? null,
+          },
+        });
+      } catch (error) {
+        if (this.isUniqueConstraintFailure(error) && attempt < MAX_RECEIPT_NUMBER_ATTEMPTS - 1) {
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    throw Object.assign(new Error('Unable to allocate a unique payment receipt number.'), {
+      statusCode: 409,
+      code: 'PAYMENT_RECEIPT_NUMBER_ALLOCATION_FAILED',
+      details: {
+        tenantId: input.tenantId,
+        receivedAt: receivedAt.toISOString(),
       },
     });
   }
@@ -123,15 +151,37 @@ export class PaymentReceiptService {
       reason: string;
     },
   ) {
+    const receipt = await tx.paymentReceipt.findFirst({
+      where: {
+        id: input.paymentReceiptId,
+        tenantId: input.tenantId,
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+
+    if (!receipt) {
+      throw Object.assign(new Error('Payment receipt not found for reversal.'), {
+        statusCode: 404,
+        code: 'PAYMENT_RECEIPT_NOT_FOUND_FOR_REVERSAL',
+      });
+    }
+
+    if (receipt.status === PaymentReceiptStatus.REVERSED) {
+      throw Object.assign(new Error('Payment receipt is already reversed.'), {
+        statusCode: 409,
+        code: 'PAYMENT_RECEIPT_ALREADY_REVERSED',
+      });
+    }
+
     return tx.paymentReceipt.update({
       where: {
         id: input.paymentReceiptId,
       },
       data: {
         status: PaymentReceiptStatus.REVERSED,
-        reversedAt: new Date(),
-        reversedById: input.reversedById,
-        reversalReason: input.reason,
         unallocatedAmount: new Prisma.Decimal(0),
       },
     });
@@ -142,24 +192,14 @@ export class PaymentReceiptService {
     const year = receivedAt.getFullYear();
     const tenantToken = await this.getTenantToken(prisma, context.tenantId);
     const prefix = this.buildPrefix(context.prefix ?? PAYMENT_DEFAULTS.receiptPrefix, tenantToken);
-
-    const sequence = await prisma.paymentReceiptSequence.findUnique({
-      where: {
-        tenantId_prefix_year: {
-          tenantId: context.tenantId,
-          prefix,
-          year,
-        },
-      },
-      select: {
-        nextValue: true,
-      },
+    const sequenceValue = await this.nextReceiptSequenceValue(prisma, {
+      tenantId: context.tenantId,
+      prefix,
+      year,
     });
 
-    const sequenceValue = sequence?.nextValue ?? 1;
-
     return {
-      receiptNumber: `${prefix}-${year}-${String(sequenceValue).padStart(6, '0')}`,
+      receiptNumber: this.formatReceiptNumber(prefix, year, sequenceValue),
       prefix,
       year,
       sequenceValue,
@@ -174,35 +214,14 @@ export class PaymentReceiptService {
     const year = receivedAt.getFullYear();
     const tenantToken = await this.getTenantToken(client, context.tenantId);
     const prefix = this.buildPrefix(context.prefix ?? PAYMENT_DEFAULTS.receiptPrefix, tenantToken);
-
-    const sequence = await client.paymentReceiptSequence.upsert({
-      where: {
-        tenantId_prefix_year: {
-          tenantId: context.tenantId,
-          prefix,
-          year,
-        },
-      },
-      create: {
-        tenantId: context.tenantId,
-        prefix,
-        year,
-        nextValue: 2,
-      },
-      update: {
-        nextValue: {
-          increment: 1,
-        },
-      },
-      select: {
-        nextValue: true,
-      },
+    const sequenceValue = await this.nextReceiptSequenceValue(client, {
+      tenantId: context.tenantId,
+      prefix,
+      year,
     });
 
-    const sequenceValue = sequence.nextValue - 1;
-
     return {
-      receiptNumber: `${prefix}-${year}-${String(sequenceValue).padStart(6, '0')}`,
+      receiptNumber: this.formatReceiptNumber(prefix, year, sequenceValue),
       prefix,
       year,
       sequenceValue,
@@ -238,17 +257,23 @@ export class PaymentReceiptService {
       });
 
       if (!invoice) {
-        throw new Error('Invoice not found for payment receipt.');
+        throw Object.assign(new Error('Invoice not found for payment receipt.'), {
+          statusCode: 404,
+          code: 'PAYMENT_RECEIPT_INVOICE_NOT_FOUND',
+        });
       }
 
-      if (invoice.balanceDue.lte(0)) {
-        throw new Error('Invoice has no payable balance.');
+      if (new Prisma.Decimal(invoice.balanceDue).lte(0)) {
+        throw Object.assign(new Error('Invoice has no payable balance.'), {
+          statusCode: 422,
+          code: 'PAYMENT_RECEIPT_INVOICE_NO_PAYABLE_BALANCE',
+        });
       }
 
       return {
         invoiceId: invoice.id,
         matterId: input.matterId ?? invoice.matterId,
-        clientId: input.clientId ?? invoice.clientId ?? invoice.matter.clientId,
+        clientId: input.clientId ?? invoice.clientId ?? invoice.matter?.clientId ?? null,
       };
     }
 
@@ -266,7 +291,10 @@ export class PaymentReceiptService {
       });
 
       if (!matter) {
-        throw new Error('Matter not found for payment receipt.');
+        throw Object.assign(new Error('Matter not found for payment receipt.'), {
+          statusCode: 404,
+          code: 'PAYMENT_RECEIPT_MATTER_NOT_FOUND',
+        });
       }
 
       return {
@@ -288,7 +316,10 @@ export class PaymentReceiptService {
       });
 
       if (!client) {
-        throw new Error('Client not found for payment receipt.');
+        throw Object.assign(new Error('Client not found for payment receipt.'), {
+          statusCode: 404,
+          code: 'PAYMENT_RECEIPT_CLIENT_NOT_FOUND',
+        });
       }
 
       return {
@@ -298,7 +329,52 @@ export class PaymentReceiptService {
       };
     }
 
-    throw new Error('Payment receipt must be linked to an invoice, matter, or client.');
+    throw Object.assign(
+      new Error('Payment receipt must be linked to an invoice, matter, or client.'),
+      {
+        statusCode: 422,
+        code: 'PAYMENT_RECEIPT_PARTY_REQUIRED',
+      },
+    );
+  }
+
+  private async nextReceiptSequenceValue(
+    client: PrismaClient | TransactionClient,
+    input: {
+      tenantId: string;
+      prefix: string;
+      year: number;
+    },
+  ): Promise<number> {
+    const yearToken = `${input.prefix}-${input.year}-`;
+
+    const latest = await client.paymentReceipt.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        receiptNumber: {
+          startsWith: yearToken,
+        },
+      },
+      orderBy: {
+        receiptNumber: 'desc',
+      },
+      select: {
+        receiptNumber: true,
+      },
+    });
+
+    if (!latest?.receiptNumber) {
+      return 1;
+    }
+
+    const lastSegment = latest.receiptNumber.slice(yearToken.length);
+    const parsed = Number.parseInt(lastSegment, 10);
+
+    if (!Number.isFinite(parsed) || parsed < 1) {
+      return 1;
+    }
+
+    return parsed + 1;
   }
 
   private async getTenantToken(
@@ -317,7 +393,13 @@ export class PaymentReceiptService {
     });
 
     if (!tenant) {
-      throw new Error('Tenant not found while generating payment receipt number.');
+      throw Object.assign(
+        new Error('Tenant not found while generating payment receipt number.'),
+        {
+          statusCode: 404,
+          code: 'PAYMENT_RECEIPT_TENANT_NOT_FOUND',
+        },
+      );
     }
 
     return this.clean(tenant.slug || tenant.kraPin || tenant.name || tenantId).slice(0, 18);
@@ -325,6 +407,10 @@ export class PaymentReceiptService {
 
   private buildPrefix(prefix: string, tenantToken: string): string {
     return `${this.clean(prefix)}-${tenantToken}`;
+  }
+
+  private formatReceiptNumber(prefix: string, year: number, sequenceValue: number): string {
+    return `${prefix}-${year}-${String(sequenceValue).padStart(6, '0')}`;
   }
 
   private clean(value: string): string {
@@ -336,16 +422,49 @@ export class PaymentReceiptService {
       .slice(0, 32);
   }
 
-  private money(value: string | Prisma.Decimal): Prisma.Decimal {
+  private money(value: string | number | Prisma.Decimal): Prisma.Decimal {
     const amount = new Prisma.Decimal(value).toDecimalPlaces(2);
 
     if (!amount.isFinite() || amount.lte(0)) {
-      throw new Error('Payment receipt amount must be greater than zero.');
+      throw Object.assign(new Error('Payment receipt amount must be greater than zero.'), {
+        statusCode: 422,
+        code: 'PAYMENT_RECEIPT_AMOUNT_INVALID',
+      });
     }
 
     return amount;
   }
 
+  private isUniqueConstraintFailure(error: unknown): boolean {
+    return (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === 'P2002'
+    );
+  }
+
+  async getClientPortalReceipt(
+    tenantId: string,
+    clientId: string,
+    paymentReceiptId: string,
+  ): Promise<PaymentReceiptWithRelations> {
+    const receipt = await prisma.paymentReceipt.findFirst({
+      where: {
+        id: paymentReceiptId,
+        tenantId,
+        clientId,
+      },
+      include: this.receiptInclude(),
+    });
+
+    if (!receipt) {
+      throw Object.assign(new Error('Payment receipt not found for client portal.'), {
+        statusCode: 404,
+        code: 'CLIENT_PORTAL_PAYMENT_RECEIPT_NOT_FOUND',
+      });
+    }
+
+    return receipt;
+  }
   private receiptInclude() {
     return {
       client: {
@@ -360,7 +479,6 @@ export class PaymentReceiptService {
         select: {
           id: true,
           title: true,
-          caseNumber: true,
         },
       },
       invoice: {

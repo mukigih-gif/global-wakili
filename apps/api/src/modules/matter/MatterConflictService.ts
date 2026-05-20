@@ -106,18 +106,49 @@ type MatterConflictRecord = {
   leadAdvocate?: AdvocateRecord | null;
 };
 
-type FindFirstDelegate<TRecord> = {
-  findFirst(args: QueryArgs): Promise<TRecord | null>;
-};
-
-type FindManyDelegate<TRecord> = {
-  findMany(args: QueryArgs): Promise<TRecord[]>;
-};
-
 type ConflictDbClient = {
-  client: FindFirstDelegate<ClientConflictRecord> & FindManyDelegate<ClientConflictRecord>;
-  matter: FindFirstDelegate<MatterConflictRecord> & FindManyDelegate<MatterConflictRecord>;
+  /**
+   * The concrete Prisma delegate type may be request-scoped / extended.
+   * We intentionally keep this structural at the boundary and recover typed
+   * records inside safeFindFirst/safeFindMany call sites.
+   */
+  client: unknown;
+  matter: unknown;
 };
+
+type ConflictFindFirstDelegate = {
+  findFirst: (args?: never) => Promise<unknown>;
+};
+
+type ConflictFindManyDelegate = {
+  findMany: (args?: never) => Promise<unknown>;
+};
+
+function asFindFirstDelegate(delegate: unknown): ConflictFindFirstDelegate | null {
+  if (
+    delegate &&
+    typeof delegate === 'object' &&
+    'findFirst' in delegate &&
+    typeof (delegate as { findFirst?: unknown }).findFirst === 'function'
+  ) {
+    return delegate as ConflictFindFirstDelegate;
+  }
+
+  return null;
+}
+
+function asFindManyDelegate(delegate: unknown): ConflictFindManyDelegate | null {
+  if (
+    delegate &&
+    typeof delegate === 'object' &&
+    'findMany' in delegate &&
+    typeof (delegate as { findMany?: unknown }).findMany === 'function'
+  ) {
+    return delegate as ConflictFindManyDelegate;
+  }
+
+  return null;
+}
 
 type ConflictInputContext = {
   tenantId: string;
@@ -601,25 +632,33 @@ function dedupeMatches(matches: ConflictMatch[]): ConflictMatch[] {
 }
 
 async function safeFindFirst<TRecord>(
-  delegate: FindFirstDelegate<TRecord> | null | undefined,
+  delegate: unknown,
   args: QueryArgs,
 ): Promise<TRecord | null> {
-  if (!delegate?.findFirst) {
+  const findFirstDelegate = asFindFirstDelegate(delegate);
+
+  if (!findFirstDelegate) {
     return null;
   }
 
-  return delegate.findFirst(args);
+  const result = await findFirstDelegate.findFirst(args as never);
+
+  return (result ?? null) as TRecord | null;
 }
 
 async function safeFindMany<TRecord>(
-  delegate: FindManyDelegate<TRecord> | null | undefined,
+  delegate: unknown,
   args: QueryArgs,
 ): Promise<TRecord[]> {
-  if (!delegate?.findMany) {
+  const findManyDelegate = asFindManyDelegate(delegate);
+
+  if (!findManyDelegate) {
     return [];
   }
 
-  return delegate.findMany(args);
+  const result = await findManyDelegate.findMany(args as never);
+
+  return Array.isArray(result) ? (result as TRecord[]) : [];
 }
 
 async function loadInputContext(
@@ -634,7 +673,7 @@ async function loadInputContext(
 
   const [client, matter] = await Promise.all([
     input.clientId
-      ? safeFindFirst(db.client, {
+      ? safeFindFirst<ClientConflictRecord>(db.client, {
           where: {
             tenantId,
             id: input.clientId,
@@ -644,7 +683,7 @@ async function loadInputContext(
       : Promise.resolve(null),
 
     input.matterId
-      ? safeFindFirst(db.matter, {
+      ? safeFindFirst<MatterConflictRecord>(db.matter, {
           where: {
             tenantId,
             id: input.matterId,
@@ -707,7 +746,8 @@ export class MatterConflictService {
    *
    * Schema alignment:
    * - Matter uses `title`, `category`, `clientId`, `leadAdvocateId`, `riskLevel`, `status`.
-   * - Matter does not have `matterCode`, `caseNumber`, `partnerId`, or `assignedLawyerId`.
+   * - Matter also has physical `matterCode` and `caseNumber` reference fields.
+   * - `partnerId` and `assignedLawyerId` are metadata-backed in the current Matter schema.
    * - Client uses `phoneNumber`, not `phone`.
    *
    * This service intentionally returns a rich result for audit logging, onboarding gates,
@@ -744,7 +784,7 @@ export class MatterConflictService {
 
     for (const term of textTerms) {
       const [clientRows, matterRows] = await Promise.all([
-        safeFindMany(db.client, {
+        safeFindMany<ClientConflictRecord>(db.client, {
           where: {
             tenantId,
             OR: [
@@ -759,7 +799,7 @@ export class MatterConflictService {
           take: 25,
         }),
 
-        safeFindMany(db.matter, {
+        safeFindMany<MatterConflictRecord>(db.matter, {
           where: {
             ...matterWhereBase,
             OR: [
@@ -800,7 +840,7 @@ export class MatterConflictService {
 
     for (const email of emailTerms) {
       const [clientRows, matterRows] = await Promise.all([
-        safeFindMany(db.client, {
+        safeFindMany<ClientConflictRecord>(db.client, {
           where: {
             tenantId,
             email: {
@@ -812,7 +852,7 @@ export class MatterConflictService {
           take: 25,
         }),
 
-        safeFindMany(db.matter, {
+        safeFindMany<MatterConflictRecord>(db.matter, {
           where: {
             ...matterWhereBase,
             client: {
@@ -844,7 +884,7 @@ export class MatterConflictService {
 
     for (const kraPin of kraPinTerms) {
       const [clientRows, matterRows] = await Promise.all([
-        safeFindMany(db.client, {
+        safeFindMany<ClientConflictRecord>(db.client, {
           where: {
             tenantId,
             kraPin: {
@@ -856,7 +896,7 @@ export class MatterConflictService {
           take: 25,
         }),
 
-        safeFindMany(db.matter, {
+        safeFindMany<MatterConflictRecord>(db.matter, {
           where: {
             ...matterWhereBase,
             client: {
@@ -888,7 +928,7 @@ export class MatterConflictService {
 
     for (const phone of phoneTerms) {
       const [clientRows, matterRows] = await Promise.all([
-        safeFindMany(db.client, {
+        safeFindMany<ClientConflictRecord>(db.client, {
           where: {
             tenantId,
             phoneNumber: {
@@ -900,7 +940,7 @@ export class MatterConflictService {
           take: 25,
         }),
 
-        safeFindMany(db.matter, {
+        safeFindMany<MatterConflictRecord>(db.matter, {
           where: {
             ...matterWhereBase,
             client: {
@@ -1015,7 +1055,7 @@ export class MatterConflictService {
       'MATTER_CONFLICT_CLIENT_REQUIRED',
     );
 
-    const client = await safeFindFirst(db.client, {
+    const client = await safeFindFirst<ClientConflictRecord>(db.client, {
       where: {
         tenantId,
         id: clientId,
@@ -1031,7 +1071,7 @@ export class MatterConflictService {
       );
     }
 
-    const relatedMatters = await safeFindMany(db.matter, {
+    const relatedMatters = await safeFindMany<MatterConflictRecord>(db.matter, {
       where: {
         tenantId,
         clientId,

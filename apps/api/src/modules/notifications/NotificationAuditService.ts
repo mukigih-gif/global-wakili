@@ -1,7 +1,26 @@
 // apps/api/src/modules/notifications/NotificationAuditService.ts
 
+import { AuditAction } from '../../types/audit';
 import type { NotificationAuditAction } from './notification.types';
 
+function mapNotificationAuditAction(action: NotificationAuditAction): AuditAction {
+  switch (action) {
+    case 'SEND_REQUESTED':
+    case 'QUEUE_REQUESTED':
+      return AuditAction.CREATE;
+
+    case 'READ':
+    case 'WEBHOOK_STATUS_UPDATED':
+      return AuditAction.UPDATE;
+
+    case 'SEARCHED':
+    case 'DASHBOARD_VIEWED':
+    case 'REPORT_VIEWED':
+    case 'CAPABILITY_VIEWED':
+    default:
+      return AuditAction.READ;
+  }
+}
 export class NotificationAuditService {
   static async logAction(
     db: any,
@@ -27,10 +46,12 @@ export class NotificationAuditService {
       data: {
         tenantId: params.tenantId,
         userId: params.userId ?? null,
-        action: `NOTIFICATION_${params.action}`,
+        action: mapNotificationAuditAction(params.action),
         entityId: params.notificationId ?? null,
         entityType: 'NOTIFICATION',
         metadata: {
+          eventCode: `NOTIFICATION_${params.action}`,
+          notificationAction: params.action,
           requestId: params.requestId ?? null,
           notificationId: params.notificationId ?? null,
           ip: params.ipAddress ?? null,

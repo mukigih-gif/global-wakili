@@ -1,7 +1,44 @@
+// apps/api/src/modules/finance/idempotency.service.ts
+
 import type {
   IdempotencyCheckResult,
   TenantDbClient,
 } from './finance.types';
+
+type JournalReferenceRecord = {
+  id: string;
+  reference: string;
+  date: Date;
+};
+
+type BankTransactionReferenceRecord = {
+  id: string;
+  reference: string | null;
+  transactionDate: Date;
+};
+
+type JournalEntryDelegate = {
+  findUnique: (args: unknown) => Promise<JournalReferenceRecord | null>;
+};
+
+type BankTransactionDelegate = {
+  findFirst: (args: unknown) => Promise<BankTransactionReferenceRecord | null>;
+};
+
+function requireDelegate<T extends object>(
+  delegate: T | null | undefined,
+  label: string,
+): T {
+  if (!delegate) {
+    throw Object.assign(new Error(`${label} delegate is not available`), {
+      statusCode: 500,
+      code: 'FINANCE_DELEGATE_UNAVAILABLE',
+      details: { delegate: label },
+    });
+  }
+
+  return delegate;
+}
 
 export class FinanceIdempotencyService {
   static async checkJournalReference(
@@ -15,7 +52,9 @@ export class FinanceIdempotencyService {
       date: Date;
     }>
   > {
-    const existingRecord = await db.journalEntry.findUnique({
+    const journalEntry = requireDelegate(db.journalEntry, 'journalEntry') as JournalEntryDelegate;
+
+    const existingRecord = await journalEntry.findUnique({
       where: {
         tenantId_reference: {
           tenantId,
@@ -65,7 +104,9 @@ export class FinanceIdempotencyService {
       transactionDate: Date;
     }>
   > {
-    const existingRecord = await db.bankTransaction.findFirst({
+    const bankTransaction = requireDelegate(db.bankTransaction, 'bankTransaction') as BankTransactionDelegate;
+
+    const existingRecord = await bankTransaction.findFirst({
       where: {
         tenantId,
         reference,
@@ -102,3 +143,5 @@ export class FinanceIdempotencyService {
     }
   }
 }
+
+export default FinanceIdempotencyService;

@@ -1,6 +1,9 @@
 // apps/api/src/modules/notifications/NotificationDeliveryService.ts
 
 import { NotificationProviderRegistry } from './NotificationProviderRegistry';
+import { NotificationPreferenceService } from './providers/NotificationPreferenceService';
+import { NotificationTemplateRegistry } from './providers/NotificationTemplateRegistry';
+import type { NotificationTemplateDefinition } from './providers/NotificationTemplateRegistry';
 import type {
   NotificationChannel,
   NotificationDbClient,
@@ -71,30 +74,103 @@ function requireRecipientValue(
   return false;
 }
 
-function buildNotificationPayload(input: NotificationSendInput) {
+
+type PreferenceFilterParams = Parameters<typeof NotificationPreferenceService.filterAllowedChannels>[1];
+type PreferenceChannel = PreferenceFilterParams['channels'][number];
+
+function mapTemplateChannelToDeliveryChannel(channel: 'email' | 'sms' | 'portal'): NotificationChannel {
+  if (channel === 'email') return 'EMAIL';
+  if (channel === 'sms') return 'SMS';
+  return 'SYSTEM_ALERT';
+}
+
+function mapDeliveryChannelToPreferenceChannel(channel: NotificationChannel): PreferenceChannel {
+  if (channel === 'EMAIL') return 'email';
+  if (channel === 'SMS') return 'sms';
+  return 'portal';
+}
+
+function resolveTemplateChannels(template?: NotificationTemplateDefinition | null): NotificationChannel[] | undefined {
+  if (!template?.channels?.length) {
+    return undefined;
+  }
+
+  return template.channels.map(mapTemplateChannelToDeliveryChannel);
+}
+
+function normalizePreferencePriority(
+  priority?: NotificationSendInput['priority'],
+): PreferenceFilterParams['priority'] {
+  if (
+    priority === 'low' ||
+    priority === 'normal' ||
+    priority === 'high' ||
+    priority === 'critical'
+  ) {
+    return priority;
+  }
+
+  return 'normal';
+}
+
+async function filterChannelsForRecipient(
+  db: NotificationDbClient,
+  input: NotificationSendInput,
+  recipient: ResolvedNotificationRecipient,
+  channels: NotificationChannel[],
+): Promise<NotificationChannel[]> {
+  if (!recipient.userId) {
+    return channels;
+  }
+
+  const preferenceChannels = Array.from(
+    new Set(channels.map(mapDeliveryChannelToPreferenceChannel)),
+  );
+
+  const allowedPreferenceChannels = await NotificationPreferenceService.filterAllowedChannels(db, {
+    tenantId: input.tenantId,
+    userId: recipient.userId,
+    channels: preferenceChannels,
+    category: (input.category ?? 'system_alert') as PreferenceFilterParams['category'],
+    priority: normalizePreferencePriority(input.priority),
+  });
+
+  const allowed = new Set(allowedPreferenceChannels);
+
+  return channels.filter((channel) => allowed.has(mapDeliveryChannelToPreferenceChannel(channel)));
+}
+function buildNotificationPayload(input: NotificationSendInput, templateDefinition?: NotificationTemplateDefinition | null) {
   const variables = input.template.variables ?? {};
 
   const systemTitle =
     interpolate(input.template.systemTitle, variables) ??
     interpolate(input.template.emailSubject, variables) ??
+    interpolate(templateDefinition?.subject, variables) ??
     'Global Wakili Notification';
 
   const systemMessage =
     interpolate(input.template.systemMessage, variables) ??
     interpolate(input.template.emailBody, variables) ??
+    interpolate(templateDefinition?.textBody, variables) ??
     interpolate(input.template.smsContent, variables) ??
+    interpolate(templateDefinition?.smsBody, variables) ??
     'You have a new Global Wakili notification.';
 
   const emailSubject =
-    interpolate(input.template.emailSubject, variables) ?? systemTitle;
+    interpolate(input.template.emailSubject, variables) ??
+    interpolate(templateDefinition?.subject, variables) ??
+    systemTitle;
 
   const emailBody =
     interpolate(input.template.emailBody, variables) ??
+    interpolate(templateDefinition?.htmlBody, variables) ??
+    interpolate(templateDefinition?.textBody, variables) ??
     interpolate(input.template.systemMessage, variables) ??
     systemMessage;
 
   const smsContent =
     interpolate(input.template.smsContent, variables) ??
+    interpolate(templateDefinition?.smsBody, variables) ??
     interpolate(input.template.systemMessage, variables) ??
     systemMessage;
 
@@ -171,6 +247,86 @@ function resolveSmsSenderId(input: NotificationSendInput): string {
   );
 }
 
+type DeliveryAttemptStatus =
+  | 'PENDING'
+  | 'ACCEPTED'
+  | 'DELIVERED'
+  | 'FAILED'
+  | 'BOUNCED'
+  | 'RETRYING'
+  | 'SKIPPED';
+
+function coerceDeliveryErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function recordDeliveryAttempt(
+  db: NotificationDbClient,
+  params: {
+    tenantId: string;
+    notificationId: string;
+    channel: NotificationChannel;
+    provider?: string | null;
+    providerMessageId?: string | null;
+    status: DeliveryAttemptStatus;
+    attemptNumber?: number;
+    acceptedAt?: Date | null;
+    deliveredAt?: Date | null;
+    failedAt?: Date | null;
+    bouncedAt?: Date | null;
+    nextRetryAt?: Date | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    rawResponse?: unknown;
+    metadata?: Record<string, unknown> | null;
+  },
+) {
+  return db.notificationDeliveryAttempt.create({
+    data: {
+      tenantId: params.tenantId,
+      notificationId: params.notificationId,
+      channel: params.channel,
+      provider: params.provider ?? null,
+      providerMessageId: params.providerMessageId ?? null,
+      status: params.status,
+      attemptNumber: params.attemptNumber ?? 1,
+      acceptedAt: params.acceptedAt ?? null,
+      deliveredAt: params.deliveredAt ?? null,
+      failedAt: params.failedAt ?? null,
+      bouncedAt: params.bouncedAt ?? null,
+      nextRetryAt: params.nextRetryAt ?? null,
+      errorCode: params.errorCode ?? null,
+      errorMessage: params.errorMessage ?? null,
+      rawResponse: params.rawResponse ?? null,
+      metadata: {
+        ...(params.metadata ?? {}),
+        recordedAt: new Date().toISOString(),
+      },
+    },
+  });
+}
+
+async function recordDeliveryAttemptSafely(
+  db: NotificationDbClient,
+  params: Parameters<typeof recordDeliveryAttempt>[1],
+): Promise<void> {
+  try {
+    await recordDeliveryAttempt(db, params);
+  } catch (error) {
+    // Do not convert a provider-accepted notification into FAILED merely because
+    // the lifecycle ledger write failed. The legacy Notification row remains
+    // the source of current delivery status; the attempt table is the audit ledger.
+    // A later repair/reconciliation job can backfill missing attempts from Notification metadata.
+    console.error('Notification delivery attempt persistence failed', {
+      tenantId: params.tenantId,
+      notificationId: params.notificationId,
+      channel: params.channel,
+      provider: params.provider ?? null,
+      providerMessageId: params.providerMessageId ?? null,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 export class NotificationDeliveryService {
   static async sendNow(db: NotificationDbClient, input: NotificationSendInput) {
     assertTenant(input.tenantId);
@@ -199,14 +355,24 @@ export class NotificationDeliveryService {
       });
     }
 
-    const orderedChannels = normalizeChannels(input.channels);
-    const content = buildNotificationPayload(input);
+    const schemaAwareTemplate = input.template.templateKey
+      ? await NotificationTemplateRegistry.getSchemaAware(db, {
+          tenantId: input.tenantId,
+          key: input.template.templateKey,
+        })
+      : null;
+
+    const orderedChannels = normalizeChannels(
+      input.channels?.length ? input.channels : resolveTemplateChannels(schemaAwareTemplate),
+    );
+    const content = buildNotificationPayload(input, schemaAwareTemplate);
     const results: Array<Record<string, unknown>> = [];
 
     for (const rawRecipient of input.recipients) {
       const recipient = await resolveRecipient(db, input.tenantId, rawRecipient);
+      const allowedChannels = await filterChannelsForRecipient(db, input, recipient, orderedChannels);
 
-      for (const channel of orderedChannels) {
+      for (const channel of allowedChannels) {
         if (channel === 'EMAIL' && recipient.emailNotifications === false) continue;
         if (channel === 'SMS' && recipient.smsNotifications !== true) continue;
         if (!requireRecipientValue(channel, recipient)) continue;
@@ -253,6 +419,20 @@ export class NotificationDeliveryService {
               },
             });
 
+            await recordDeliveryAttemptSafely(db, {
+              tenantId: input.tenantId,
+              notificationId: notification.id,
+              channel,
+              provider: 'system',
+              status: 'DELIVERED',
+              acceptedAt: updated.sentAt ?? new Date(),
+              deliveredAt: updated.sentAt ?? new Date(),
+              metadata: {
+                deliveryClaim: 'LOCAL_SYSTEM_RECORD',
+                tenantName: tenant.name,
+              },
+            });
+
             results.push({
               channel,
               notificationId: updated.id,
@@ -287,6 +467,42 @@ export class NotificationDeliveryService {
                 provider: emailResult.provider,
                 providerMessageId: emailResult.providerMessageId,
                 attemptCount: 1,
+                metadata: {
+                  ...(notification.metadata ?? {}),
+                  providerAcceptance: {
+                    provider: emailResult.provider,
+                    channel: 'EMAIL',
+                    accepted: emailResult.accepted,
+                    simulated: Boolean(emailResult.rawResponse?.simulated),
+                    deliveryClaim: emailResult.rawResponse?.simulated
+                      ? 'ACCEPTED_BY_FOUNDATION_PROVIDER_ONLY'
+                      : 'ACCEPTED_BY_EXTERNAL_PROVIDER',
+                    providerMessageId: emailResult.providerMessageId,
+                    rawResponse: emailResult.rawResponse ?? null,
+                    recordedAt: new Date().toISOString(),
+                  },
+                },
+              },
+            });
+
+            await recordDeliveryAttemptSafely(db, {
+              tenantId: input.tenantId,
+              notificationId: notification.id,
+              channel,
+              provider: emailResult.provider,
+              providerMessageId: emailResult.providerMessageId,
+              status: emailResult.accepted ? 'ACCEPTED' : 'FAILED',
+              acceptedAt: emailResult.accepted ? updated.sentAt ?? new Date() : null,
+              failedAt: emailResult.accepted ? null : updated.failedAt ?? new Date(),
+              errorMessage: emailResult.accepted
+                ? null
+                : 'Email provider did not accept the notification request.',
+              rawResponse: emailResult.rawResponse ?? null,
+              metadata: {
+                deliveryClaim: emailResult.rawResponse?.simulated
+                  ? 'ACCEPTED_BY_FOUNDATION_PROVIDER_ONLY'
+                  : 'ACCEPTED_BY_EXTERNAL_PROVIDER',
+                simulated: Boolean(emailResult.rawResponse?.simulated),
               },
             });
 
@@ -323,6 +539,43 @@ export class NotificationDeliveryService {
                 provider: smsResult.provider,
                 providerMessageId: smsResult.providerMessageIds.join(','),
                 attemptCount: 1,
+                metadata: {
+                  ...(notification.metadata ?? {}),
+                  providerAcceptance: {
+                    provider: smsResult.provider,
+                    channel: 'SMS',
+                    accepted: smsResult.accepted,
+                    simulated: Boolean(smsResult.rawResponse?.simulated),
+                    deliveryClaim: smsResult.rawResponse?.simulated
+                      ? 'ACCEPTED_BY_FOUNDATION_PROVIDER_ONLY'
+                      : 'ACCEPTED_BY_EXTERNAL_PROVIDER',
+                    providerMessageIds: smsResult.providerMessageIds,
+                    rawResponse: smsResult.rawResponse ?? null,
+                    recordedAt: new Date().toISOString(),
+                  },
+                },
+              },
+            });
+
+            await recordDeliveryAttemptSafely(db, {
+              tenantId: input.tenantId,
+              notificationId: notification.id,
+              channel,
+              provider: smsResult.provider,
+              providerMessageId: smsResult.providerMessageIds.join(','),
+              status: smsResult.accepted ? 'ACCEPTED' : 'FAILED',
+              acceptedAt: smsResult.accepted ? updated.sentAt ?? new Date() : null,
+              failedAt: smsResult.accepted ? null : updated.failedAt ?? new Date(),
+              errorMessage: smsResult.accepted
+                ? null
+                : 'SMS provider did not accept the notification request.',
+              rawResponse: smsResult.rawResponse ?? null,
+              metadata: {
+                deliveryClaim: smsResult.rawResponse?.simulated
+                  ? 'ACCEPTED_BY_FOUNDATION_PROVIDER_ONLY'
+                  : 'ACCEPTED_BY_EXTERNAL_PROVIDER',
+                simulated: Boolean(smsResult.rawResponse?.simulated),
+                providerMessageIds: smsResult.providerMessageIds,
               },
             });
 
@@ -346,6 +599,20 @@ export class NotificationDeliveryService {
                 deliveryOrder: NotificationProviderRegistry.getDeliveryOrder(),
                 failure: error instanceof Error ? error.message : String(error),
               },
+            },
+          });
+
+          await recordDeliveryAttemptSafely(db, {
+            tenantId: input.tenantId,
+            notificationId: notification.id,
+            channel,
+            provider: NotificationProviderRegistry.getProviderName(channel),
+            status: 'FAILED',
+            failedAt: updated.failedAt ?? new Date(),
+            errorMessage: coerceDeliveryErrorMessage(error),
+            metadata: {
+              deliveryOrder: NotificationProviderRegistry.getDeliveryOrder(),
+              failure: coerceDeliveryErrorMessage(error),
             },
           });
 
@@ -407,12 +674,15 @@ export class NotificationDeliveryService {
   static async updateProviderStatus(
     db: NotificationDbClient,
     params: {
+      tenantId: string;
       providerMessageId: string;
       provider?: string | null;
       status: NotificationStatus;
       metadata?: Record<string, unknown> | null;
     },
   ) {
+    assertTenant(params.tenantId);
+
     if (!params.providerMessageId?.trim()) {
       throw Object.assign(new Error('Provider message ID is required'), {
         statusCode: 422,
@@ -422,6 +692,7 @@ export class NotificationDeliveryService {
 
     const notification = await db.notification.findFirst({
       where: {
+        tenantId: params.tenantId,
         providerMessageId: params.providerMessageId,
         ...(params.provider ? { provider: params.provider } : {}),
       },
