@@ -4,7 +4,8 @@ type CapabilityStatus =
   | 'ACTIVE'
   | 'PENDING_SCHEMA'
   | 'PENDING_CROSS_MODULE'
-  | 'PENDING_PROVIDER';
+  | 'PENDING_PROVIDER'
+  | 'PENDING_INTEGRATION';
 
 type CapabilityRisk = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
@@ -90,19 +91,27 @@ export class NotificationCapabilityService {
       },
       {
         key: 'notifications.preferences',
-        status: 'PENDING_SCHEMA',
+        status: 'PENDING_INTEGRATION',
         risk: 'MEDIUM',
         requiredForCloseout: false,
         description:
-          'No NotificationPreference model exists; current filtering uses User.emailNotifications and User.smsNotifications.',
+          'NotificationPreference schema is present after Notifications N2B; runtime preference filtering still needs N2C integration while preserving User.emailNotifications and User.smsNotifications as safe fallback.',
+        notes: [
+          'N2B added the NotificationPreference persistence model.',
+          'N2C must wire read/write behavior without breaking existing user-level notification flags.',
+        ],
       },
       {
         key: 'notifications.templates',
-        status: 'PENDING_SCHEMA',
+        status: 'PENDING_INTEGRATION',
         risk: 'MEDIUM',
         requiredForCloseout: false,
         description:
-          'No NotificationTemplate model exists; current templates are code registry / request payload based.',
+          'NotificationTemplate schema is present after Notifications N2B; runtime template loading still uses the code registry/request payload path until N2C integration is completed.',
+        notes: [
+          'N2B added the NotificationTemplate persistence model.',
+          'N2C must preserve the static registry as fallback while introducing tenant/system template persistence.',
+        ],
       },
       {
         key: 'notifications.worker_processor',
@@ -129,7 +138,7 @@ export class NotificationCapabilityService {
     return {
       module: 'notifications',
       generatedAt: new Date(),
-      status: 'FOUNDATION_DELIVERY_ORCHESTRATION_ACTIVE_PROVIDER_AND_WORKER_PENDING',
+      status: 'N2B_SCHEMA_AVAILABLE_PROVIDER_AND_WORKER_PENDING',
       deliveryOrder: ['SYSTEM_ALERT', 'EMAIL', 'SMS'],
       providerMode: {
         systemAlert: 'LOCAL_SYSTEM_RECORD',
@@ -142,6 +151,7 @@ export class NotificationCapabilityService {
       pendingCrossModule: capabilities.filter((item) => item.status === 'PENDING_CROSS_MODULE')
         .length,
       pendingProvider: capabilities.filter((item) => item.status === 'PENDING_PROVIDER').length,
+      pendingIntegration: capabilities.filter((item) => item.status === 'PENDING_INTEGRATION').length,
       requiredForCloseoutRemaining: capabilities.filter(
         (item) => item.requiredForCloseout && item.status !== 'ACTIVE',
       ),
