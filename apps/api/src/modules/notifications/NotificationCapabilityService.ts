@@ -30,7 +30,7 @@ export class NotificationCapabilityService {
       },
       {
         key: 'notifications.email',
-        status: 'ACTIVE',
+        status: 'PENDING_PROVIDER',
         risk: 'HIGH',
         requiredForCloseout: true,
         description:
@@ -42,7 +42,7 @@ export class NotificationCapabilityService {
       },
       {
         key: 'notifications.sms',
-        status: 'ACTIVE',
+        status: 'PENDING_PROVIDER',
         risk: 'HIGH',
         requiredForCloseout: true,
         description:
@@ -78,11 +78,15 @@ export class NotificationCapabilityService {
       },
       {
         key: 'notifications.provider_webhooks',
-        status: 'ACTIVE',
+        status: 'PENDING_PROVIDER',
         risk: 'HIGH',
         requiredForCloseout: true,
         description:
-          'Provider webhook status updates can update Notification delivery state.',
+          'Provider webhook status updates are tenant-scoped, but provider-specific authentication/signature verification remains pending production provider configuration.',
+        notes: [
+          'Tenant-scoped callback lookup is active after Notifications N1.',
+          'Provider-specific webhook secrets/signature verification are deferred to Notifications N2C.',
+        ],
       },
       {
         key: 'notifications.preferences',
