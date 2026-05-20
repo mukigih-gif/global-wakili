@@ -287,6 +287,21 @@ export class NotificationDeliveryService {
                 provider: emailResult.provider,
                 providerMessageId: emailResult.providerMessageId,
                 attemptCount: 1,
+                metadata: {
+                  ...(notification.metadata ?? {}),
+                  providerAcceptance: {
+                    provider: emailResult.provider,
+                    channel: 'EMAIL',
+                    accepted: emailResult.accepted,
+                    simulated: Boolean(emailResult.rawResponse?.simulated),
+                    deliveryClaim: emailResult.rawResponse?.simulated
+                      ? 'ACCEPTED_BY_FOUNDATION_PROVIDER_ONLY'
+                      : 'ACCEPTED_BY_EXTERNAL_PROVIDER',
+                    providerMessageId: emailResult.providerMessageId,
+                    rawResponse: emailResult.rawResponse ?? null,
+                    recordedAt: new Date().toISOString(),
+                  },
+                },
               },
             });
 
@@ -323,6 +338,21 @@ export class NotificationDeliveryService {
                 provider: smsResult.provider,
                 providerMessageId: smsResult.providerMessageIds.join(','),
                 attemptCount: 1,
+                metadata: {
+                  ...(notification.metadata ?? {}),
+                  providerAcceptance: {
+                    provider: smsResult.provider,
+                    channel: 'SMS',
+                    accepted: smsResult.accepted,
+                    simulated: Boolean(smsResult.rawResponse?.simulated),
+                    deliveryClaim: smsResult.rawResponse?.simulated
+                      ? 'ACCEPTED_BY_FOUNDATION_PROVIDER_ONLY'
+                      : 'ACCEPTED_BY_EXTERNAL_PROVIDER',
+                    providerMessageIds: smsResult.providerMessageIds,
+                    rawResponse: smsResult.rawResponse ?? null,
+                    recordedAt: new Date().toISOString(),
+                  },
+                },
               },
             });
 

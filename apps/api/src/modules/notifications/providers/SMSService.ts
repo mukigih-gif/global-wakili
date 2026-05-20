@@ -50,10 +50,11 @@ export class SMSService {
 
     console.info('[SMS_SEND_ATTEMPT]', {
       tenantId: input.tenantId,
-      senderId: input.senderId ?? null,
-      recipients: input.recipients.map((r) => normalizePhoneNumber(r.phoneNumber)),
+      providerMode: 'SIMULATED_SMS_GATEWAY',
+      senderIdConfigured: Boolean(input.senderId?.trim()),
+      recipientCount: input.recipients.length,
       messageLength: input.message.length,
-      metadata: input.metadata ?? null,
+      metadataKeys: Object.keys(input.metadata ?? {}),
     });
 
     return {
@@ -62,6 +63,8 @@ export class SMSService {
       providerMessageIds,
       rawResponse: {
         simulated: true,
+        providerMode: 'SIMULATED_SMS_GATEWAY',
+        deliveryClaim: 'ACCEPTED_BY_FOUNDATION_PROVIDER_ONLY',
         count: input.recipients.length,
       },
     };

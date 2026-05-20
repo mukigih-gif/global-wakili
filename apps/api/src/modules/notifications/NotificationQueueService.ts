@@ -24,12 +24,21 @@ export class NotificationQueueService {
       deliveryOrder: ['SYSTEM_ALERT', 'EMAIL', 'SMS'],
       recipients: input.recipients,
       template: input.template,
-      metadata: input.metadata ?? {},
+      metadata: {
+        ...(input.metadata ?? {}),
+        notificationQueue: {
+          processingMode: 'ENQUEUED_ONLY',
+          workerStatus: 'PENDING_NOTIFICATION_WORKER',
+          truthfulness: 'Job accepted by queue; dispatch worker completion is not claimed by this service.',
+        },
+      },
       requestedAt: new Date().toISOString(),
     });
 
     return {
       queued: true,
+      processed: false,
+      workerStatus: 'PENDING_NOTIFICATION_WORKER',
       queue: 'integrations',
       jobName: 'notification.dispatch',
       jobId: job.id,

@@ -82,12 +82,13 @@ export class EmailService {
 
     console.info('[EMAIL_SEND_ATTEMPT]', {
       tenantId: input.tenantId,
-      fromEmail: input.fromEmail,
-      to: input.to.map((r) => r.email),
-      cc: input.cc?.map((r) => r.email) ?? [],
-      bcc: input.bcc?.map((r) => r.email) ?? [],
-      subject: input.subject,
-      metadata: input.metadata ?? null,
+      providerMode: 'SIMULATED_SMTP',
+      fromEmailConfigured: Boolean(input.fromEmail?.trim()),
+      recipientCount: input.to.length,
+      ccCount: input.cc?.length ?? 0,
+      bccCount: input.bcc?.length ?? 0,
+      subjectLength: input.subject.length,
+      metadataKeys: Object.keys(input.metadata ?? {}),
     });
 
     return {
@@ -96,7 +97,9 @@ export class EmailService {
       providerMessageId,
       rawResponse: {
         simulated: true,
-        subject: input.subject,
+        providerMode: 'SIMULATED_SMTP',
+        deliveryClaim: 'ACCEPTED_BY_FOUNDATION_PROVIDER_ONLY',
+        subjectLength: input.subject.length,
       },
     };
   }

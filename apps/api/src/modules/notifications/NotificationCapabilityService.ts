@@ -34,7 +34,11 @@ export class NotificationCapabilityService {
         risk: 'HIGH',
         requiredForCloseout: true,
         description:
-          'Email delivery is bridged through notifications/providers/EmailService.',
+          'Email delivery currently uses a foundation provider adapter and remains pending production provider configuration.',
+        notes: [
+          'Current adapter returns simulated provider acceptance for development/foundation workflows.',
+          'Production SMTP/API credentials and provider-specific delivery confirmation are deferred to Notifications N2C.',
+        ],
       },
       {
         key: 'notifications.sms',
@@ -42,7 +46,11 @@ export class NotificationCapabilityService {
         risk: 'HIGH',
         requiredForCloseout: true,
         description:
-          'SMS delivery is bridged through notifications/providers/SMSService.',
+          'SMS delivery currently uses a foundation provider adapter and remains pending production SMS gateway configuration.',
+        notes: [
+          'Current adapter returns simulated provider acceptance for development/foundation workflows.',
+          'Production SMS gateway credentials and provider-specific delivery confirmation are deferred to Notifications N2C.',
+        ],
       },
       {
         key: 'notifications.delivery_order',
@@ -117,8 +125,14 @@ export class NotificationCapabilityService {
     return {
       module: 'notifications',
       generatedAt: new Date(),
-      status: 'ENTERPRISE_DELIVERY_ORCHESTRATION_ACTIVE',
+      status: 'FOUNDATION_DELIVERY_ORCHESTRATION_ACTIVE_PROVIDER_AND_WORKER_PENDING',
       deliveryOrder: ['SYSTEM_ALERT', 'EMAIL', 'SMS'],
+      providerMode: {
+        systemAlert: 'LOCAL_SYSTEM_RECORD',
+        email: 'SIMULATED_PROVIDER_PENDING_PRODUCTION_CONFIGURATION',
+        sms: 'SIMULATED_PROVIDER_PENDING_PRODUCTION_CONFIGURATION',
+      },
+      workerMode: 'ENQUEUE_ONLY_PENDING_NOTIFICATION_WORKER',
       active: capabilities.filter((item) => item.status === 'ACTIVE').length,
       pendingSchema: capabilities.filter((item) => item.status === 'PENDING_SCHEMA').length,
       pendingCrossModule: capabilities.filter((item) => item.status === 'PENDING_CROSS_MODULE')
