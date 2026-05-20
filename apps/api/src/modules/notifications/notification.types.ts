@@ -122,4 +122,11 @@ export type NotificationDbClient = {
   auditLog: {
     create: Function;
   };
+  notificationDeliveryAttempt: {
+    create: Function;
+    findFirst: Function;
+    findMany: Function;
+    update: Function;
+    updateMany: Function;
+  };
 };

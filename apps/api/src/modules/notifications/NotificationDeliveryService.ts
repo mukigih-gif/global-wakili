@@ -171,6 +171,86 @@ function resolveSmsSenderId(input: NotificationSendInput): string {
   );
 }
 
+type DeliveryAttemptStatus =
+  | 'PENDING'
+  | 'ACCEPTED'
+  | 'DELIVERED'
+  | 'FAILED'
+  | 'BOUNCED'
+  | 'RETRYING'
+  | 'SKIPPED';
+
+function coerceDeliveryErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+async function recordDeliveryAttempt(
+  db: NotificationDbClient,
+  params: {
+    tenantId: string;
+    notificationId: string;
+    channel: NotificationChannel;
+    provider?: string | null;
+    providerMessageId?: string | null;
+    status: DeliveryAttemptStatus;
+    attemptNumber?: number;
+    acceptedAt?: Date | null;
+    deliveredAt?: Date | null;
+    failedAt?: Date | null;
+    bouncedAt?: Date | null;
+    nextRetryAt?: Date | null;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+    rawResponse?: unknown;
+    metadata?: Record<string, unknown> | null;
+  },
+) {
+  return db.notificationDeliveryAttempt.create({
+    data: {
+      tenantId: params.tenantId,
+      notificationId: params.notificationId,
+      channel: params.channel,
+      provider: params.provider ?? null,
+      providerMessageId: params.providerMessageId ?? null,
+      status: params.status,
+      attemptNumber: params.attemptNumber ?? 1,
+      acceptedAt: params.acceptedAt ?? null,
+      deliveredAt: params.deliveredAt ?? null,
+      failedAt: params.failedAt ?? null,
+      bouncedAt: params.bouncedAt ?? null,
+      nextRetryAt: params.nextRetryAt ?? null,
+      errorCode: params.errorCode ?? null,
+      errorMessage: params.errorMessage ?? null,
+      rawResponse: params.rawResponse ?? null,
+      metadata: {
+        ...(params.metadata ?? {}),
+        recordedAt: new Date().toISOString(),
+      },
+    },
+  });
+}
+
+async function recordDeliveryAttemptSafely(
+  db: NotificationDbClient,
+  params: Parameters<typeof recordDeliveryAttempt>[1],
+): Promise<void> {
+  try {
+    await recordDeliveryAttempt(db, params);
+  } catch (error) {
+    // Do not convert a provider-accepted notification into FAILED merely because
+    // the lifecycle ledger write failed. The legacy Notification row remains
+    // the source of current delivery status; the attempt table is the audit ledger.
+    // A later repair/reconciliation job can backfill missing attempts from Notification metadata.
+    console.error('Notification delivery attempt persistence failed', {
+      tenantId: params.tenantId,
+      notificationId: params.notificationId,
+      channel: params.channel,
+      provider: params.provider ?? null,
+      providerMessageId: params.providerMessageId ?? null,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+}
 export class NotificationDeliveryService {
   static async sendNow(db: NotificationDbClient, input: NotificationSendInput) {
     assertTenant(input.tenantId);
@@ -253,6 +333,20 @@ export class NotificationDeliveryService {
               },
             });
 
+            await recordDeliveryAttemptSafely(db, {
+              tenantId: input.tenantId,
+              notificationId: notification.id,
+              channel,
+              provider: 'system',
+              status: 'DELIVERED',
+              acceptedAt: updated.sentAt ?? new Date(),
+              deliveredAt: updated.sentAt ?? new Date(),
+              metadata: {
+                deliveryClaim: 'LOCAL_SYSTEM_RECORD',
+                tenantName: tenant.name,
+              },
+            });
+
             results.push({
               channel,
               notificationId: updated.id,
@@ -302,6 +396,27 @@ export class NotificationDeliveryService {
                     recordedAt: new Date().toISOString(),
                   },
                 },
+              },
+            });
+
+            await recordDeliveryAttemptSafely(db, {
+              tenantId: input.tenantId,
+              notificationId: notification.id,
+              channel,
+              provider: emailResult.provider,
+              providerMessageId: emailResult.providerMessageId,
+              status: emailResult.accepted ? 'ACCEPTED' : 'FAILED',
+              acceptedAt: emailResult.accepted ? updated.sentAt ?? new Date() : null,
+              failedAt: emailResult.accepted ? null : updated.failedAt ?? new Date(),
+              errorMessage: emailResult.accepted
+                ? null
+                : 'Email provider did not accept the notification request.',
+              rawResponse: emailResult.rawResponse ?? null,
+              metadata: {
+                deliveryClaim: emailResult.rawResponse?.simulated
+                  ? 'ACCEPTED_BY_FOUNDATION_PROVIDER_ONLY'
+                  : 'ACCEPTED_BY_EXTERNAL_PROVIDER',
+                simulated: Boolean(emailResult.rawResponse?.simulated),
               },
             });
 
@@ -356,6 +471,28 @@ export class NotificationDeliveryService {
               },
             });
 
+            await recordDeliveryAttemptSafely(db, {
+              tenantId: input.tenantId,
+              notificationId: notification.id,
+              channel,
+              provider: smsResult.provider,
+              providerMessageId: smsResult.providerMessageIds.join(','),
+              status: smsResult.accepted ? 'ACCEPTED' : 'FAILED',
+              acceptedAt: smsResult.accepted ? updated.sentAt ?? new Date() : null,
+              failedAt: smsResult.accepted ? null : updated.failedAt ?? new Date(),
+              errorMessage: smsResult.accepted
+                ? null
+                : 'SMS provider did not accept the notification request.',
+              rawResponse: smsResult.rawResponse ?? null,
+              metadata: {
+                deliveryClaim: smsResult.rawResponse?.simulated
+                  ? 'ACCEPTED_BY_FOUNDATION_PROVIDER_ONLY'
+                  : 'ACCEPTED_BY_EXTERNAL_PROVIDER',
+                simulated: Boolean(smsResult.rawResponse?.simulated),
+                providerMessageIds: smsResult.providerMessageIds,
+              },
+            });
+
             results.push({
               channel,
               notificationId: updated.id,
@@ -376,6 +513,20 @@ export class NotificationDeliveryService {
                 deliveryOrder: NotificationProviderRegistry.getDeliveryOrder(),
                 failure: error instanceof Error ? error.message : String(error),
               },
+            },
+          });
+
+          await recordDeliveryAttemptSafely(db, {
+            tenantId: input.tenantId,
+            notificationId: notification.id,
+            channel,
+            provider: NotificationProviderRegistry.getProviderName(channel),
+            status: 'FAILED',
+            failedAt: updated.failedAt ?? new Date(),
+            errorMessage: coerceDeliveryErrorMessage(error),
+            metadata: {
+              deliveryOrder: NotificationProviderRegistry.getDeliveryOrder(),
+              failure: coerceDeliveryErrorMessage(error),
             },
           });
 
