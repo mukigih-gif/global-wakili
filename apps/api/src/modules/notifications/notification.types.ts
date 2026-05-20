@@ -136,4 +136,12 @@ export type NotificationDbClient = {
     update: Function;
     updateMany: Function;
   };
+  notificationPreference: {
+    create: Function;
+    findFirst: Function;
+    findMany: Function;
+    update: Function;
+    updateMany: Function;
+    upsert: Function;
+  };
 };
