@@ -1,6 +1,9 @@
 // apps/api/src/modules/notifications/NotificationDeliveryService.ts
 
 import { NotificationProviderRegistry } from './NotificationProviderRegistry';
+import { NotificationPreferenceService } from './providers/NotificationPreferenceService';
+import { NotificationTemplateRegistry } from './providers/NotificationTemplateRegistry';
+import type { NotificationTemplateDefinition } from './providers/NotificationTemplateRegistry';
 import type {
   NotificationChannel,
   NotificationDbClient,
@@ -71,30 +74,103 @@ function requireRecipientValue(
   return false;
 }
 
-function buildNotificationPayload(input: NotificationSendInput) {
+
+type PreferenceFilterParams = Parameters<typeof NotificationPreferenceService.filterAllowedChannels>[1];
+type PreferenceChannel = PreferenceFilterParams['channels'][number];
+
+function mapTemplateChannelToDeliveryChannel(channel: 'email' | 'sms' | 'portal'): NotificationChannel {
+  if (channel === 'email') return 'EMAIL';
+  if (channel === 'sms') return 'SMS';
+  return 'SYSTEM_ALERT';
+}
+
+function mapDeliveryChannelToPreferenceChannel(channel: NotificationChannel): PreferenceChannel {
+  if (channel === 'EMAIL') return 'email';
+  if (channel === 'SMS') return 'sms';
+  return 'portal';
+}
+
+function resolveTemplateChannels(template?: NotificationTemplateDefinition | null): NotificationChannel[] | undefined {
+  if (!template?.channels?.length) {
+    return undefined;
+  }
+
+  return template.channels.map(mapTemplateChannelToDeliveryChannel);
+}
+
+function normalizePreferencePriority(
+  priority?: NotificationSendInput['priority'],
+): PreferenceFilterParams['priority'] {
+  if (
+    priority === 'low' ||
+    priority === 'normal' ||
+    priority === 'high' ||
+    priority === 'critical'
+  ) {
+    return priority;
+  }
+
+  return 'normal';
+}
+
+async function filterChannelsForRecipient(
+  db: NotificationDbClient,
+  input: NotificationSendInput,
+  recipient: ResolvedNotificationRecipient,
+  channels: NotificationChannel[],
+): Promise<NotificationChannel[]> {
+  if (!recipient.userId) {
+    return channels;
+  }
+
+  const preferenceChannels = Array.from(
+    new Set(channels.map(mapDeliveryChannelToPreferenceChannel)),
+  );
+
+  const allowedPreferenceChannels = await NotificationPreferenceService.filterAllowedChannels(db, {
+    tenantId: input.tenantId,
+    userId: recipient.userId,
+    channels: preferenceChannels,
+    category: (input.category ?? 'system_alert') as PreferenceFilterParams['category'],
+    priority: normalizePreferencePriority(input.priority),
+  });
+
+  const allowed = new Set(allowedPreferenceChannels);
+
+  return channels.filter((channel) => allowed.has(mapDeliveryChannelToPreferenceChannel(channel)));
+}
+function buildNotificationPayload(input: NotificationSendInput, templateDefinition?: NotificationTemplateDefinition | null) {
   const variables = input.template.variables ?? {};
 
   const systemTitle =
     interpolate(input.template.systemTitle, variables) ??
     interpolate(input.template.emailSubject, variables) ??
+    interpolate(templateDefinition?.subject, variables) ??
     'Global Wakili Notification';
 
   const systemMessage =
     interpolate(input.template.systemMessage, variables) ??
     interpolate(input.template.emailBody, variables) ??
+    interpolate(templateDefinition?.textBody, variables) ??
     interpolate(input.template.smsContent, variables) ??
+    interpolate(templateDefinition?.smsBody, variables) ??
     'You have a new Global Wakili notification.';
 
   const emailSubject =
-    interpolate(input.template.emailSubject, variables) ?? systemTitle;
+    interpolate(input.template.emailSubject, variables) ??
+    interpolate(templateDefinition?.subject, variables) ??
+    systemTitle;
 
   const emailBody =
     interpolate(input.template.emailBody, variables) ??
+    interpolate(templateDefinition?.htmlBody, variables) ??
+    interpolate(templateDefinition?.textBody, variables) ??
     interpolate(input.template.systemMessage, variables) ??
     systemMessage;
 
   const smsContent =
     interpolate(input.template.smsContent, variables) ??
+    interpolate(templateDefinition?.smsBody, variables) ??
     interpolate(input.template.systemMessage, variables) ??
     systemMessage;
 
@@ -279,14 +355,24 @@ export class NotificationDeliveryService {
       });
     }
 
-    const orderedChannels = normalizeChannels(input.channels);
-    const content = buildNotificationPayload(input);
+    const schemaAwareTemplate = input.template.templateKey
+      ? await NotificationTemplateRegistry.getSchemaAware(db, {
+          tenantId: input.tenantId,
+          key: input.template.templateKey,
+        })
+      : null;
+
+    const orderedChannels = normalizeChannels(
+      input.channels?.length ? input.channels : resolveTemplateChannels(schemaAwareTemplate),
+    );
+    const content = buildNotificationPayload(input, schemaAwareTemplate);
     const results: Array<Record<string, unknown>> = [];
 
     for (const rawRecipient of input.recipients) {
       const recipient = await resolveRecipient(db, input.tenantId, rawRecipient);
+      const allowedChannels = await filterChannelsForRecipient(db, input, recipient, orderedChannels);
 
-      for (const channel of orderedChannels) {
+      for (const channel of allowedChannels) {
         if (channel === 'EMAIL' && recipient.emailNotifications === false) continue;
         if (channel === 'SMS' && recipient.smsNotifications !== true) continue;
         if (!requireRecipientValue(channel, recipient)) continue;
