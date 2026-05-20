@@ -91,26 +91,28 @@ export class NotificationCapabilityService {
       },
       {
         key: 'notifications.preferences',
-        status: 'PENDING_INTEGRATION',
+        status: 'ACTIVE',
         risk: 'MEDIUM',
         requiredForCloseout: false,
         description:
-          'NotificationPreference schema is present after Notifications N2B; runtime preference filtering still needs N2C integration while preserving User.emailNotifications and User.smsNotifications as safe fallback.',
+          'NotificationPreference schema is present and runtime preference filtering is wired through NotificationPreferenceService while preserving User.emailNotifications and User.smsNotifications as safe fallback.',
         notes: [
           'N2B added the NotificationPreference persistence model.',
-          'N2C must wire read/write behavior without breaking existing user-level notification flags.',
+          'N2C wired schema-aware preference lookup and delivery-time channel filtering.',
+          'User.emailNotifications and User.smsNotifications remain preserved as fallback compatibility controls.',
         ],
       },
       {
         key: 'notifications.templates',
-        status: 'PENDING_INTEGRATION',
+        status: 'ACTIVE',
         risk: 'MEDIUM',
         requiredForCloseout: false,
         description:
-          'NotificationTemplate schema is present after Notifications N2B; runtime template loading still uses the code registry/request payload path until N2C integration is completed.',
+          'NotificationTemplate schema is present and schema-aware template loading is wired through NotificationTemplateRegistry while preserving the static registry and request payload path as safe fallback.',
         notes: [
           'N2B added the NotificationTemplate persistence model.',
-          'N2C must preserve the static registry as fallback while introducing tenant/system template persistence.',
+          'N2C added tenant/system schema-aware template lookup with deterministic tenant override behavior.',
+          'The static registry remains preserved as fallback.',
         ],
       },
       {
@@ -138,7 +140,7 @@ export class NotificationCapabilityService {
     return {
       module: 'notifications',
       generatedAt: new Date(),
-      status: 'N2B_SCHEMA_AVAILABLE_PROVIDER_AND_WORKER_PENDING',
+      status: 'N2C_RUNTIME_INTEGRATION_ACTIVE_PROVIDER_AND_WORKER_PENDING',
       deliveryOrder: ['SYSTEM_ALERT', 'EMAIL', 'SMS'],
       providerMode: {
         systemAlert: 'LOCAL_SYSTEM_RECORD',
