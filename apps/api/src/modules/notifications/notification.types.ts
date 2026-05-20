@@ -129,4 +129,11 @@ export type NotificationDbClient = {
     update: Function;
     updateMany: Function;
   };
+  notificationWebhookEvent: {
+    create: Function;
+    findFirst: Function;
+    findMany: Function;
+    update: Function;
+    updateMany: Function;
+  };
 };
