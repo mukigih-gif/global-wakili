@@ -1,8 +1,9 @@
-// apps/api/src/modules/document/DocumentAuditService.ts
+﻿// apps/api/src/modules/document/DocumentAuditService.ts
 
 export type DocumentAuditAction =
   | 'UPLOADED'
   | 'VIEWED'
+  | 'EDITED'
   | 'DOWNLOADED'
   | 'SIGNED_URL_ISSUED'
   | 'SEARCHED'

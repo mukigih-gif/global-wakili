@@ -1,4 +1,4 @@
-// apps/api/src/modules/document/document.validators.ts
+﻿// apps/api/src/modules/document/document.validators.ts
 
 import { z } from 'zod';
 
@@ -131,6 +131,82 @@ export const contractVersionInputSchema = z.object({
   changeSummary: z.string().trim().max(2000).nullable().optional(),
   metadata: z.record(z.unknown()).optional(),
 });
+
+
+const MAX_DOCUMENT_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+
+const ALLOWED_DOCUMENT_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain',
+  'text/csv',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+]);
+
+export function sanitizeDocumentTags(value: unknown): string[] {
+  const rawTags = Array.isArray(value)
+    ? value
+    : typeof value === 'string'
+      ? value.split(',')
+      : [];
+
+  const normalized = rawTags
+    .map((tag) => String(tag).trim())
+    .filter((tag) => tag.length > 0)
+    .map((tag) => tag.slice(0, 80));
+
+  return Array.from(new Set(normalized)).slice(0, 50);
+}
+
+export function assertAllowedMimeType(mimeType: string | null | undefined): void {
+  const normalized = mimeType?.trim().toLowerCase();
+
+  if (!normalized) {
+    throw Object.assign(new Error('Document MIME type is required'), {
+      statusCode: 422,
+      code: 'DOCUMENT_MIME_TYPE_REQUIRED',
+    });
+  }
+
+  if (!ALLOWED_DOCUMENT_MIME_TYPES.has(normalized)) {
+    throw Object.assign(new Error('Document MIME type is not allowed'), {
+      statusCode: 415,
+      code: 'DOCUMENT_MIME_TYPE_NOT_ALLOWED',
+      details: {
+        mimeType: normalized,
+      },
+    });
+  }
+}
+
+export function assertAllowedFileSize(fileSize: number | null | undefined): void {
+  const normalized = Number(fileSize ?? 0);
+
+  if (!Number.isFinite(normalized) || normalized <= 0) {
+    throw Object.assign(new Error('Document file size is required'), {
+      statusCode: 422,
+      code: 'DOCUMENT_FILE_SIZE_REQUIRED',
+    });
+  }
+
+  if (normalized > MAX_DOCUMENT_FILE_SIZE_BYTES) {
+    throw Object.assign(new Error('Document file exceeds the allowed upload size'), {
+      statusCode: 413,
+      code: 'DOCUMENT_FILE_TOO_LARGE',
+      details: {
+        maxBytes: MAX_DOCUMENT_FILE_SIZE_BYTES,
+        actualBytes: normalized,
+      },
+    });
+  }
+}
 
 export type DocumentUploadDto = z.infer<typeof documentUploadSchema>;
 export type DocumentUpdateDto = z.infer<typeof documentUpdateSchema>;

@@ -1,4 +1,4 @@
-import { CalendarAvailabilityService } from './CalendarAvailabilityService';
+﻿import { CalendarAvailabilityService } from './CalendarAvailabilityService';
 import { EventVisibilityService } from './event-visibility.service';
 import { normalizePrivacy } from './calendar.validators';
 import type {
@@ -107,7 +107,7 @@ export class CalendarService {
     ];
 
     const clash = await CalendarAvailabilityService.checkConflicts(db, {
-      tenantId: payload.tenantId,
+      tenantId: payload.tenantId as string,
       startTime,
       endTime,
       userIds: userIdsForConflict,
@@ -266,10 +266,10 @@ export class CalendarService {
       });
     }
 
-    const conflictUsers = [existing.creatorId, ...finalAttendeeIds];
+    const conflictUsers = [existing.creatorId, ...finalAttendeeIds].filter((id): id is string => Boolean(id?.trim()));
 
     const clash = await CalendarAvailabilityService.checkConflicts(db, {
-      tenantId: payload.tenantId,
+      tenantId: payload.tenantId as string,
       startTime,
       endTime,
       userIds: conflictUsers,
@@ -312,7 +312,7 @@ export class CalendarService {
           ? {
               attendees: {
                 set: [],
-                connect: finalAttendeeIds.map((id) => ({ id })),
+                connect: finalAttendeeIds.map((id: string) => ({ id })),
               },
             }
           : {}),
