@@ -1,4 +1,4 @@
-// apps/api/src/modules/payroll/PayrollService.ts
+﻿// apps/api/src/modules/payroll/PayrollService.ts
 
 import { Prisma, prisma } from '@global-wakili/database';
 
@@ -300,8 +300,8 @@ export class PayrollService {
       },
     });
 
-    return records.reduce(
-      (summary, record) => ({
+    return (records as any[]).reduce<PayrollBatchSummary>(
+      (summary: PayrollBatchSummary, record: any): PayrollBatchSummary => ({
         ...summary,
         employeeCount: summary.employeeCount + 1,
         grossPay: summary.grossPay.plus(record.grossPay ?? 0),

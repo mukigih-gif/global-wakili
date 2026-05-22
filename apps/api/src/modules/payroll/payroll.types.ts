@@ -1,4 +1,4 @@
-// apps/api/src/modules/payroll/payroll.types.ts
+﻿// apps/api/src/modules/payroll/payroll.types.ts
 
 import { Prisma } from '@global-wakili/database';
 
@@ -285,3 +285,4 @@ export const PAYROLL_DEFAULTS = {
   defaultFrequency: 'MONTHLY',
   defaultPaymentDay: 28,
 } as const;
+

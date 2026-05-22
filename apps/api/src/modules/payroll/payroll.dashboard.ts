@@ -1,10 +1,28 @@
-// apps/api/src/modules/payroll/payroll.dashboard.ts
+﻿// apps/api/src/modules/payroll/payroll.dashboard.ts
 
 import { Prisma, prisma } from '@global-wakili/database';
 
 type DbClient = typeof prisma | Prisma.TransactionClient | any;
 
 const ZERO = new Prisma.Decimal(0);
+
+type PayrollDashboardRecord = Record<string, any>;
+
+type PayrollDashboardTotals = {
+  employeeCount: number;
+  grossPay: Prisma.Decimal;
+  taxablePay: Prisma.Decimal;
+  paye: Prisma.Decimal;
+  nssfEmployee: Prisma.Decimal;
+  nssfEmployer: Prisma.Decimal;
+  sha: Prisma.Decimal;
+  housingLevyEmployee: Prisma.Decimal;
+  housingLevyEmployer: Prisma.Decimal;
+  nitaEmployer: Prisma.Decimal;
+  totalDeductions: Prisma.Decimal;
+  netPay: Prisma.Decimal;
+  employerCost: Prisma.Decimal;
+};
 
 export type PayrollDashboardInput = {
   tenantId: string;
@@ -169,8 +187,8 @@ export class PayrollDashboardService {
       }),
     ]);
 
-    const totals = records.reduce(
-      (acc, record) => ({
+    const totals = (records as PayrollDashboardRecord[]).reduce(
+      (acc: PayrollDashboardTotals, record: PayrollDashboardRecord): PayrollDashboardTotals => ({
         employeeCount: acc.employeeCount + 1,
         grossPay: acc.grossPay.plus(money(record.grossPay)),
         taxablePay: acc.taxablePay.plus(money(record.taxablePay)),

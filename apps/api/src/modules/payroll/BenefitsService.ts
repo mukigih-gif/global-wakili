@@ -1,4 +1,4 @@
-// apps/api/src/modules/payroll/BenefitsService.ts
+﻿// apps/api/src/modules/payroll/BenefitsService.ts
 
 import { Prisma, prisma } from '@global-wakili/database';
 
@@ -157,7 +157,7 @@ export class BenefitsService {
           },
         };
       })
-      .filter((benefit) => money(benefit.amount).gt(0));
+      .filter((benefit: PayrollBenefitLine) => money(benefit.amount).gt(0));
   }
 
   async buildPayrollBenefitSummary(input: PayrollBenefitInput) {

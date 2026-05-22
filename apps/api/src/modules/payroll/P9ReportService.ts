@@ -1,4 +1,4 @@
-// apps/api/src/modules/payroll/P9ReportService.ts
+﻿// apps/api/src/modules/payroll/P9ReportService.ts
 
 import { Prisma, prisma } from '@global-wakili/database';
 
@@ -11,6 +11,24 @@ export type P9ReportInput = {
 };
 
 const ZERO = new Prisma.Decimal(0);
+
+type P9MonthlyRow = {
+  month: number;
+  monthName: string;
+  recordCount: number;
+  basicPay: Prisma.Decimal;
+  grossPay: Prisma.Decimal;
+  taxablePay: Prisma.Decimal;
+  pensionablePay: Prisma.Decimal;
+  payeGrossTax: Prisma.Decimal;
+  personalRelief: Prisma.Decimal;
+  insuranceRelief: Prisma.Decimal;
+  paye: Prisma.Decimal;
+  nssfEmployee: Prisma.Decimal;
+  sha: Prisma.Decimal;
+  housingLevyEmployee: Prisma.Decimal;
+  netPay: Prisma.Decimal;
+};
 
 function delegate(db: DbClient, name: string) {
   const modelDelegate = db[name];
@@ -93,9 +111,9 @@ export class P9ReportService {
       });
     }
 
-    const monthlyRows = Array.from({ length: 12 }, (_, index) => {
+    const monthlyRows: P9MonthlyRow[] = Array.from({ length: 12 }, (_, index): P9MonthlyRow => {
       const month = index + 1;
-      const monthRecords = records.filter((record: any) => {
+      const monthRecords = (records as any[]).filter((record: any) => {
         const periodStart = new Date(record.periodStart);
         return periodStart.getMonth() + 1 === month;
       });

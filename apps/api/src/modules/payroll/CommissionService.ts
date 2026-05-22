@@ -1,4 +1,4 @@
-// apps/api/src/modules/payroll/CommissionService.ts
+﻿// apps/api/src/modules/payroll/CommissionService.ts
 
 import { Prisma, prisma } from '@global-wakili/database';
 
@@ -139,7 +139,7 @@ export class CommissionService {
           },
         };
       })
-      .filter((commission) => money(commission.amount).gt(0));
+      .filter((commission: PayrollCommissionLine) => money(commission.amount).gt(0));
   }
 
   async calculateMatterCommissionPayrollLines(input: PayrollCommissionInput) {
@@ -187,7 +187,7 @@ export class CommissionService {
           },
         };
       })
-      .filter((commission) => money(commission.amount).gt(0));
+      .filter((commission: PayrollCommissionLine) => money(commission.amount).gt(0));
   }
 
   async buildPayrollCommissionSummary(input: PayrollCommissionInput) {
