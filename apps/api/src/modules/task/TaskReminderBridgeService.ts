@@ -1,4 +1,4 @@
-// apps/api/src/modules/task/TaskReminderBridgeService.ts
+﻿// apps/api/src/modules/task/TaskReminderBridgeService.ts
 
 import { TaskService } from './TaskService';
 import { TaskAuditService } from './TaskAuditService';
@@ -57,3 +57,4 @@ export class TaskReminderBridgeService {
 }
 
 export default TaskReminderBridgeService;
+

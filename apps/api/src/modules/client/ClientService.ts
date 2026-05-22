@@ -3,7 +3,23 @@ import type {
   ClientValidationIssue,
   ClientValidationResult,
   TenantClientDbClient,
-} from './client.types';
+} from './client.type';
+
+type ClientListQuery = {
+  page?: number;
+  limit?: number;
+  search?: string;
+};
+
+type ClientListDbClient = TenantClientDbClient & {
+  client: TenantClientDbClient['client'] & {
+    count: Function;
+  };
+};
+
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 25;
+const MAX_LIMIT = 100;
 
 function normalizeEmail(email?: string | null): string | null {
   return email?.trim().toLowerCase() || null;
@@ -19,6 +35,42 @@ function normalizePin(pin?: string | null): string | null {
 
 function normalizeCurrency(currency?: string | null): string | null {
   return currency?.trim().toUpperCase() || null;
+}
+
+function normalizePage(page?: number): number {
+  if (!Number.isFinite(page) || !page || page < 1) {
+    return DEFAULT_PAGE;
+  }
+
+  return Math.floor(page);
+}
+
+function normalizeLimit(limit?: number): number {
+  if (!Number.isFinite(limit) || !limit || limit < 1) {
+    return DEFAULT_LIMIT;
+  }
+
+  return Math.min(Math.floor(limit), MAX_LIMIT);
+}
+
+function buildSearchWhere(search?: string) {
+  const normalizedSearch = search?.trim();
+
+  if (!normalizedSearch) {
+    return {};
+  }
+
+  return {
+    OR: [
+      { name: { contains: normalizedSearch, mode: 'insensitive' } },
+      { clientCode: { contains: normalizedSearch, mode: 'insensitive' } },
+      { email: { contains: normalizedSearch, mode: 'insensitive' } },
+      { phoneNumber: { contains: normalizedSearch, mode: 'insensitive' } },
+      { kraPin: { contains: normalizedSearch, mode: 'insensitive' } },
+      { registrationNumber: { contains: normalizedSearch, mode: 'insensitive' } },
+      { nationalId: { contains: normalizedSearch, mode: 'insensitive' } },
+    ],
+  };
 }
 
 export class ClientService {
@@ -55,7 +107,7 @@ export class ClientService {
         ? db.client.findFirst({
             where: {
               tenantId,
-              phone: normalizePhone(input.phoneNumber),
+              phoneNumber: normalizePhone(input.phoneNumber),
               ...(excludeClientId ? { id: { not: excludeClientId } } : {}),
             },
             select: { id: true },
@@ -186,9 +238,9 @@ export class ClientService {
         status: input.status ?? 'ACTIVE',
         name: input.name.trim(),
         email: normalizeEmail(input.email),
-        phone: normalizePhone(input.phoneNumber),
+        phoneNumber: normalizePhone(input.phoneNumber),
         kraPin: normalizePin(input.kraPin),
-        idNumber: input.idNumber?.trim() ?? null,
+        nationalId: input.idNumber?.trim() ?? null,
         registrationNumber: input.registrationNumber?.trim() ?? null,
         taxExempt: input.taxExempt ?? false,
         address: input.address?.trim() ?? null,
@@ -295,9 +347,9 @@ export class ClientService {
         ...(input.status !== undefined ? { status: input.status } : {}),
         ...(input.name !== undefined ? { name: input.name.trim() } : {}),
         ...(input.email !== undefined ? { email: normalizeEmail(input.email) } : {}),
-        ...(input.phoneNumber !== undefined ? { phone: normalizePhone(input.phoneNumber) } : {}),
+        ...(input.phoneNumber !== undefined ? { phoneNumber: normalizePhone(input.phoneNumber) } : {}),
         ...(input.kraPin !== undefined ? { kraPin: normalizePin(input.kraPin) } : {}),
-        ...(input.idNumber !== undefined ? { idNumber: input.idNumber?.trim() ?? null } : {}),
+        ...(input.idNumber !== undefined ? { nationalId: input.idNumber?.trim() ?? null } : {}),
         ...(input.registrationNumber !== undefined
           ? { registrationNumber: input.registrationNumber?.trim() ?? null }
           : {}),
@@ -319,6 +371,199 @@ export class ClientService {
           : {}),
         ...(input.portalUserId !== undefined ? { portalUserId: input.portalUserId ?? null } : {}),
         ...(input.metadata !== undefined ? { metadata: input.metadata ?? null } : {}),
+      },
+    });
+  }
+
+  static async listActive(
+    db: TenantClientDbClient,
+    tenantId: string,
+    query: ClientListQuery = {},
+  ) {
+    const clientDb = db as ClientListDbClient;
+    const page = normalizePage(query.page);
+    const limit = normalizeLimit(query.limit);
+    const skip = (page - 1) * limit;
+
+    const where = {
+      tenantId,
+      status: 'ACTIVE',
+      ...buildSearchWhere(query.search),
+    };
+
+    const [data, total] = await Promise.all([
+      clientDb.client.findMany({
+        where,
+        orderBy: [{ updatedAt: 'desc' }, { name: 'asc' }],
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          tenantId: true,
+          branchId: true,
+          clientCode: true,
+          name: true,
+          type: true,
+          email: true,
+          phoneNumber: true,
+          registrationNumber: true,
+          kraPin: true,
+          status: true,
+          kycStatus: true,
+          pepStatus: true,
+          sanctionsStatus: true,
+          riskScore: true,
+          riskBand: true,
+          needsEnhancedDueDiligence: true,
+          currency: true,
+          createdAt: true,
+          updatedAt: true,
+          onboardingCompletedAt: true,
+          branch: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          _count: {
+            select: {
+              matters: true,
+              invoices: true,
+            },
+          },
+        },
+      }),
+      clientDb.client.count({ where }),
+    ]);
+
+    return {
+      data,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  static async getById(
+    db: TenantClientDbClient,
+    tenantId: string,
+    clientId: string,
+  ) {
+    return db.client.findFirst({
+      where: {
+        tenantId,
+        id: clientId,
+      },
+      include: {
+        branch: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        portalUser: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            status: true,
+          },
+        },
+        _count: {
+          select: {
+            contacts: true,
+            matters: true,
+            invoices: true,
+            paymentReceipts: true,
+            clientTrustLedgers: true,
+          },
+        },
+      },
+    });
+  }
+
+  static async getOverview(
+    db: TenantClientDbClient,
+    tenantId: string,
+    clientId: string,
+  ) {
+    return db.client.findFirst({
+      where: {
+        tenantId,
+        id: clientId,
+      },
+      select: {
+        id: true,
+        tenantId: true,
+        branchId: true,
+        clientCode: true,
+        name: true,
+        type: true,
+        email: true,
+        phoneNumber: true,
+        registrationNumber: true,
+        kraPin: true,
+        status: true,
+        kycStatus: true,
+        pepStatus: true,
+        sanctionsStatus: true,
+        riskScore: true,
+        riskBand: true,
+        needsEnhancedDueDiligence: true,
+        onboardingCompletedAt: true,
+        currency: true,
+        createdAt: true,
+        updatedAt: true,
+        branch: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        _count: {
+          select: {
+            matters: true,
+            invoices: true,
+          },
+        },
+        matters: {
+          orderBy: {
+            updatedAt: 'desc',
+          },
+          take: 5,
+          select: {
+            id: true,
+            matterCode: true,
+            caseNumber: true,
+            title: true,
+            status: true,
+            category: true,
+            openedDate: true,
+            closedDate: true,
+            updatedAt: true,
+          },
+        },
+        invoices: {
+          orderBy: {
+            issuedDate: 'desc',
+          },
+          take: 5,
+          select: {
+            id: true,
+            invoiceNumber: true,
+            status: true,
+            total: true,
+            paidAmount: true,
+            balanceDue: true,
+            currency: true,
+            issuedDate: true,
+            dueDate: true,
+          },
+        },
       },
     });
   }

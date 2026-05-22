@@ -1,4 +1,4 @@
-export * from './client.types';
+export * from './client.type';
 export * from './client.validators';
 export * from './ClientService';
 export * from './ClientDashboardService';

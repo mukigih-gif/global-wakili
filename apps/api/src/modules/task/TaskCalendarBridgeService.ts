@@ -1,4 +1,4 @@
-// apps/api/src/modules/task/TaskCalendarBridgeService.ts
+﻿// apps/api/src/modules/task/TaskCalendarBridgeService.ts
 
 import { TaskService } from './TaskService';
 import { TaskAuditService } from './TaskAuditService';
@@ -67,3 +67,4 @@ export class TaskCalendarBridgeService {
 }
 
 export default TaskCalendarBridgeService;
+
