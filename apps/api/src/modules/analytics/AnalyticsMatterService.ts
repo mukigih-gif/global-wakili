@@ -2,6 +2,16 @@
 
 import type { AnalyticsDbClient, AnalyticsPeriodInput } from './analytics.types';
 
+type MatterAmountRow = {
+  trustBalance: unknown;
+  wipValue: unknown;
+};
+
+type MatterFinancialAggregate = {
+  totalTrustBalance: number;
+  totalWipValue: number;
+};
+
 function assertTenant(tenantId: string): void {
   if (!tenantId?.trim()) {
     throw Object.assign(new Error('Tenant ID is required for matter analytics'), {
@@ -146,8 +156,11 @@ export class AnalyticsMatterService {
       }),
     ]);
 
-    const aggregates = matterAmounts.reduce(
-      (acc, item) => {
+    const aggregates = (matterAmounts as MatterAmountRow[]).reduce(
+      (
+        acc: MatterFinancialAggregate,
+        item: MatterAmountRow,
+      ): MatterFinancialAggregate => {
         acc.totalTrustBalance += toNumber(item.trustBalance);
         acc.totalWipValue += toNumber(item.wipValue);
         return acc;
