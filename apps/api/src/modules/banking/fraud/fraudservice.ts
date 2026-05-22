@@ -1,39 +1,65 @@
-import { prisma } from '../../config/database';
+﻿import { Prisma, prisma } from '@global-wakili/database';
 
-export const detectFraud = async (tenantId: string) => {
-  const alerts: any[] = [];
+type FraudAlert = {
+  tenantId: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH';
+  code: string;
+  message: string;
+  metadata?: Record<string, unknown>;
+};
 
-  const largeTransactions = await prisma.journalEntry.findMany({
-    where: {
-      tenantId,
-      amount: { gt: 1000000 }
-    }
-  });
+function decimal(value: unknown): Prisma.Decimal {
+  if (value instanceof Prisma.Decimal) {
+    return value;
+  }
 
-  for (const tx of largeTransactions) {
-    alerts.push({
-      type: 'LARGE_TRANSACTION',
-      severity: 'HIGH',
-      message: `Transaction above threshold: ${tx.amount}`,
-      txId: tx.id
+  if (typeof value === 'number' || typeof value === 'string') {
+    return new Prisma.Decimal(value);
+  }
+
+  return new Prisma.Decimal(0);
+}
+
+export const detectFraud = async (tenantId: string): Promise<FraudAlert[]> => {
+  if (!tenantId?.trim()) {
+    throw Object.assign(new Error('Tenant ID is required for fraud detection'), {
+      statusCode: 400,
+      code: 'BANKING_FRAUD_TENANT_REQUIRED',
     });
   }
 
-  const duplicateRefs = await prisma.journalEntry.groupBy({
-    by: ['reference'],
-    _count: true,
-    having: {
-      reference: { _count: { gt: 1 } }
-    }
+  const alerts: FraudAlert[] = [];
+
+  const largeTransactions = await prisma.bankTransaction.findMany({
+    where: {
+      tenantId,
+      amount: {
+        gte: new Prisma.Decimal(1000000),
+      },
+    },
+    take: 100,
+    orderBy: {
+      transactionDate: 'desc',
+    },
   });
 
-  for (const dup of duplicateRefs) {
+  for (const transaction of largeTransactions) {
     alerts.push({
-      type: 'DUPLICATE_REFERENCE',
-      severity: 'CRITICAL',
-      message: `Duplicate reference detected: ${dup.reference}`
+      tenantId,
+      severity: decimal(transaction.amount).gte(5000000) ? 'HIGH' : 'MEDIUM',
+      code: 'LARGE_BANK_TRANSACTION',
+      message: 'Large bank transaction detected for review.',
+      metadata: {
+        bankTransactionId: transaction.id,
+        amount: transaction.amount?.toString?.() ?? String(transaction.amount),
+        transactionDate: transaction.transactionDate,
+        reference: transaction.reference ?? null,
+      },
     });
   }
 
   return alerts;
 };
+
+export default detectFraud;
+

@@ -1,11 +1,14 @@
-import { detectFraud } from './fraud.service';
+﻿import { detectFraud } from './fraudservice';
 
 export const runFraudMonitor = async (tenantId: string) => {
   const alerts = await detectFraud(tenantId);
 
-  if (alerts.length > 0) {
-    console.error('🚨 FRAUD ALERTS:', alerts);
-  }
-
-  return alerts;
+  return {
+    tenantId,
+    alertCount: alerts.length,
+    alerts,
+    checkedAt: new Date().toISOString(),
+  };
 };
+
+export default runFraudMonitor;

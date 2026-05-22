@@ -1,4 +1,4 @@
-// apps/api/src/modules/banking/index.ts
+﻿// apps/api/src/modules/banking/index.ts
 
 export * from './bank.interface';
 
