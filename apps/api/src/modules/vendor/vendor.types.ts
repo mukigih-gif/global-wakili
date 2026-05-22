@@ -83,13 +83,14 @@ export type VendorListResult = {
 };
 
 export type SupplierDelegate = {
-  findFirst: (args: unknown) => Promise<any>;
-  findMany: (args: unknown) => Promise<any[]>;
-  create: (args: unknown) => Promise<any>;
-  update: (args: unknown) => Promise<any>;
-  count: (args: unknown) => Promise<number>;
+  findFirst: Function;
+  findMany: Function;
+  create: Function;
+  update: Function;
+  count: Function;
 };
 
 export type VendorDbClient = {
   supplier: SupplierDelegate;
 };
+

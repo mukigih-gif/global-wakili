@@ -1,4 +1,4 @@
-import { Prisma } from '@global-wakili/database';
+﻿import { Prisma } from '@global-wakili/database';
 import type { Request } from 'express';
 import { GeneralLedgerService } from '../finance/GeneralLedgerService';
 
@@ -23,7 +23,7 @@ export class ProcurementPostingService {
       },
       include: {
         lines: true,
-        vendor: true,
+        supplier: true,
       },
     });
 
@@ -72,7 +72,7 @@ export class ProcurementPostingService {
       const whtPayable = await req.db.chartOfAccount.findFirst({
         where: {
           tenantId: req.tenantId!,
-          subtype: 'WITHHOLDING_TAX_PAYABLE',
+          subtype: 'ACCOUNTS_PAYABLE',
           isActive: true,
         },
         select: { id: true },
@@ -99,7 +99,7 @@ export class ProcurementPostingService {
       req,
       {
         reference: `VBILL-${bill.billNumber}`,
-        description: `Vendor bill approval for ${bill.vendor?.name ?? 'vendor'}`,
+        description: `Vendor bill approval for ${bill.supplier?.name ?? 'vendor'}`,
         date: bill.billDate,
         currency: bill.currency,
         exchangeRate: 1,
@@ -132,7 +132,7 @@ export class ProcurementPostingService {
         id: params.vendorBillId,
       },
       include: {
-        vendor: true,
+        supplier: true,
       },
     });
 
@@ -165,7 +165,7 @@ export class ProcurementPostingService {
       req,
       {
         reference: params.reference ?? `VPAY-${bill.billNumber}`,
-        description: `Vendor payment for ${bill.vendor?.name ?? 'vendor'}`,
+        description: `Vendor payment for ${bill.supplier?.name ?? 'vendor'}`,
         date: params.paymentDate ?? new Date(),
         currency: bill.currency,
         exchangeRate: 1,
@@ -199,3 +199,4 @@ export class ProcurementPostingService {
     );
   }
 }
+

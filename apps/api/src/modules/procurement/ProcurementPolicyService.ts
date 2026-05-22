@@ -1,4 +1,4 @@
-import { Prisma } from '@global-wakili/database';
+﻿import { Prisma } from '@global-wakili/database';
 import type {
   DecimalLike,
   ProcurementValidationIssue,
@@ -20,7 +20,7 @@ export class ProcurementPolicyService {
   ): Promise<ProcurementValidationResult> {
     const issues: ProcurementValidationIssue[] = [];
 
-    const vendor = await db.vendor.findFirst({
+    const vendor = await db.supplier.findFirst({
       where: {
         tenantId,
         id: input.vendorId,
@@ -216,4 +216,73 @@ export class ProcurementPolicyService {
       });
     }
   }
+  static async assertPaymentAllowed(
+    db: TenantProcurementDbClient,
+    tenantId: string,
+    input: {
+      vendorBillId: string;
+      amount: DecimalLike;
+    },
+  ): Promise<void> {
+    const bill = await db.vendorBill.findFirst({
+      where: {
+        tenantId,
+        id: input.vendorBillId,
+      },
+      select: {
+        id: true,
+        total: true,
+        paidAmount: true,
+        status: true,
+      },
+    });
+
+    const issues: ProcurementValidationIssue[] = [];
+
+    if (!bill) {
+      issues.push({
+        code: 'MISSING_BILL',
+        message: 'Vendor bill not found.',
+      });
+    }
+
+    const paymentAmount = Number(input.amount ?? 0);
+
+    if (!Number.isFinite(paymentAmount) || paymentAmount <= 0) {
+      issues.push({
+        code: 'INVALID_AMOUNT',
+        message: 'Vendor payment amount must be greater than zero.',
+      });
+    }
+
+    if (bill?.status === 'DRAFT' || bill?.status === 'REJECTED') {
+      issues.push({
+        code: 'INVALID_STATUS_TRANSITION',
+        message: 'Only submitted, approved, or partially paid vendor bills may be paid.',
+      });
+    }
+
+    if (bill) {
+      const total = Number(bill.total ?? 0);
+      const paidAmount = Number(bill.paidAmount ?? 0);
+
+      if (paymentAmount > total - paidAmount) {
+        issues.push({
+          code: 'INVALID_AMOUNT',
+          message: 'Vendor payment amount cannot exceed the outstanding bill balance.',
+        });
+      }
+    }
+
+    if (issues.length > 0) {
+      throw Object.assign(new Error('Vendor payment policy validation failed'), {
+        statusCode: issues.some((issue) => issue.code === 'MISSING_BILL') ? 404 : 422,
+        code: 'PROCUREMENT_PAYMENT_POLICY_VIOLATION',
+        details: issues,
+      });
+    }
+  }
 }
+
+
+

@@ -1,4 +1,4 @@
-import { Prisma } from '@global-wakili/database';
+﻿import { Prisma } from '@global-wakili/database';
 
 function toDecimal(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
   if (value === null || value === undefined) {
@@ -43,7 +43,7 @@ export class PayablesAgingService {
         },
       },
       include: {
-        vendor: {
+        supplier: {
           select: {
             id: true,
             name: true,
@@ -74,8 +74,8 @@ export class PayablesAgingService {
       return {
         id: bill.id,
         billNumber: bill.billNumber,
-        vendorId: bill.vendorId,
-        vendorName: bill.vendor?.name ?? null,
+        vendorId: bill.supplierId,
+        vendorName: bill.supplier?.name ?? null,
         billDate: bill.billDate,
         dueDate: bill.dueDate,
         status: bill.status,

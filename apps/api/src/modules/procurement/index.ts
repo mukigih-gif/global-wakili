@@ -1,7 +1,7 @@
-export * from './procurement.types';
+﻿export * from './procurement.types';
 export * from './procurement.validators';
 
-export * from './VendorService';
+export * from '../vendor/VendorService';
 export * from './VendorBillService';
 export * from './ProcurementPolicyService';
 export * from './ProcurementApprovalService';

@@ -1,4 +1,4 @@
-import { Prisma } from '@global-wakili/database';
+﻿import { Prisma } from '@global-wakili/database';
 import type { DecimalLike, TenantProcurementDbClient } from './procurement.types';
 import { ProcurementPolicyService } from './ProcurementPolicyService';
 
@@ -35,7 +35,7 @@ export class VendorPaymentService {
           total: true,
           paidAmount: true,
           status: true,
-          vendorId: true,
+          supplierId: true,
           currency: true,
           billNumber: true,
         },
@@ -60,7 +60,7 @@ export class VendorPaymentService {
         data: {
           paidAmount: nextPaidAmount,
           status: nextStatus,
-          paidDate: nextStatus === 'PAID' ? params.paymentDate ?? new Date() : undefined,
+          paidAt: nextStatus === 'PAID' ? params.paymentDate ?? new Date() : undefined,
         },
       });
 
@@ -69,7 +69,7 @@ export class VendorPaymentService {
           data: {
             tenantId,
             vendorBillId: bill.id,
-            vendorId: bill.vendorId,
+            supplierId: bill.supplierId,
             amount: paymentAmount,
             currency: bill.currency,
             paymentDate: params.paymentDate ?? new Date(),
@@ -83,3 +83,4 @@ export class VendorPaymentService {
     });
   }
 }
+

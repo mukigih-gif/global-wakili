@@ -1,12 +1,12 @@
-import type {
-  TenantProcurementDbClient,
+﻿import type {
+  VendorDbClient,
   VendorInput,
-} from './procurement.types';
-import { VendorService } from './VendorService';
+} from '../vendor/vendor.types';
+import { VendorService } from '../vendor/VendorService';
 
 export class SupplierService {
   static async create(
-    db: TenantProcurementDbClient,
+    db: VendorDbClient,
     tenantId: string,
     input: VendorInput,
   ) {
@@ -14,7 +14,7 @@ export class SupplierService {
   }
 
   static async update(
-    db: TenantProcurementDbClient,
+    db: VendorDbClient,
     tenantId: string,
     supplierId: string,
     input: Partial<VendorInput>,
@@ -23,7 +23,7 @@ export class SupplierService {
   }
 
   static async listActive(
-    db: TenantProcurementDbClient,
+    db: VendorDbClient,
     tenantId: string,
   ) {
     return VendorService.listActive(db, tenantId);
