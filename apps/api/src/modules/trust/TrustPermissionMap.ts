@@ -39,22 +39,33 @@ export type TrustPermission =
   (typeof TRUST_PERMISSIONS)[keyof typeof TRUST_PERMISSIONS];
 
 function userPermissions(req: Request): string[] {
-  const user = req.user ?? (req as any).user;
+  const userPermissionsFromAuth = Array.isArray(req.user?.permissions)
+    ? req.user.permissions
+    : [];
+
+  const grantedPermissions = req.grantedPermissionsCache
+    ? Array.from(req.grantedPermissionsCache)
+    : [];
 
   return [
-    ...(Array.isArray(user?.permissions) ? user.permissions : []),
-    ...(Array.isArray((req as any).permissions) ? (req as any).permissions : []),
+    ...userPermissionsFromAuth,
+    ...grantedPermissions,
   ].map(String);
 }
 
 function isPrivilegedTrustUser(req: Request): boolean {
-  const user = req.user ?? (req as any).user;
-  const roles = Array.isArray(user?.roles) ? user.roles.map(String) : [];
-  const role = user?.role ? String(user.role) : '';
+  const user = req.user;
+
+  if (!user) {
+    return false;
+  }
+
+  const roles = Array.isArray(user.roleNames) ? user.roleNames.map(String) : [];
+  const role = user.role ? String(user.role) : '';
 
   return (
-    user?.isSuperAdmin === true ||
-    user?.isSystemAdmin === true ||
+    user.isSuperAdmin === true ||
+    user.isSystemAdmin === true ||
     roles.includes('SUPER_ADMIN') ||
     roles.includes('MANAGING_PARTNER') ||
     roles.includes('FINANCE_PARTNER') ||

@@ -1,9 +1,12 @@
-import { Prisma } from '@global-wakili/database';
+import type { Request } from 'express';
+import { AccountSubtype, Prisma } from '@global-wakili/database';
 import { logAdminAction } from '../../utils/audit-logger';
-import { AuditSeverity } from '../../types/audit';
+import { AuditAction, AuditSeverity } from '../../types/audit';
 import type {
   DecimalLike,
   TenantTrustDbClient,
+  TrustDbClient,
+  TrustTransactionClient,
   TrustTransactionInput,
   TrustValidationIssue,
   TrustValidationResult,
@@ -11,11 +14,93 @@ import type {
 import { ClientTrustLedgerService } from './ClientTrustLedgerService';
 import { GeneralLedgerService } from '../finance/GeneralLedgerService';
 
+type TrustRequestUser = {
+  sub?: string | null;
+  id?: string | null;
+  userId?: string | null;
+};
+
+type RequestWithTrustContext = Request & {
+  tenantId?: string | null;
+  user?: TrustRequestUser;
+};
+
+type TrustChartAccount = {
+  id: string;
+};
+
+const ZERO = new Prisma.Decimal(0);
+
 function toDecimal(value: DecimalLike | null | undefined): Prisma.Decimal {
-  if (value === null || value === undefined) {
-    return new Prisma.Decimal(0);
+  if (value === null || value === undefined || value === '') {
+    return ZERO;
   }
-  return new Prisma.Decimal(value);
+
+  return value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
+}
+
+function requireTenantId(req: RequestWithTrustContext): string {
+  if (!req.tenantId?.trim()) {
+    throw Object.assign(new Error('Tenant context is required for trust transactions'), {
+      statusCode: 401,
+      code: 'TENANT_BOUNDARY_REQUIRED',
+    });
+  }
+
+  return req.tenantId.trim();
+}
+
+function requireTrustAccountId(input: TrustTransactionInput): string {
+  if (!input.trustAccountId?.trim()) {
+    throw Object.assign(new Error('Trust account boundary is required for trust transactions'), {
+      statusCode: 400,
+      code: 'TRUST_ACCOUNT_BOUNDARY_REQUIRED',
+    });
+  }
+
+  return input.trustAccountId.trim();
+}
+
+function requireClientId(input: TrustTransactionInput): string {
+  if (!input.clientId?.trim()) {
+    throw Object.assign(new Error('Client boundary is required for trust transactions'), {
+      statusCode: 400,
+      code: 'CLIENT_MISMATCH',
+    });
+  }
+
+  return input.clientId.trim();
+}
+
+function actorIdFrom(req: RequestWithTrustContext): string | null {
+  return req.user?.sub ?? req.user?.id ?? req.user?.userId ?? null;
+}
+
+function transactionDescription(input: TrustTransactionInput): string {
+  return input.description?.trim() || `Trust transaction ${input.reference}`;
+}
+
+function transactionCurrency(input: TrustTransactionInput, fallback = 'KES'): string {
+  return input.currency?.trim() || fallback;
+}
+
+function isTrustInflow(transactionType: TrustTransactionInput['transactionType']): boolean {
+  return transactionType === 'DEPOSIT' || transactionType === 'INTEREST';
+}
+
+function isTrustOutflow(transactionType: TrustTransactionInput['transactionType']): boolean {
+  return transactionType === 'WITHDRAWAL' || transactionType === 'TRANSFER_TO_OFFICE';
+}
+
+function requestWithDb(req: Request, db: TrustTransactionClient): Request {
+  return {
+    ...req,
+    db,
+  } as unknown as Request;
+}
+
+function requestDb(req: Request): TenantTrustDbClient {
+  return req.db as unknown as TenantTrustDbClient;
 }
 
 export class TrustTransactionService {
@@ -26,83 +111,147 @@ export class TrustTransactionService {
   ): Promise<TrustValidationResult> {
     const issues: TrustValidationIssue[] = [];
 
+    if (!tenantId?.trim()) {
+      issues.push({
+        code: 'TENANT_BOUNDARY_REQUIRED',
+        message: 'Tenant context is required for trust transactions.',
+      });
+    }
+
+    if (!input.trustAccountId?.trim()) {
+      issues.push({
+        code: 'TRUST_ACCOUNT_BOUNDARY_REQUIRED',
+        message: 'Trust account is required for trust transactions.',
+      });
+    }
+
     if (!input.reference?.trim()) {
-      issues.push({ code: 'INVALID_REFERENCE', message: 'Trust reference is required.' });
+      issues.push({
+        code: 'INVALID_REFERENCE',
+        message: 'Trust reference is required.',
+      });
     }
 
     if (!(input.transactionDate instanceof Date) || Number.isNaN(input.transactionDate.getTime())) {
-      issues.push({ code: 'INVALID_DATE', message: 'Transaction date is invalid.' });
+      issues.push({
+        code: 'INVALID_DATE',
+        message: 'Transaction date is invalid.',
+      });
     }
 
     const amount = toDecimal(input.amount);
-    if (amount.lt(0)) {
-      issues.push({ code: 'INVALID_AMOUNT', message: 'Trust amount cannot be negative.' });
-    }
-    if (amount.eq(0)) {
-      issues.push({ code: 'ZERO_AMOUNT', message: 'Trust amount cannot be zero.' });
-    }
 
-    const duplicate = await db.trustTransaction.findFirst({
-      where: { tenantId, reference: input.reference },
-      select: { id: true },
-    });
-
-    if (duplicate) {
-      issues.push({ code: 'DUPLICATE_REFERENCE', message: 'Trust reference already exists.' });
+    if (amount.lt(ZERO)) {
+      issues.push({
+        code: 'INVALID_AMOUNT',
+        message: 'Trust amount cannot be negative.',
+      });
     }
 
-    const trustAccount = await db.trustAccount.findFirst({
-      where: { tenantId, id: input.trustAccountId },
-      select: {
-        id: true,
-        isActive: true,
-        balance: true,
-        currency: true,
-        clientId: true,
-      },
-    });
+    if (amount.eq(ZERO)) {
+      issues.push({
+        code: 'ZERO_AMOUNT',
+        message: 'Trust amount cannot be zero.',
+      });
+    }
+
+    if (!input.transactionType) {
+      issues.push({
+        code: 'INVALID_TRANSACTION_TYPE',
+        message: 'Trust transaction type is required.',
+      });
+    }
+
+    if (!input.clientId?.trim()) {
+      issues.push({
+        code: 'CLIENT_MISMATCH',
+        message: 'Client is required for trust transactions.',
+      });
+    }
+
+    if (input.reference?.trim()) {
+      const duplicate = await db.trustTransaction.findFirst({
+        where: {
+          tenantId,
+          reference: input.reference.trim(),
+        },
+        select: { id: true },
+      });
+
+      if (duplicate) {
+        issues.push({
+          code: 'DUPLICATE_REFERENCE',
+          message: 'Trust reference already exists.',
+        });
+      }
+    }
+
+    const trustAccount = input.trustAccountId?.trim()
+      ? await db.trustAccount.findFirst({
+          where: {
+            tenantId,
+            id: input.trustAccountId.trim(),
+          },
+          select: {
+            id: true,
+            isActive: true,
+            currentBalance: true,
+            currency: true,
+          },
+        })
+      : null;
 
     if (!trustAccount) {
-      issues.push({ code: 'MISSING_TRUST_ACCOUNT', message: 'Trust account not found.' });
+      issues.push({
+        code: 'MISSING_TRUST_ACCOUNT',
+        message: 'Trust account not found.',
+      });
     } else {
       if (!trustAccount.isActive) {
-        issues.push({ code: 'INACTIVE_TRUST_ACCOUNT', message: 'Trust account is inactive.' });
+        issues.push({
+          code: 'INACTIVE_TRUST_ACCOUNT',
+          message: 'Trust account is inactive.',
+        });
       }
 
       if (input.currency && trustAccount.currency !== input.currency) {
         issues.push({
           code: 'CURRENCY_MISMATCH',
           message: 'Trust transaction currency does not match trust account currency.',
+          meta: {
+            trustAccountCurrency: trustAccount.currency,
+            transactionCurrency: input.currency,
+          },
         });
       }
 
-      if (trustAccount.clientId !== input.clientId) {
+      if (isTrustOutflow(input.transactionType) && toDecimal(trustAccount.currentBalance).lt(amount)) {
         issues.push({
-          code: 'CLIENT_MISMATCH',
-          message: 'Trust account does not belong to the supplied client.',
+          code: 'INSUFFICIENT_TRUST_ACCOUNT_BALANCE',
+          message: 'Trust account has insufficient balance.',
+          meta: {
+            available: toDecimal(trustAccount.currentBalance).toString(),
+            required: amount.toString(),
+          },
         });
-      }
-
-      if (
-        input.transactionType === 'WITHDRAWAL' ||
-        input.transactionType === 'TRANSFER_TO_OFFICE'
-      ) {
-        if (toDecimal(trustAccount.balance).lt(amount)) {
-          issues.push({
-            code: 'INSUFFICIENT_TRUST_ACCOUNT_BALANCE',
-            message: 'Trust account has insufficient balance.',
-          });
-        }
       }
     }
 
-    const client = await db.client.findFirst({
-      where: { tenantId, id: input.clientId },
-      select: { id: true },
-    });
+    const client = input.clientId?.trim()
+      ? await db.client.findFirst({
+          where: {
+            tenantId,
+            id: input.clientId.trim(),
+          },
+          select: { id: true },
+        })
+      : null;
 
     if (!client) {
-      issues.push({ code: 'CLIENT_MISMATCH', message: 'Client not found for tenant.' });
+      issues.push({
+        code: 'CLIENT_MISMATCH',
+        message: 'Client not found for tenant.',
+      });
     }
 
     if (input.matterId) {
@@ -123,11 +272,7 @@ export class TrustTransactionService {
       }
     }
 
-    if (
-      (input.transactionType === 'WITHDRAWAL' ||
-        input.transactionType === 'TRANSFER_TO_OFFICE') &&
-      input.matterId
-    ) {
+    if (isTrustOutflow(input.transactionType) && input.matterId && input.trustAccountId) {
       const matterBalance = await ClientTrustLedgerService.getMatterBalance(
         db,
         tenantId,
@@ -141,6 +286,9 @@ export class TrustTransactionService {
           code: 'INSUFFICIENT_CLIENT_TRUST_BALANCE',
           message: 'Matter-level client trust balance is insufficient.',
           meta: {
+            trustAccountId: input.trustAccountId,
+            clientId: input.clientId,
+            matterId: input.matterId,
             available: matterBalance.balance.toString(),
             required: amount.toString(),
           },
@@ -171,6 +319,7 @@ export class TrustTransactionService {
           });
         } else {
           const amountDue = toDecimal(invoice.total).minus(toDecimal(invoice.paidAmount));
+
           if (amount.gt(amountDue)) {
             issues.push({
               code: 'TRANSFER_EXCEEDS_AMOUNT_DUE',
@@ -186,7 +335,7 @@ export class TrustTransactionService {
         }
       }
 
-      if (input.drnId && db.disbursementRequestNote) {
+      if (input.drnId) {
         const drn = await db.disbursementRequestNote.findFirst({
           where: {
             tenantId,
@@ -224,13 +373,23 @@ export class TrustTransactionService {
     };
   }
 
-  static async create(req: any, input: TrustTransactionInput) {
-    const db = req.db as TenantTrustDbClient & { $transaction: Function };
-    const tenantId = req.tenantId as string;
-    const actorId = req.user?.sub ?? null;
+  static async create(req: Request, input: TrustTransactionInput) {
+    const db = requestDb(req);
+    const trustReq = req as RequestWithTrustContext;
+    const tenantId = requireTenantId(trustReq);
+    const trustAccountId = requireTrustAccountId(input);
+    const clientId = requireClientId(input);
+    const actorId = actorIdFrom(trustReq);
     const amount = toDecimal(input.amount);
+    const currency = transactionCurrency(input);
 
-    const validation = await this.validate(db, tenantId, input);
+    const validation = await this.validate(db, tenantId, {
+      ...input,
+      trustAccountId,
+      clientId,
+      currency,
+    });
+
     if (!validation.valid) {
       throw Object.assign(new Error('Trust transaction validation failed'), {
         statusCode: 422,
@@ -239,99 +398,102 @@ export class TrustTransactionService {
       });
     }
 
-    const delta =
-      input.transactionType === 'DEPOSIT' || input.transactionType === 'INTEREST'
-        ? amount
-        : amount.negated();
+    const delta = isTrustInflow(input.transactionType) ? amount : amount.negated();
 
-    return db.$transaction(async (tx: any) => {
+    return db.$transaction(async (tx) => {
+      const transactionReq = requestWithDb(req, tx);
+      const description = transactionDescription(input);
+
       const trustTx = await tx.trustTransaction.create({
         data: {
           tenantId,
-          trustAccountId: input.trustAccountId,
-          clientId: input.clientId,
+          trustAccountId,
+          clientId,
           matterId: input.matterId ?? null,
           transactionDate: input.transactionDate,
           transactionType: input.transactionType,
           amount,
-          currency: input.currency ?? 'KES',
-          reference: input.reference,
-          description: input.description ?? null,
-          notes: input.notes ?? null,
+          debit: isTrustOutflow(input.transactionType) ? amount : ZERO,
+          credit: isTrustInflow(input.transactionType) ? amount : ZERO,
+          currency,
+          reference: input.reference.trim(),
+          description,
+          notes: input.notes?.trim() || null,
           bankTransactionId: input.bankTransactionId ?? null,
           createdById: actorId,
         },
       });
 
       await tx.trustAccount.update({
-        where: { id: input.trustAccountId },
+        where: { id: trustAccountId },
         data: {
-          balance: {
+          currentBalance: {
             increment: delta,
           },
         },
       });
 
       await ClientTrustLedgerService.applyDelta(tx, tenantId, {
-        trustAccountId: input.trustAccountId,
-        clientId: input.clientId,
+        trustAccountId,
+        clientId,
         matterId: input.matterId ?? null,
         delta,
+        description,
+        transactionDate: input.transactionDate,
       });
 
-      const trustBank = await this.resolveAccountId(tx, tenantId, 'TRUST_BANK');
-      const trustLiability = await this.resolveAccountId(tx, tenantId, 'TRUST_LIABILITY');
+      const trustBank = await this.resolveAccountId(tx, tenantId, AccountSubtype.TRUST_BANK);
+const trustLiability = await this.resolveAccountId(tx, tenantId, AccountSubtype.TRUST_LIABILITY);
 
-      const trustLines =
-        input.transactionType === 'DEPOSIT' || input.transactionType === 'INTEREST'
-          ? [
-              {
-                accountId: trustBank.id,
-                debit: amount,
-                credit: new Prisma.Decimal(0),
-                clientId: input.clientId,
-                matterId: input.matterId ?? null,
-                reference: input.reference,
-                description: input.description ?? null,
-              },
-              {
-                accountId: trustLiability.id,
-                debit: new Prisma.Decimal(0),
-                credit: amount,
-                clientId: input.clientId,
-                matterId: input.matterId ?? null,
-                reference: input.reference,
-                description: input.description ?? null,
-              },
-            ]
-          : [
-              {
-                accountId: trustLiability.id,
-                debit: amount,
-                credit: new Prisma.Decimal(0),
-                clientId: input.clientId,
-                matterId: input.matterId ?? null,
-                reference: input.reference,
-                description: input.description ?? null,
-              },
-              {
-                accountId: trustBank.id,
-                debit: new Prisma.Decimal(0),
-                credit: amount,
-                clientId: input.clientId,
-                matterId: input.matterId ?? null,
-                reference: input.reference,
-                description: input.description ?? null,
-              },
-            ];
+      const trustLines = isTrustInflow(input.transactionType)
+        ? [
+            {
+              accountId: trustBank.id,
+              debit: amount,
+              credit: ZERO,
+              clientId,
+              matterId: input.matterId ?? null,
+              reference: input.reference,
+              description,
+            },
+            {
+              accountId: trustLiability.id,
+              debit: ZERO,
+              credit: amount,
+              clientId,
+              matterId: input.matterId ?? null,
+              reference: input.reference,
+              description,
+            },
+          ]
+        : [
+            {
+              accountId: trustLiability.id,
+              debit: amount,
+              credit: ZERO,
+              clientId,
+              matterId: input.matterId ?? null,
+              reference: input.reference,
+              description,
+            },
+            {
+              accountId: trustBank.id,
+              debit: ZERO,
+              credit: amount,
+              clientId,
+              matterId: input.matterId ?? null,
+              reference: input.reference,
+              description,
+            },
+          ];
 
       await GeneralLedgerService.postJournal(
-        { ...req, db: tx },
+        transactionReq,
         {
           reference: `TRUST-${input.reference}`,
-          description: input.description ?? `Trust transaction ${input.reference}`,
+          description,
           date: input.transactionDate,
-          currency: input.currency ?? 'KES',
+          currency,
           exchangeRate: 1,
           sourceModule: 'trust',
           sourceEntityType: 'TrustTransaction',
@@ -348,11 +510,14 @@ export class TrustTransactionService {
       );
 
       if (input.transactionType === 'TRANSFER_TO_OFFICE') {
-        await this.postOfficeSideSettlement(tx, req, tenantId, trustTx.id, input, amount);
+        await this.postOfficeSideSettlement(tx, transactionReq, tenantId, trustTx.id, input, amount);
 
         if (input.invoiceId) {
           const invoice = await tx.invoice.findFirst({
-            where: { tenantId, id: input.invoiceId },
+            where: {
+              tenantId,
+              id: input.invoiceId,
+            },
             select: {
               id: true,
               total: true,
@@ -380,7 +545,7 @@ export class TrustTransactionService {
           });
         }
 
-        if (input.drnId && tx.disbursementRequestNote?.update) {
+        if (input.drnId) {
           await tx.disbursementRequestNote.update({
             where: { id: input.drnId },
             data: {
@@ -391,25 +556,30 @@ export class TrustTransactionService {
       }
 
       await logAdminAction({
-        req: { ...req, db: tx },
+        req: transactionReq,
         tenantId,
-        action:
-          input.transactionType === 'DEPOSIT'
-            ? 'TRUST_DEPOSIT'
-            : input.transactionType === 'WITHDRAWAL'
-              ? 'TRUST_WITHDRAWAL'
-              : 'TRUST_TRANSFER',
+        action: AuditAction.CREATE,
         severity: AuditSeverity.HIGH,
         entityId: trustTx.id,
         payload: {
+          eventCode:
+            input.transactionType === 'DEPOSIT'
+              ? 'TRUST_DEPOSIT'
+              : input.transactionType === 'WITHDRAWAL'
+                ? 'TRUST_WITHDRAWAL'
+                : input.transactionType === 'INTEREST'
+                  ? 'TRUST_INTEREST'
+                  : 'TRUST_TRANSFER_TO_OFFICE',
           reference: input.reference,
           amount: amount.toString(),
           transactionType: input.transactionType,
-          trustAccountId: input.trustAccountId,
-          clientId: input.clientId,
+          trustAccountId,
+          clientId,
           matterId: input.matterId ?? null,
+          bankTransactionId: input.bankTransactionId ?? null,
           invoiceId: input.invoiceId ?? null,
           drnId: input.drnId ?? null,
+          createdById: actorId,
           ipAddress: req.ip ?? null,
           userAgent: req.headers?.['user-agent'] ?? null,
         },
@@ -420,23 +590,23 @@ export class TrustTransactionService {
   }
 
   private static async postOfficeSideSettlement(
-    tx: any,
-    req: any,
+    tx: TrustTransactionClient,
+    req: Request,
     tenantId: string,
     trustTransactionId: string,
     input: TrustTransactionInput,
     amount: Prisma.Decimal,
   ) {
-    const officeBank = await this.resolveAccountId(tx, tenantId, 'OFFICE_BANK');
-    const accountsReceivable = await this.resolveAccountId(tx, tenantId, 'ACCOUNTS_RECEIVABLE');
+    const officeBank = await this.resolveAccountId(tx, tenantId, AccountSubtype.OFFICE_BANK);
+const accountsReceivable = await this.resolveAccountId(tx, tenantId, AccountSubtype.ACCOUNTS_RECEIVABLE);
 
     await GeneralLedgerService.postJournal(
-      { ...req, db: tx },
+      req,
       {
         reference: `OFFICE-${input.reference}`,
-        description: `Trust to office settlement: ${input.description ?? input.reference}`,
+        description: `Trust to office settlement: ${transactionDescription(input)}`,
         date: input.transactionDate,
-        currency: input.currency ?? 'KES',
+        currency: transactionCurrency(input),
         exchangeRate: 1,
         sourceModule: 'trust',
         sourceEntityType: 'TrustTransaction',
@@ -445,7 +615,7 @@ export class TrustTransactionService {
           {
             accountId: officeBank.id,
             debit: amount,
-            credit: new Prisma.Decimal(0),
+            credit: ZERO,
             clientId: input.clientId,
             matterId: input.matterId ?? null,
             reference: input.reference,
@@ -453,7 +623,7 @@ export class TrustTransactionService {
           },
           {
             accountId: accountsReceivable.id,
-            debit: new Prisma.Decimal(0),
+            debit: ZERO,
             credit: amount,
             clientId: input.clientId,
             matterId: input.matterId ?? null,
@@ -472,7 +642,11 @@ export class TrustTransactionService {
     );
   }
 
-  private static async resolveAccountId(db: any, tenantId: string, subtype: string) {
+  private static async resolveAccountId(
+  db: TrustDbClient,
+  tenantId: string,
+  subtype: AccountSubtype,
+): Promise<TrustChartAccount> {
     const account = await db.chartOfAccount.findFirst({
       where: {
         tenantId,

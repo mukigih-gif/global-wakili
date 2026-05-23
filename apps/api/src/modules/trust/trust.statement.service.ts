@@ -5,11 +5,30 @@ import type {
   TrustStatementRow,
 } from './trust.report.types';
 
+const ZERO = new Prisma.Decimal(0);
+
 function toDecimal(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
   if (value === null || value === undefined) {
-    return new Prisma.Decimal(0);
+    return ZERO;
   }
-  return new Prisma.Decimal(value);
+
+  return value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
+}
+
+function moneyString(value: Prisma.Decimal): string {
+  return value.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP).toString();
+}
+
+function isInflowTransaction(transactionType: unknown): boolean {
+  const value = String(transactionType);
+
+  return value === 'DEPOSIT' || value === 'INTEREST';
+}
+
+function isAdjustmentTransaction(transactionType: unknown): boolean {
+  const value = String(transactionType);
+
+  return value === 'ADJUSTMENT' || value === 'REVERSAL';
 }
 
 export class TrustStatementService {
@@ -31,10 +50,11 @@ export class TrustStatementService {
       },
       select: {
         id: true,
-        name: true,
+        accountName: true,
         accountNumber: true,
-        currency: true,
-        clientId: true,
+        bankName: true,
+        currentBalance: true,
+        reconciliationBalance: true,
       },
     });
 
@@ -110,52 +130,88 @@ export class TrustStatementService {
         transactionType: true,
         description: true,
         amount: true,
+        debit: true,
+        credit: true,
         clientId: true,
         matterId: true,
-        invoiceId: true,
-        drnId: true,
+        postedDate: true,
+        isReconciled: true,
       },
     });
 
     let runningBalance = openingBalance;
+    let totalReceipts = ZERO;
+    let totalPayments = ZERO;
+    let totalAdjustments = ZERO;
 
-    const rows: TrustStatementRow[] = transactions.map((tx: any) => {
+    const rows: TrustStatementRow[] = transactions.map((tx) => {
       const amount = toDecimal(tx.amount);
-      const isInflow = tx.transactionType === 'DEPOSIT' || tx.transactionType === 'INTEREST';
-      const debit = isInflow ? amount : new Prisma.Decimal(0);
-      const credit = isInflow ? new Prisma.Decimal(0) : amount;
+      const debit = toDecimal(tx.debit);
+      const credit = toDecimal(tx.credit);
 
-      runningBalance = isInflow
-        ? runningBalance.plus(amount)
-        : runningBalance.minus(amount);
+      runningBalance = runningBalance.plus(credit).minus(debit);
+
+      if (isInflowTransaction(tx.transactionType)) {
+        totalReceipts = totalReceipts.plus(amount);
+      } else if (isAdjustmentTransaction(tx.transactionType)) {
+        totalAdjustments = totalAdjustments.plus(amount);
+      } else {
+        totalPayments = totalPayments.plus(amount);
+      }
 
       return {
-        trustTransactionId: tx.id,
+        id: tx.id,
+        transactionId: tx.id,
         transactionDate: tx.transactionDate,
+        postedAt: tx.postedDate,
         reference: tx.reference,
         transactionType: tx.transactionType,
         description: tx.description ?? null,
-        debit,
-        credit,
-        runningBalance,
+        debit: moneyString(debit),
+        credit: moneyString(credit),
+        amount: moneyString(amount),
+        runningBalance: moneyString(runningBalance),
+        trustAccountId: params.trustAccountId,
         clientId: tx.clientId,
         matterId: tx.matterId ?? null,
-        invoiceId: tx.invoiceId ?? null,
-        drnId: tx.drnId ?? null,
+        status: tx.isReconciled ? 'RECONCILED' : 'UNRECONCILED',
       };
     });
 
     return {
-      trustAccountId: trustAccount.id,
-      trustAccountName: trustAccount.name,
-      accountNumber: trustAccount.accountNumber,
-      currency: trustAccount.currency,
-      clientId: trustAccount.clientId,
-      periodStart: params.start,
-      periodEnd: params.end,
-      openingBalance,
-      closingBalance: runningBalance,
+      metadata: {
+        tenantId,
+        reportType: 'TRUST_STATEMENT',
+        generatedAt: new Date().toISOString(),
+        generatedById: req.user?.sub ?? null,
+        requestId: req.id ?? null,
+        filters: {
+          tenantId,
+          trustAccountId: params.trustAccountId,
+          from: params.start?.toISOString() ?? null,
+          to: params.end?.toISOString() ?? null,
+        },
+      },
+      account: {
+        id: trustAccount.id,
+        accountId: trustAccount.id,
+        accountName: trustAccount.accountName,
+        accountNumber: trustAccount.accountNumber,
+        trustAccountId: trustAccount.id,
+        trustAccountName: trustAccount.accountName,
+      },
       rows,
+      summary: {
+        openingBalance: moneyString(openingBalance),
+        totalReceipts: moneyString(totalReceipts),
+        totalPayments: moneyString(totalPayments),
+        totalAdjustments: moneyString(totalAdjustments),
+        closingBalance: moneyString(runningBalance),
+        rowCount: rows.length,
+        from: params.start ?? null,
+        to: params.end ?? null,
+        trustAccountId: params.trustAccountId,
+      },
     };
   }
 }

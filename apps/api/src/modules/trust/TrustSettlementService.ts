@@ -1,19 +1,21 @@
 // apps/api/src/modules/trust/TrustSettlementService.ts
 
 import { Prisma } from '@global-wakili/database';
+import type { Request } from 'express';
 import { TrustTransferService } from './TrustTransferService';
 import { TrustPolicyService } from './TrustPolicyService';
 
 const ZERO = new Prisma.Decimal(0);
 
-function money(value: unknown): Prisma.Decimal {
+function money(value: Prisma.Decimal | string | number | null | undefined): Prisma.Decimal {
   if (value === null || value === undefined || value === '') return ZERO;
-  const parsed = new Prisma.Decimal(value as any);
-  return parsed.isFinite() ? parsed.toDecimalPlaces(2) : ZERO;
+  return value instanceof Prisma.Decimal
+    ? value.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+    : new Prisma.Decimal(value).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 }
 
 export class TrustSettlementService {
-  static async settleInvoiceFromTrust(req: any, input: {
+  static async settleInvoiceFromTrust(req: Request, input: {
     trustAccountId: string;
     clientId: string;
     matterId: string;
@@ -27,13 +29,13 @@ export class TrustSettlementService {
 
     await TrustPolicyService.assertTrustAccountActive({
       db: req.db,
-      tenantId: req.tenantId,
+      tenantId: req.tenantId!,
       trustAccountId: input.trustAccountId,
     });
 
     await TrustPolicyService.assertNoNegativeMatterBalance({
       db: req.db,
-      tenantId: req.tenantId,
+      tenantId: req.tenantId!,
       clientId: input.clientId,
       matterId: input.matterId,
       trustAccountId: input.trustAccountId,
@@ -42,7 +44,7 @@ export class TrustSettlementService {
 
     await TrustPolicyService.assertTransferDoesNotExceedInvoiceDue({
       db: req.db,
-      tenantId: req.tenantId,
+      tenantId: req.tenantId!,
       clientId: input.clientId,
       matterId: input.matterId,
       invoiceId: input.invoiceId,
@@ -61,7 +63,7 @@ export class TrustSettlementService {
     });
   }
 
-  static async settleDrnFromTrust(req: any, input: {
+  static async settleDrnFromTrust(req: Request, input: {
     trustAccountId: string;
     clientId: string;
     matterId: string;
@@ -75,13 +77,13 @@ export class TrustSettlementService {
 
     await TrustPolicyService.assertTrustAccountActive({
       db: req.db,
-      tenantId: req.tenantId,
+      tenantId: req.tenantId!,
       trustAccountId: input.trustAccountId,
     });
 
     await TrustPolicyService.assertNoNegativeMatterBalance({
       db: req.db,
-      tenantId: req.tenantId,
+      tenantId: req.tenantId!,
       clientId: input.clientId,
       matterId: input.matterId,
       trustAccountId: input.trustAccountId,

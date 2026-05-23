@@ -1,4 +1,26 @@
-import { prisma } from '@global-wakili/database';
+import { prisma, Prisma } from '@global-wakili/database';
+import type { Request } from 'express';
+import { TrustStatementService } from './trust.statement.service';
+import { TrustReconciliationService } from './TrustReconciliationService';
+
+function decimal(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
+  if (value === null || value === undefined) {
+    return new Prisma.Decimal(0);
+  }
+
+  return value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
+}
+
+function requireTenantId(req: Request): string {
+  if (!req.tenantId?.trim()) {
+    throw Object.assign(new Error('Tenant context is required for trust overview'), {
+      statusCode: 400,
+      code: 'TRUST_TENANT_REQUIRED',
+    });
+  }
+
+  return req.tenantId;
+}
 
 export class TrustService {
   async getTrustAccounts(tenantId: string) {
@@ -67,19 +89,116 @@ export class TrustService {
     ]);
 
     const totalTrustBalance = accounts.reduce(
-      (sum, account) => sum + Number(account.currentBalance ?? 0),
-      0,
+      (sum, account) => sum.plus(decimal(account.currentBalance)),
+      new Prisma.Decimal(0),
     );
 
-    const totalLedgerCredit = Number(ledger._sum.credit ?? 0);
-    const totalLedgerDebit = Number(ledger._sum.debit ?? 0);
+    const totalClientLedgerBalance = decimal(ledger._sum.credit).minus(decimal(ledger._sum.debit));
 
     return {
       accounts,
       accountCount: accounts.length,
       transactionCount: transactions,
       totalTrustBalance,
-      totalClientLedgerBalance: totalLedgerCredit - totalLedgerDebit,
+      totalClientLedgerBalance,
+      variance: totalTrustBalance.minus(totalClientLedgerBalance),
+    };
+  }
+
+  async getOverview(req: Request) {
+    const tenantId = requireTenantId(req);
+    const [dashboard, recentTransactions, recentReconciliations] = await Promise.all([
+      this.getTrustDashboard(tenantId),
+      req.db.trustTransaction.findMany({
+        where: { tenantId },
+        orderBy: [{ transactionDate: 'desc' }, { createdAt: 'desc' }],
+        take: 10,
+      }),
+      req.db.trustReconciliation.findMany({
+        where: { tenantId },
+        include: {
+          account: {
+            select: {
+              id: true,
+              accountName: true,
+              accountNumber: true,
+            },
+          },
+        },
+        orderBy: [{ statementDate: 'desc' }],
+        take: 10,
+      }),
+    ]);
+
+    return {
+      generatedAt: new Date(),
+      dashboard,
+      recentTransactions,
+      recentReconciliations,
+    };
+  }
+
+  async getTrustAccountView(
+    req: Request,
+    params: {
+      trustAccountId: string;
+      statementDate?: Date;
+      start?: Date;
+      end?: Date;
+    },
+  ) {
+    const tenantId = requireTenantId(req);
+
+    const account = await req.db.trustAccount.findFirst({
+      where: {
+        tenantId,
+        id: params.trustAccountId,
+      },
+      select: {
+        id: true,
+        accountName: true,
+        accountNumber: true,
+        bankName: true,
+        routingNumber: true,
+        swiftCode: true,
+        currentBalance: true,
+        reconciliationBalance: true,
+        lastReconciled: true,
+        isActive: true,
+        custodian: true,
+        branchId: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    if (!account) {
+      throw Object.assign(new Error('Trust account not found'), {
+        statusCode: 404,
+        code: 'TRUST_ACCOUNT_NOT_FOUND',
+        details: { trustAccountId: params.trustAccountId },
+      });
+    }
+
+    const [statement, snapshot] = await Promise.all([
+      TrustStatementService.getTrustAccountStatement(req, {
+        trustAccountId: params.trustAccountId,
+        start: params.start,
+        end: params.end,
+      }),
+      params.statementDate
+        ? TrustReconciliationService.getTrustAccountSnapshot(req, {
+            trustAccountId: params.trustAccountId,
+            statementDate: params.statementDate,
+          })
+        : Promise.resolve(null),
+    ]);
+
+    return {
+      generatedAt: new Date(),
+      account,
+      statement,
+      snapshot,
     };
   }
 }

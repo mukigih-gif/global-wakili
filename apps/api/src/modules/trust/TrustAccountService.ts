@@ -1,24 +1,44 @@
 // apps/api/src/modules/trust/TrustAccountService.ts
 
 import { Prisma } from '@global-wakili/database';
+import type { Request } from 'express';
 
 const ZERO = new Prisma.Decimal(0);
 
-function money(value: unknown): Prisma.Decimal {
+function money(value: Prisma.Decimal | string | number | null | undefined): Prisma.Decimal {
   if (value === null || value === undefined || value === '') return ZERO;
-  const parsed = new Prisma.Decimal(value as any);
-  return parsed.isFinite() ? parsed.toDecimalPlaces(2) : ZERO;
+  return value instanceof Prisma.Decimal
+    ? value.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+    : new Prisma.Decimal(value).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+}
+
+function requireTenantId(req: Request): string {
+  if (!req.tenantId?.trim()) {
+    throw Object.assign(new Error('Tenant context is required for trust account operations'), {
+      statusCode: 400,
+      code: 'TRUST_TENANT_REQUIRED',
+    });
+  }
+
+  return req.tenantId;
 }
 
 export class TrustAccountService {
-  static async getById(req: any, trustAccountId: string) {
+  static async getById(req: Request, trustAccountId: string) {
+    const tenantId = requireTenantId(req);
+
     const account = await req.db.trustAccount.findFirst({
       where: {
-        tenantId: req.tenantId,
+        tenantId,
         id: trustAccountId,
       },
       include: {
-        client: true,
+        branch: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
     });
 
@@ -32,23 +52,58 @@ export class TrustAccountService {
     return account;
   }
 
-  static async list(req: any, filters: {
+  static async list(req: Request, filters: {
+    branchId?: string;
     clientId?: string;
     isActive?: boolean;
     take?: number;
     skip?: number;
   } = {}) {
+    const tenantId = requireTenantId(req);
+
+    let trustAccountIds: string[] | undefined;
+
+    if (filters.clientId) {
+      const clientLedgerRows = await req.db.clientTrustLedger.findMany({
+        where: {
+          tenantId,
+          clientId: filters.clientId,
+          trustAccountId: {
+            not: null,
+          },
+        },
+        select: {
+          trustAccountId: true,
+        },
+        distinct: ['trustAccountId'],
+      });
+
+      trustAccountIds = clientLedgerRows
+        .map((row) => row.trustAccountId)
+        .filter((trustAccountId): trustAccountId is string => Boolean(trustAccountId));
+
+      if (trustAccountIds.length === 0) {
+        return [];
+      }
+    }
+
     return req.db.trustAccount.findMany({
       where: {
-        tenantId: req.tenantId,
-        ...(filters.clientId ? { clientId: filters.clientId } : {}),
+        tenantId,
+        ...(filters.branchId ? { branchId: filters.branchId } : {}),
         ...(filters.isActive !== undefined ? { isActive: filters.isActive } : {}),
+        ...(trustAccountIds ? { id: { in: trustAccountIds } } : {}),
       },
       include: {
-        client: true,
+        branch: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
       },
       orderBy: [
-        { clientId: 'asc' },
+        { branchId: 'asc' },
         { createdAt: 'desc' },
       ],
       take: Math.min(filters.take ?? 100, 100),
@@ -56,45 +111,65 @@ export class TrustAccountService {
     });
   }
 
-  static async getBalance(req: any, trustAccountId: string) {
+  static async getBalance(req: Request, trustAccountId: string) {
+    const tenantId = requireTenantId(req);
     const account = await this.getById(req, trustAccountId);
 
-    const transactionAggregate = await req.db.trustTransaction.aggregate({
-      where: {
-        tenantId: req.tenantId,
-        trustAccountId,
-      },
-      _sum: {
-        amount: true,
-      },
-    });
+    const [transactionAggregate, clientLedgerAggregate] = await Promise.all([
+      req.db.trustTransaction.aggregate({
+        where: {
+          tenantId,
+          trustAccountId,
+        },
+        _sum: {
+          debit: true,
+          credit: true,
+          amount: true,
+        },
+      }),
+      req.db.clientTrustLedger.aggregate({
+        where: {
+          tenantId,
+          trustAccountId,
+        },
+        _sum: {
+          debit: true,
+          credit: true,
+        },
+      }),
+    ]);
 
-    const ledgerAggregate = await req.db.clientTrustLedger.aggregate({
-      where: {
-        tenantId: req.tenantId,
-        trustAccountId,
-      },
-      _sum: {
-        balance: true,
-      },
-    });
+    const trustTransactionBalance = money(transactionAggregate._sum.credit).minus(
+      money(transactionAggregate._sum.debit),
+    );
+
+    const clientLedgerBalance = money(clientLedgerAggregate._sum.credit).minus(
+      money(clientLedgerAggregate._sum.debit),
+    );
 
     return {
       trustAccountId,
-      accountBalance: money(account.balance),
-      trustTransactionBalance: money(transactionAggregate._sum.amount),
-      clientLedgerBalance: money(ledgerAggregate._sum.balance),
-      variance: money(account.balance).minus(money(ledgerAggregate._sum.balance)).toDecimalPlaces(2),
+      accountBalance: money(account.currentBalance),
+      reconciliationBalance: money(account.reconciliationBalance),
+      trustTransactionBalance,
+      clientLedgerBalance,
+      accountVsTrustBookVariance: money(account.currentBalance)
+        .minus(trustTransactionBalance)
+        .toDecimalPlaces(2),
+      trustBookVsClientLedgerVariance: trustTransactionBalance
+        .minus(clientLedgerBalance)
+        .toDecimalPlaces(2),
+      scope: 'TRUST_ACCOUNT_LEVEL',
       generatedAt: new Date(),
     };
   }
 
-  static async assertSufficientBalance(req: any, input: {
+  static async assertSufficientBalance(req: Request, input: {
     trustAccountId: string;
     amount: Prisma.Decimal | string | number;
   }) {
     const account = await this.getById(req, input.trustAccountId);
-    const balance = money(account.balance);
+    const balance = money(account.currentBalance);
     const amount = money(input.amount);
 
     if (balance.lt(amount)) {
@@ -102,6 +177,7 @@ export class TrustAccountService {
         statusCode: 409,
         code: 'INSUFFICIENT_TRUST_ACCOUNT_BALANCE',
         details: {
+          trustAccountId: input.trustAccountId,
           available: balance.toString(),
           requested: amount.toString(),
         },

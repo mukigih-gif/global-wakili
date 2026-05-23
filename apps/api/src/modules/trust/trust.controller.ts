@@ -11,7 +11,29 @@ import { TrustReportExporter } from './trust.reporter';
 import { TrustInterestService } from './TrustInterestService';
 import { TrustAlertService } from './TrustAlertService';
 import { TrustService } from './TrustService';
-import { ReconciliationMatchService } from './reconciliation-match.service';
+import { reconciliationMatchService } from './reconciliation-match.service';
+
+
+type TrustInterestDbClient = ConstructorParameters<typeof TrustInterestService>[0];
+type TrustAlertDbClient = ConstructorParameters<typeof TrustAlertService>[0];
+
+function trustInterestDb(req: Request): TrustInterestDbClient {
+  return req.db as unknown as TrustInterestDbClient;
+}
+
+function trustAlertDb(req: Request): TrustAlertDbClient {
+  return req.db as unknown as TrustAlertDbClient;
+}
+function requireTenantId(req: Request): string {
+  if (!req.tenantId?.trim()) {
+    throw Object.assign(new Error('Tenant context is required for trust operations'), {
+      statusCode: 400,
+      code: 'TRUST_TENANT_REQUIRED',
+    });
+  }
+
+  return req.tenantId;
+}
 
 function parseDateOrThrow(value: unknown, fieldName: string): Date {
   const date = new Date(String(value));
@@ -36,14 +58,30 @@ export const transferTrustToOffice = asyncHandler(async (req: Request, res: Resp
 });
 
 export const postTrustInterest = asyncHandler(async (req: Request, res: Response) => {
-  const result = await TrustInterestService.postInterest(req, {
+  const tenantId = requireTenantId(req);
+  const service = new TrustInterestService(trustInterestDb(req));
+
+  const result = await service.postInterest({
+    tenantId,
     trustAccountId: req.body.trustAccountId,
-    clientId: req.body.clientId,
-    matterId: req.body.matterId ?? null,
-    amount: req.body.amount,
+    totalInterestAmount: req.body.amount,
     transactionDate: parseDateOrThrow(req.body.transactionDate, 'transactionDate'),
+    postedById: req.user?.sub ?? undefined,
     reference: req.body.reference,
-    description: req.body.description ?? null,
+    description: req.body.description ?? undefined,
+    allocationBasis: 'MANUAL',
+    allocations: [
+      {
+        clientId: req.body.clientId,
+        matterId: req.body.matterId ?? undefined,
+        amount: req.body.amount,
+        description: req.body.description ?? undefined,
+      },
+    ],
+    metadata: {
+      source: 'TRUST_CONTROLLER',
+      postingMode: 'SINGLE_MANUAL_INTEREST_ALLOCATION',
+    },
   });
 
   res.status(201).json(result);
@@ -89,11 +127,10 @@ export const runThreeWayReconciliation = asyncHandler(async (req: Request, res: 
 });
 
 export const getReconciliationMatches = asyncHandler(async (req: Request, res: Response) => {
-  const result = await ReconciliationMatchService.listByRun(
-    req.db,
-    req.tenantId!,
-    req.params.runId,
-  );
+  const result = await reconciliationMatchService.list({
+    tenantId: requireTenantId(req),
+    runId: req.params.runId,
+  });
 
   res.status(200).json(result);
 });
@@ -104,13 +141,34 @@ export const getTrustViolations = asyncHandler(async (req: Request, res: Respons
 });
 
 export const getTrustAlerts = asyncHandler(async (req: Request, res: Response) => {
-  const result = await TrustAlertService.getAlertSummary(req);
-  res.status(200).json(result);
+  const tenantId = requireTenantId(req);
+  const service = new TrustAlertService(trustAlertDb(req));
+
+  const [summary, alerts] = await Promise.all([
+    service.getTrustBalanceSummary(tenantId),
+    service.scanTenant({ tenantId, emitNotifications: false }),
+  ]);
+
+  res.status(200).json({
+    generatedAt: new Date(),
+    summary,
+    alertCount: alerts.length,
+    criticalCount: alerts.filter((alert) => alert.severity === 'CRITICAL').length,
+    warningCount: alerts.filter((alert) => alert.severity === 'WARNING').length,
+    alerts,
+  });
 });
 
 export const emitTrustAlerts = asyncHandler(async (req: Request, res: Response) => {
-  const result = await TrustAlertService.emitViolationAlerts(req);
-  res.status(200).json(result);
+  const tenantId = requireTenantId(req);
+  const service = new TrustAlertService(trustAlertDb(req));
+  const alerts = await service.scanTenant({ tenantId, emitNotifications: true });
+
+  res.status(200).json({
+    emitted: true,
+    alertCount: alerts.length,
+    alerts,
+  });
 });
 
 export const getTrustDashboard = asyncHandler(async (req: Request, res: Response) => {
@@ -119,12 +177,12 @@ export const getTrustDashboard = asyncHandler(async (req: Request, res: Response
 });
 
 export const getTrustOverview = asyncHandler(async (req: Request, res: Response) => {
-  const overview = await TrustService.getOverview(req);
+  const overview = await new TrustService().getOverview(req);
   res.status(200).json(overview);
 });
 
 export const getTrustAccountView = asyncHandler(async (req: Request, res: Response) => {
-  const view = await TrustService.getTrustAccountView(req, {
+  const view = await new TrustService().getTrustAccountView(req, {
     trustAccountId: req.params.trustAccountId,
     statementDate: req.query.statementDate
       ? parseDateOrThrow(req.query.statementDate, 'statementDate')
@@ -146,18 +204,17 @@ export const getTrustStatement = asyncHandler(async (req: Request, res: Response
   if (String(req.query.format ?? '').toLowerCase() === 'csv') {
     const csv = TrustReportExporter.toCsv(
       statement.rows.map((row) => ({
-        trustTransactionId: row.trustTransactionId,
+        transactionId: row.transactionId,
         transactionDate: row.transactionDate,
         reference: row.reference,
         transactionType: row.transactionType,
         description: row.description,
-        debit: row.debit?.toString?.() ?? row.debit,
-        credit: row.credit?.toString?.() ?? row.credit,
-        runningBalance: row.runningBalance?.toString?.() ?? row.runningBalance,
+        debit: row.debit,
+        credit: row.credit,
+        runningBalance: row.runningBalance,
         clientId: row.clientId,
         matterId: row.matterId,
         invoiceId: row.invoiceId,
-        drnId: row.drnId,
       })),
     );
 

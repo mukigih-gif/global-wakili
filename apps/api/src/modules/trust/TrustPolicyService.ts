@@ -1,8 +1,9 @@
 // apps/api/src/modules/trust/TrustPolicyService.ts
 
 import { Prisma } from '@global-wakili/database';
+import type { Request } from 'express';
 
-type DbClient = any;
+type TrustDbClient = Request['db'];
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -14,19 +15,27 @@ export type TrustPolicyDecision = {
   meta?: Record<string, unknown>;
 };
 
-function money(value: unknown): Prisma.Decimal {
+function money(value: Prisma.Decimal | string | number | null | undefined): Prisma.Decimal {
   if (value === null || value === undefined || value === '') return ZERO;
+  return value instanceof Prisma.Decimal
+    ? value.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+    : new Prisma.Decimal(value).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+}
 
-  const parsed = new Prisma.Decimal(value as any);
+function requireTrustAccountId(trustAccountId?: string | null): string {
+  if (!trustAccountId?.trim()) {
+    throw Object.assign(new Error('Trust account context is required for trust policy checks'), {
+      statusCode: 400,
+      code: 'TRUST_ACCOUNT_BOUNDARY_REQUIRED',
+    });
+  }
 
-  if (!parsed.isFinite()) return ZERO;
-
-  return parsed.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  return trustAccountId.trim();
 }
 
 export class TrustPolicyService {
   static async assertNoNegativeMatterBalance(input: {
-    db: DbClient;
+    db: TrustDbClient;
     tenantId: string;
     clientId: string;
     matterId: string | null;
@@ -34,6 +43,7 @@ export class TrustPolicyService {
     amount: Prisma.Decimal | string | number;
   }) {
     const amount = money(input.amount);
+    const trustAccountId = requireTrustAccountId(input.trustAccountId);
 
     if (!input.matterId) {
       throw Object.assign(new Error('Matter is required for trust withdrawal or transfer'), {
@@ -42,27 +52,32 @@ export class TrustPolicyService {
       });
     }
 
-    const ledger = await input.db.clientTrustLedger.findFirst({
+    const ledger = await input.db.clientTrustLedger.aggregate({
       where: {
         tenantId: input.tenantId,
+        trustAccountId,
         clientId: input.clientId,
         matterId: input.matterId,
-        trustAccountId: input.trustAccountId,
       },
-      select: {
-        balance: true,
+      _sum: {
+        debit: true,
+        credit: true,
       },
     });
 
-    const available = money(ledger?.balance);
+    const available = money(ledger._sum.credit).minus(money(ledger._sum.debit));
 
     if (available.lt(amount)) {
       throw Object.assign(new Error('Matter-level trust balance is insufficient'), {
         statusCode: 409,
         code: 'INSUFFICIENT_MATTER_TRUST_BALANCE',
         details: {
+          trustAccountId,
+          clientId: input.clientId,
+          matterId: input.matterId,
           available: available.toString(),
           requested: amount.toString(),
+          scope: 'TRUST_ACCOUNT_LEVEL',
         },
       });
     }
@@ -70,29 +85,36 @@ export class TrustPolicyService {
     return {
       allowed: true,
       code: 'TRUST_MATTER_BALANCE_OK',
-      message: 'Matter-level trust balance is sufficient.',
+      message: 'Matter-level trust balance is sufficient within the scoped trust account.',
       severity: 'INFO',
       meta: {
+        trustAccountId,
+        clientId: input.clientId,
+        matterId: input.matterId,
         available: available.toString(),
         requested: amount.toString(),
+        scope: 'TRUST_ACCOUNT_LEVEL',
       },
     } satisfies TrustPolicyDecision;
   }
 
   static async assertTrustAccountActive(input: {
-    db: DbClient;
+    db: TrustDbClient;
     tenantId: string;
     trustAccountId: string;
   }) {
+    const trustAccountId = requireTrustAccountId(input.trustAccountId);
+
     const account = await input.db.trustAccount.findFirst({
       where: {
         tenantId: input.tenantId,
-        id: input.trustAccountId,
+        id: trustAccountId,
       },
       select: {
         id: true,
         isActive: true,
-        balance: true,
+        currentBalance: true,
+        reconciliationBalance: true,
       },
     });
 
@@ -114,7 +136,7 @@ export class TrustPolicyService {
   }
 
   static async assertTransferDoesNotExceedInvoiceDue(input: {
-    db: DbClient;
+    db: TrustDbClient;
     tenantId: string;
     clientId: string;
     matterId: string;
@@ -131,7 +153,7 @@ export class TrustPolicyService {
       select: {
         id: true,
         total: true,
-        totalAmount: true,
+        balanceDue: true,
         paidAmount: true,
         status: true,
       },
@@ -144,9 +166,9 @@ export class TrustPolicyService {
       });
     }
 
-    const total = money(invoice.total ?? invoice.totalAmount);
+    const total = money(invoice.total);
     const paid = money(invoice.paidAmount);
-    const due = total.minus(paid).toDecimalPlaces(2);
+    const due = money(invoice.balanceDue);
     const amount = money(input.amount);
 
     if (amount.gt(due)) {

@@ -2328,6 +2328,7 @@ model ClientKycProfile {
 model ClientTrustLedger {
   id                    String                @id @default(cuid())
   tenantId              String
+  trustAccountId        String?
   clientId              String
   matterId              String?
   debit                 Decimal               @default(0) @db.Decimal(18, 2)
@@ -2337,11 +2338,17 @@ model ClientTrustLedger {
   transactionDate       DateTime
   createdAt             DateTime              @default(now())
   tenant                Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  trustAccount          TrustAccount?         @relation(fields: [trustAccountId], references: [id], onDelete: Restrict)
   client                Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
   matter                Matter?               @relation("MatterTrustTransactions", fields: [matterId], references: [id])
   reconciliationMatches ReconciliationMatch[]
 
   @@index([tenantId])
+  @@index([trustAccountId])
+  @@index([tenantId, trustAccountId])
+  @@index([tenantId, trustAccountId, clientId])
+  @@index([tenantId, trustAccountId, clientId, matterId])
+  @@index([tenantId, trustAccountId, transactionDate])
   @@index([clientId])
   @@index([transactionDate])
 }
@@ -3055,6 +3062,7 @@ model TrustAccount {
   bankName              String
   routingNumber         String?
   swiftCode             String?
+  currency              String                @default("KES")
   currentBalance        Decimal               @db.Decimal(18, 2)
   lastReconciled        DateTime?
   reconciliationBalance Decimal               @db.Decimal(18, 2)
@@ -3066,8 +3074,13 @@ model TrustAccount {
   tenant                Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   reconciliations       TrustReconciliation[]
   transactions          TrustTransaction[]
+  bankTransactions      BankTransaction[]
+  clientTrustLedgers    ClientTrustLedger[]
+  reconciliationRuns    ReconciliationRun[]
+  reconciliationMatches ReconciliationMatch[]
 
   @@index([tenantId])
+  @@index([tenantId, isActive])
 }
 
 model OfficeAccount {
@@ -3098,12 +3111,16 @@ model TrustTransaction {
   tenantId              String
   trustAccountId        String
   matterId              String?
+  bankTransactionId     String?
+  createdById           String?
   reference             String
   description           String
+  notes                 String?
   transactionType       TrustTransactionType
   amount                Decimal               @db.Decimal(18, 2)
   debit                 Decimal               @default(0) @db.Decimal(18, 2)
   credit                Decimal               @default(0) @db.Decimal(18, 2)
+  currency              String                @default("KES")
   transactionDate       DateTime
   postedDate            DateTime?
   isReconciled          Boolean               @default(false)
@@ -3114,6 +3131,7 @@ model TrustTransaction {
   matter                Matter?               @relation(fields: [matterId], references: [id])
   reconciliation        TrustReconciliation?  @relation(fields: [reconciliationId], references: [id])
   account               TrustAccount          @relation(fields: [trustAccountId], references: [id], onDelete: Cascade)
+  bankTransaction       BankTransaction?      @relation(fields: [bankTransactionId], references: [id], onDelete: Restrict)
   reconciliationMatches ReconciliationMatch[]
   client                Client?               @relation(fields: [clientId], references: [id])
   clientId              String?
@@ -3121,6 +3139,10 @@ model TrustTransaction {
   @@unique([tenantId, reference])
   @@index([tenantId])
   @@index([trustAccountId])
+  @@index([tenantId, trustAccountId])
+  @@index([tenantId, trustAccountId, transactionDate])
+  @@index([bankTransactionId])
+  @@index([createdById])
   @@index([matterId])
   @@index([transactionDate])
 }
@@ -3740,6 +3762,7 @@ model BankTransaction {
   id                    String                @id @default(cuid())
   tenantId              String
   bankStatementId       String
+  trustAccountId        String?
   externalId            String?
   amount                Decimal               @db.Decimal(18, 2)
   description           String?
@@ -3749,16 +3772,23 @@ model BankTransaction {
   createdAt             DateTime              @default(now())
   tenant                Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   bankStatement         BankStatement         @relation(fields: [bankStatementId], references: [id], onDelete: Cascade)
+  trustAccount          TrustAccount?         @relation(fields: [trustAccountId], references: [id], onDelete: Restrict)
   reconciliationMatches ReconciliationMatch[]
+  trustTransactions     TrustTransaction[]
 
   @@index([tenantId])
   @@index([bankStatementId])
+  @@index([trustAccountId])
+  @@index([tenantId, trustAccountId])
+  @@index([tenantId, trustAccountId, transactionDate])
+  @@index([tenantId, trustAccountId, reference])
   @@index([tenantId, reference])
 }
 
 model ReconciliationRun {
   id          String                @id @default(cuid())
   tenantId    String
+  trustAccountId String?
   type        ReconciliationRunType
   periodStart DateTime
   periodEnd   DateTime
@@ -3766,15 +3796,21 @@ model ReconciliationRun {
   createdById String?
   createdAt   DateTime              @default(now())
   tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  trustAccount   TrustAccount?         @relation(fields: [trustAccountId], references: [id], onDelete: Restrict)
   matches     ReconciliationMatch[]
 
   @@index([tenantId])
+  @@index([trustAccountId])
+  @@index([tenantId, trustAccountId])
+  @@index([tenantId, trustAccountId, periodStart, periodEnd], map: "ReconciliationRun_trust_scope_period_idx")
 }
 
 model ReconciliationMatch {
   id       String @id @default(cuid())
   tenantId String
   runId    String
+
+  trustAccountId       String?
 
   bankTransactionId   String?
   trustTransactionId  String?
@@ -3799,11 +3835,15 @@ model ReconciliationMatch {
 
   tenant            Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   run               ReconciliationRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+  trustAccount      TrustAccount?      @relation(fields: [trustAccountId], references: [id], onDelete: Restrict)
   bankTransaction   BankTransaction?   @relation(fields: [bankTransactionId], references: [id])
   trustTransaction  TrustTransaction?  @relation(fields: [trustTransactionId], references: [id])
   clientTrustLedger ClientTrustLedger? @relation(fields: [clientTrustLedgerId], references: [id])
 
   @@index([tenantId])
+  @@index([trustAccountId])
+  @@index([tenantId, trustAccountId])
+  @@index([tenantId, trustAccountId, status])
   @@index([tenantId, status])
   @@index([runId])
   @@index([bankTransactionId])

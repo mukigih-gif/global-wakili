@@ -1,11 +1,14 @@
 import { Prisma } from '@global-wakili/database';
 import type { Request } from 'express';
 
+const ZERO = new Prisma.Decimal(0);
+
 function toDecimal(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
   if (value === null || value === undefined) {
-    return new Prisma.Decimal(0);
+    return ZERO;
   }
-  return new Prisma.Decimal(value);
+
+  return value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
 }
 
 export class TrustViolationService {
@@ -31,25 +34,19 @@ export class TrustViolationService {
             caseNumber: true,
           },
         },
-        trustAccount: {
-          select: {
-            id: true,
-            name: true,
-            accountNumber: true,
-          },
-        },
       },
       orderBy: [{ createdAt: 'desc' }],
     });
 
     return ledgers
-      .filter((row: any) => toDecimal(row.balance).lt(0))
-      .map((row: any) => ({
+      .filter((row) => toDecimal(row.balance).lt(ZERO))
+      .map((row) => ({
         type: 'MATTER_OVERDRAW',
         trustAccountId: row.trustAccountId,
-        trustAccount: row.trustAccount,
         client: row.client,
         matter: row.matter,
+        clientId: row.clientId,
+        matterId: row.matterId ?? null,
         balance: toDecimal(row.balance),
       }));
   }
@@ -62,23 +59,21 @@ export class TrustViolationService {
       where: { tenantId },
       select: {
         id: true,
-        name: true,
+        accountName: true,
         accountNumber: true,
-        balance: true,
-        clientId: true,
+        currentBalance: true,
       },
       orderBy: [{ createdAt: 'desc' }],
     });
 
     return trustAccounts
-      .filter((row: any) => toDecimal(row.balance).lt(0))
-      .map((row: any) => ({
+      .filter((row) => toDecimal(row.currentBalance).lt(ZERO))
+      .map((row) => ({
         type: 'TRUST_ACCOUNT_OVERDRAW',
         trustAccountId: row.id,
-        name: row.name,
+        accountName: row.accountName,
         accountNumber: row.accountNumber,
-        balance: toDecimal(row.balance),
-        clientId: row.clientId,
+        balance: toDecimal(row.currentBalance),
       }));
   }
 
@@ -86,46 +81,64 @@ export class TrustViolationService {
     const db = req.db;
     const tenantId = req.tenantId!;
 
-    const trustAccounts = await db.trustAccount.findMany({
-      where: { tenantId },
-      select: {
-        id: true,
-        name: true,
-        accountNumber: true,
-        balance: true,
-      },
-    });
-
-    const issues = [];
-
-    for (const trustAccount of trustAccounts) {
-      const aggregate = await db.clientTrustLedger.aggregate({
+    const [trustAccounts, ledgerBalances] = await Promise.all([
+      db.trustAccount.findMany({
+        where: { tenantId },
+        select: {
+          id: true,
+          accountName: true,
+          accountNumber: true,
+          currentBalance: true,
+        },
+        orderBy: [{ createdAt: 'desc' }],
+      }),
+      db.clientTrustLedger.groupBy({
+        by: ['trustAccountId'],
         where: {
           tenantId,
-          trustAccountId: trustAccount.id,
+          trustAccountId: {
+            not: null,
+          },
         },
         _sum: {
-          balance: true,
+          debit: true,
+          credit: true,
         },
-      });
+      }),
+    ]);
 
-      const ledgerTotal = toDecimal(aggregate._sum.balance);
-      const trustBalance = toDecimal(trustAccount.balance);
+    const ledgerByTrustAccountId = new Map<string, Prisma.Decimal>();
 
-      if (!ledgerTotal.equals(trustBalance)) {
-        issues.push({
-          type: 'TRUST_LEDGER_MISMATCH',
-          trustAccountId: trustAccount.id,
-          name: trustAccount.name,
-          accountNumber: trustAccount.accountNumber,
-          trustAccountBalance: trustBalance,
-          clientLedgerTotal: ledgerTotal,
-          variance: trustBalance.minus(ledgerTotal),
-        });
-      }
+    for (const ledger of ledgerBalances) {
+      if (!ledger.trustAccountId) continue;
+
+      const creditTotal = toDecimal(ledger._sum.credit);
+      const debitTotal = toDecimal(ledger._sum.debit);
+
+      ledgerByTrustAccountId.set(
+        ledger.trustAccountId,
+        creditTotal.minus(debitTotal),
+      );
     }
 
-    return issues;
+    return trustAccounts
+      .map((account) => {
+        const trustAccountBalance = toDecimal(account.currentBalance);
+        const clientLedgerTotal = ledgerByTrustAccountId.get(account.id) ?? ZERO;
+        const variance = trustAccountBalance.minus(clientLedgerTotal);
+
+        return {
+          type: 'TRUST_ACCOUNT_LEDGER_MISMATCH',
+          trustAccountId: account.id,
+          accountName: account.accountName,
+          accountNumber: account.accountNumber,
+          trustAccountBalance,
+          clientLedgerTotal,
+          variance,
+          scope: 'TRUST_ACCOUNT_LEVEL',
+        };
+      })
+      .filter((row) => !row.variance.equals(ZERO));
   }
 
   static async getAllViolations(req: Request) {

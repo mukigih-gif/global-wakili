@@ -1,119 +1,89 @@
-import { Prisma } from '@global-wakili/database';
-import type { TrustTransferInput } from './trust.types';
+import type { Request } from 'express';
+import { TrustTransactionType } from '@global-wakili/database';
+import type { TrustTransactionInput, TrustTransferInput } from './trust.types';
 import { TrustTransactionService } from './TrustTransactionService';
 
-function toDecimal(value: Prisma.Decimal | string | number): Prisma.Decimal {
-  return new Prisma.Decimal(value);
+type TrustTransferRequest = Request & {
+  tenantId?: string | null;
+};
+
+function requireTenantId(req: TrustTransferRequest): string {
+  if (!req.tenantId?.trim()) {
+    throw Object.assign(new Error('Tenant context is required for trust transfer operations'), {
+      statusCode: 401,
+      code: 'TENANT_BOUNDARY_REQUIRED',
+    });
+  }
+
+  return req.tenantId.trim();
+}
+
+function requireNonEmpty(value: string | null | undefined, fieldName: string): string {
+  if (!value?.trim()) {
+    throw Object.assign(new Error(`${fieldName} is required for trust transfer operations`), {
+      statusCode: 400,
+      code: 'TRUST_TRANSFER_BOUNDARY_REQUIRED',
+      details: { fieldName },
+    });
+  }
+
+  return value.trim();
+}
+
+function normalizeOptional(value: string | null | undefined): string | null {
+  return value?.trim() ? value.trim() : null;
+}
+
+function normalizeTransactionDate(value: Date | string | null | undefined): Date {
+  if (value instanceof Date) {
+    if (!Number.isNaN(value.getTime())) return value;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+
+  throw Object.assign(new Error('transactionDate is required and must be valid for trust transfer'), {
+    statusCode: 400,
+    code: 'INVALID_DATE',
+    details: { fieldName: 'transactionDate' },
+  });
+}
+
+function buildDescription(input: TrustTransferInput): string {
+  return (
+    input.description?.trim() ||
+    `Trust to office transfer ${input.reference}`
+  );
 }
 
 export class TrustTransferService {
-  static async transferToOffice(req: any, input: TrustTransferInput) {
-    const db = req.db;
-    const tenantId = req.tenantId as string;
+  static async transferToOffice(req: Request, input: TrustTransferInput) {
+    requireTenantId(req as TrustTransferRequest);
 
-    if (!input.matterId) {
-      throw Object.assign(new Error('Matter is required for trust transfer to office'), {
-        statusCode: 400,
-        code: 'MATTER_REQUIRED',
-      });
-    }
+    const trustAccountId = requireNonEmpty(input.trustAccountId, 'trustAccountId');
+    const clientId = requireNonEmpty(input.clientId, 'clientId');
+    const matterId = requireNonEmpty(input.matterId, 'matterId');
+    const reference = requireNonEmpty(input.reference, 'reference');
+    const transactionDate = normalizeTransactionDate(input.transactionDate);
 
-    if (input.invoiceId) {
-      const invoice = await db.invoice.findFirst({
-        where: {
-          tenantId,
-          id: input.invoiceId,
-          clientId: input.clientId,
-          matterId: input.matterId,
-        },
-        select: {
-          id: true,
-          total: true,
-          paidAmount: true,
-          status: true,
-        },
-      });
-
-      if (!invoice) {
-        throw Object.assign(new Error('Invoice not found for trust transfer'), {
-          statusCode: 404,
-          code: 'INVOICE_NOT_FOUND',
-        });
-      }
-
-      const requested = toDecimal(input.amount);
-      const amountDue = toDecimal(invoice.total).minus(toDecimal(invoice.paidAmount));
-
-      if (requested.gt(amountDue)) {
-        throw Object.assign(new Error('Transfer amount exceeds invoice amount due'), {
-          statusCode: 409,
-          code: 'TRANSFER_EXCEEDS_AMOUNT_DUE',
-          details: {
-            total: toDecimal(invoice.total).toString(),
-            paidAmount: toDecimal(invoice.paidAmount).toString(),
-            amountDue: amountDue.toString(),
-            requested: requested.toString(),
-          },
-        });
-      }
-    }
-
-    if (input.drnId && db.disbursementRequestNote) {
-      const drn = await db.disbursementRequestNote.findFirst({
-        where: {
-          tenantId,
-          id: input.drnId,
-          clientId: input.clientId,
-          matterId: input.matterId,
-        },
-        select: {
-          id: true,
-          amount: true,
-          status: true,
-        },
-      });
-
-      if (!drn) {
-        throw Object.assign(new Error('Disbursement Request Note not found'), {
-          statusCode: 404,
-          code: 'DRN_NOT_FOUND',
-        });
-      }
-
-      const requested = toDecimal(input.amount);
-      const drnAmount = toDecimal(drn.amount);
-
-      if (requested.gt(drnAmount)) {
-        throw Object.assign(new Error('Transfer amount exceeds DRN amount'), {
-          statusCode: 409,
-          code: 'TRANSFER_EXCEEDS_DRN_AMOUNT',
-          details: {
-            drnAmount: drnAmount.toString(),
-            requested: requested.toString(),
-          },
-        });
-      }
-    }
-
-    return TrustTransactionService.create(req, {
-      trustAccountId: input.trustAccountId,
-      clientId: input.clientId,
-      matterId: input.matterId,
-      transactionDate: input.transactionDate,
-      transactionType: 'TRANSFER_TO_OFFICE',
+    const transactionInput: TrustTransactionInput = {
+      trustAccountId,
+      clientId,
+      matterId,
+      bankTransactionId: normalizeOptional(input.bankTransactionId),
+      transactionType: TrustTransactionType.TRANSFER_TO_OFFICE,
       amount: input.amount,
-      currency: 'KES',
-      reference: input.reference,
-      description: input.description,
-      notes: input.disbursementId
-        ? `Disbursement reference: ${input.disbursementId}`
-        : input.invoiceId
-          ? `Invoice reference: ${input.invoiceId}`
-          : input.drnId
-            ? `DRN reference: ${input.drnId}`
-            : null,
-      invoiceId: input.invoiceId ?? null,
-      drnId: input.drnId ?? null,
-    });
+      reference,
+      description: buildDescription(input),
+      notes: input.notes ?? null,
+      currency: input.currency ?? null,
+      transactionDate,
+      invoiceId: normalizeOptional(input.invoiceId),
+      drnId: normalizeOptional(input.drnId ?? input.disbursementId),
+    };
+
+    return TrustTransactionService.create(req, transactionInput);
   }
 }
