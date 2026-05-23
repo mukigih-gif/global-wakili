@@ -1,4 +1,4 @@
-// apps/api/src/modules/payroll/PayrollPostingService.ts
+﻿// apps/api/src/modules/payroll/PayrollPostingService.ts
 
 import {
   AccountSubtype,
@@ -27,6 +27,22 @@ type PayrollPostingLine = {
   normalBalance: BalanceSide;
   debit: Prisma.Decimal;
   credit: Prisma.Decimal;
+};
+
+type PayrollPostingRecord = Record<string, any>;
+
+type PayrollPostingTotals = {
+  grossPay: Prisma.Decimal;
+  employerCost: Prisma.Decimal;
+  netPay: Prisma.Decimal;
+  paye: Prisma.Decimal;
+  nssfEmployee: Prisma.Decimal;
+  nssfEmployer: Prisma.Decimal;
+  sha: Prisma.Decimal;
+  housingLevyEmployee: Prisma.Decimal;
+  housingLevyEmployer: Prisma.Decimal;
+  nitaEmployer: Prisma.Decimal;
+  totalDeductions: Prisma.Decimal;
 };
 
 function delegate(db: DbClient, name: string) {
@@ -118,8 +134,8 @@ export class PayrollPostingService {
         });
       }
 
-      const totals = records.reduce(
-        (acc, record) => ({
+      const totals = (records as PayrollPostingRecord[]).reduce(
+        (acc: PayrollPostingTotals, record: PayrollPostingRecord): PayrollPostingTotals => ({
           grossPay: acc.grossPay.plus(money(record.grossPay)),
           employerCost: acc.employerCost.plus(money(record.employerCost)),
           netPay: acc.netPay.plus(money(record.netPay)),
@@ -157,7 +173,7 @@ export class PayrollPostingService {
           accountCode: '6100',
           accountName: 'Salaries and Wages Expense',
           accountType: AccountType.EXPENSE,
-          accountSubtype: AccountSubtype.OPERATING_EXPENSE,
+          accountSubtype: AccountSubtype.GENERAL_EXPENSE,
           normalBalance: BalanceSide.DEBIT,
           debit: totals.grossPay,
           credit: ZERO,
@@ -166,7 +182,7 @@ export class PayrollPostingService {
           accountCode: '6110',
           accountName: 'Employer Payroll Contributions Expense',
           accountType: AccountType.EXPENSE,
-          accountSubtype: AccountSubtype.OPERATING_EXPENSE,
+          accountSubtype: AccountSubtype.GENERAL_EXPENSE,
           normalBalance: BalanceSide.DEBIT,
           debit: employerContributionExpense,
           credit: ZERO,
@@ -175,7 +191,7 @@ export class PayrollPostingService {
           accountCode: '2300',
           accountName: 'Net Payroll Payable',
           accountType: AccountType.LIABILITY,
-          accountSubtype: AccountSubtype.CURRENT_LIABILITY,
+          accountSubtype: AccountSubtype.ACCOUNTS_PAYABLE,
           normalBalance: BalanceSide.CREDIT,
           debit: ZERO,
           credit: totals.netPay,
@@ -184,7 +200,7 @@ export class PayrollPostingService {
           accountCode: '2310',
           accountName: 'PAYE Payable',
           accountType: AccountType.LIABILITY,
-          accountSubtype: AccountSubtype.TAX_PAYABLE,
+          accountSubtype: AccountSubtype.PAYE_LIABILITY,
           normalBalance: BalanceSide.CREDIT,
           debit: ZERO,
           credit: totals.paye,
@@ -193,7 +209,7 @@ export class PayrollPostingService {
           accountCode: '2320',
           accountName: 'NSSF Payable',
           accountType: AccountType.LIABILITY,
-          accountSubtype: AccountSubtype.STATUTORY_PAYABLE,
+          accountSubtype: AccountSubtype.NSSF_LIABILITY,
           normalBalance: BalanceSide.CREDIT,
           debit: ZERO,
           credit: totals.nssfEmployee.plus(totals.nssfEmployer).toDecimalPlaces(2),
@@ -202,7 +218,7 @@ export class PayrollPostingService {
           accountCode: '2330',
           accountName: 'SHA/SHIF Payable',
           accountType: AccountType.LIABILITY,
-          accountSubtype: AccountSubtype.STATUTORY_PAYABLE,
+          accountSubtype: AccountSubtype.SHIF_LIABILITY,
           normalBalance: BalanceSide.CREDIT,
           debit: ZERO,
           credit: totals.sha,
@@ -211,7 +227,7 @@ export class PayrollPostingService {
           accountCode: '2340',
           accountName: 'Affordable Housing Levy Payable',
           accountType: AccountType.LIABILITY,
-          accountSubtype: AccountSubtype.STATUTORY_PAYABLE,
+          accountSubtype: AccountSubtype.HOUSING_LEVY_LIABILITY,
           normalBalance: BalanceSide.CREDIT,
           debit: ZERO,
           credit: totals.housingLevyEmployee.plus(totals.housingLevyEmployer).toDecimalPlaces(2),
@@ -220,7 +236,7 @@ export class PayrollPostingService {
           accountCode: '2350',
           accountName: 'NITA Payable',
           accountType: AccountType.LIABILITY,
-          accountSubtype: AccountSubtype.STATUTORY_PAYABLE,
+          accountSubtype: AccountSubtype.ACCOUNTS_PAYABLE,
           normalBalance: BalanceSide.CREDIT,
           debit: ZERO,
           credit: totals.nitaEmployer,

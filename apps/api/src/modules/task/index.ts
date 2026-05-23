@@ -1,4 +1,4 @@
-// apps/api/src/modules/task/index.ts
+﻿// apps/api/src/modules/task/index.ts
 
 export * from './task.types';
 export * from './task.validators';
@@ -15,3 +15,4 @@ export * from './TaskCalendarBridgeService';
 export * from './task.controller';
 
 export { default as taskRoutes } from './task.routes';
+

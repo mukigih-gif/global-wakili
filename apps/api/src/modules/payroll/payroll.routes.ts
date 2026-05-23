@@ -19,7 +19,7 @@ import {
   requirePayrollPermission,
 } from './payroll-permission.map';
 
-import { bindPlatformModuleEnforcement } from '../../middleware/platform/module-enforcement';
+import { bindPlatformModuleEnforcement } from '../../middleware/platform-access.middleware';
 import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
 import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 import {

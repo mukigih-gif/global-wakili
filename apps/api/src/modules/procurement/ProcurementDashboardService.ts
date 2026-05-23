@@ -1,4 +1,4 @@
-import { Prisma } from '@global-wakili/database';
+﻿import { Prisma } from '@global-wakili/database';
 
 function toDecimal(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
   if (value === null || value === undefined) {
@@ -15,10 +15,10 @@ export class ProcurementDashboardService {
     },
   ) {
     const [vendorCount, activeVendorCount, bills, aggregate] = await Promise.all([
-      db.vendor.count({
+      db.supplier.count({
         where: { tenantId: params.tenantId },
       }),
-      db.vendor.count({
+      db.supplier.count({
         where: {
           tenantId: params.tenantId,
           status: 'ACTIVE',

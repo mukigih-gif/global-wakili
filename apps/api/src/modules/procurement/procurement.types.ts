@@ -1,4 +1,4 @@
-import type { Prisma } from '@global-wakili/database';
+﻿import type { Prisma } from '@global-wakili/database';
 
 export type DecimalLike = Prisma.Decimal | string | number;
 
@@ -90,11 +90,12 @@ export type VendorBillInput = {
 };
 
 export type TenantProcurementDbClient = {
-  vendor: {
+  supplier: {
     findFirst: Function;
     findMany: Function;
     create: Function;
     update: Function;
+    count: Function;
   };
   vendorBill: {
     findFirst: Function;

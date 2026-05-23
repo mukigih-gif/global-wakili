@@ -1,6 +1,6 @@
-import type { Request, Response } from 'express';
+﻿import type { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/async-handler';
-import { VendorService } from './VendorService';
+import { VendorService } from '../vendor/VendorService';
 import { VendorBillService } from './VendorBillService';
 import { ProcurementApprovalService } from './ProcurementApprovalService';
 import { VendorPaymentService } from './VendorPaymentService';

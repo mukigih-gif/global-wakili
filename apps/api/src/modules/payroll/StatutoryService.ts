@@ -1,4 +1,4 @@
-// apps/api/src/modules/payroll/StatutoryService.ts
+﻿// apps/api/src/modules/payroll/StatutoryService.ts
 
 import { Prisma } from '@global-wakili/database';
 
@@ -61,7 +61,7 @@ function rate(value: string | number): Prisma.Decimal {
 }
 
 function sum(values: Array<DecimalInput | null | undefined>): Prisma.Decimal {
-  return values.reduce((acc, value) => acc.plus(decimal(value)), ZERO).toDecimalPlaces(2);
+  return values.reduce<Prisma.Decimal>((acc: Prisma.Decimal, value) => acc.plus(decimal(value)), ZERO).toDecimalPlaces(2);
 }
 
 function max(a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal {

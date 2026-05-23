@@ -1,9 +1,14 @@
-import { Prisma, prisma } from '@global-wakili/database';
+import {
+  Prisma,
+  prisma,
+  ReconciliationStatus,
+  ReconciliationVarianceStatus,
+} from '@global-wakili/database';
 
 export interface ListReconciliationMatchesInput {
   tenantId: string;
   runId?: string;
-  status?: string;
+  status?: ReconciliationStatus | string;
   trustTransactionId?: string;
   clientTrustLedgerId?: string;
   bankTransactionId?: string;
@@ -21,43 +26,95 @@ export interface CreateReconciliationMatchInput {
   matchedAmount: Prisma.Decimal | number | string;
   varianceAmount?: Prisma.Decimal | number | string;
   varianceExplanation?: string;
-  status?: string;
+  varianceStatus?: ReconciliationVarianceStatus | string;
+  status?: ReconciliationStatus | string;
   notes?: string;
 }
 
 export interface UpdateReconciliationMatchInput {
-  status?: string;
+  status?: ReconciliationStatus | string;
   notes?: string;
   varianceAmount?: Prisma.Decimal | number | string;
   varianceExplanation?: string;
-  varianceStatus?: string;
+  varianceStatus?: ReconciliationVarianceStatus | string;
+}
+
+function decimal(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
+  if (value === null || value === undefined || value === '') {
+    return new Prisma.Decimal(0);
+  }
+
+  return value instanceof Prisma.Decimal
+    ? value.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP)
+    : new Prisma.Decimal(value).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+}
+
+function parseReconciliationStatus(
+  value: ReconciliationStatus | string | null | undefined,
+  fallback?: ReconciliationStatus,
+): ReconciliationStatus | undefined {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
+
+  const normalized = String(value).trim().toUpperCase();
+  const allowed = Object.values(ReconciliationStatus);
+
+  if (!allowed.includes(normalized as ReconciliationStatus)) {
+    throw Object.assign(new Error('Invalid reconciliation match status'), {
+      statusCode: 400,
+      code: 'INVALID_RECONCILIATION_STATUS',
+      details: { value, allowed },
+    });
+  }
+
+  return normalized as ReconciliationStatus;
+}
+
+function parseVarianceStatus(
+  value: ReconciliationVarianceStatus | string | null | undefined,
+  fallback?: ReconciliationVarianceStatus,
+): ReconciliationVarianceStatus | undefined {
+  if (value === null || value === undefined || value === '') {
+    return fallback;
+  }
+
+  const normalized = String(value).trim().toUpperCase();
+  const allowed = Object.values(ReconciliationVarianceStatus);
+
+  if (!allowed.includes(normalized as ReconciliationVarianceStatus)) {
+    throw Object.assign(new Error('Invalid reconciliation variance status'), {
+      statusCode: 400,
+      code: 'INVALID_RECONCILIATION_VARIANCE_STATUS',
+      details: { value, allowed },
+    });
+  }
+
+  return normalized as ReconciliationVarianceStatus;
 }
 
 export class ReconciliationMatchService {
   async list(input: ListReconciliationMatchesInput) {
+    const status = parseReconciliationStatus(input.status);
+
     return prisma.reconciliationMatch.findMany({
       where: {
         tenantId: input.tenantId,
         ...(input.runId ? { runId: input.runId } : {}),
-        ...(input.status ? { status: input.status as any } : {}),
+        ...(status ? { status } : {}),
         ...(input.trustTransactionId ? { trustTransactionId: input.trustTransactionId } : {}),
         ...(input.clientTrustLedgerId ? { clientTrustLedgerId: input.clientTrustLedgerId } : {}),
         ...(input.bankTransactionId ? { bankTransactionId: input.bankTransactionId } : {}),
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
-      take: input.take ?? 100,
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(input.take ?? 100, 500),
       skip: input.skip ?? 0,
     });
   }
 
   async getById(tenantId: string, id: string) {
     return prisma.reconciliationMatch.findFirst({
-      where: {
-        id,
-        tenantId,
-      },
+      where: { id, tenantId },
     });
   }
 
@@ -70,12 +127,11 @@ export class ReconciliationMatchService {
         trustTransactionId: input.trustTransactionId,
         clientTrustLedgerId: input.clientTrustLedgerId,
         matchType: input.matchType,
-        matchedAmount: new Prisma.Decimal(input.matchedAmount),
-        varianceAmount: input.varianceAmount
-          ? new Prisma.Decimal(input.varianceAmount)
-          : new Prisma.Decimal(0),
+        matchedAmount: decimal(input.matchedAmount),
+        varianceAmount: decimal(input.varianceAmount),
         varianceExplanation: input.varianceExplanation,
-        status: (input.status ?? 'PENDING') as any,
+        varianceStatus: parseVarianceStatus(input.varianceStatus, ReconciliationVarianceStatus.NONE),
+        status: parseReconciliationStatus(input.status, ReconciliationStatus.PENDING),
         notes: input.notes,
       },
     });
@@ -85,24 +141,26 @@ export class ReconciliationMatchService {
     const existing = await this.getById(tenantId, id);
 
     if (!existing) {
-      throw new Error('Reconciliation match not found.');
+      throw Object.assign(new Error('Reconciliation match not found'), {
+        statusCode: 404,
+        code: 'RECONCILIATION_MATCH_NOT_FOUND',
+      });
     }
 
+    const data: Prisma.ReconciliationMatchUpdateInput = {};
+
+    const status = parseReconciliationStatus(input.status);
+    const varianceStatus = parseVarianceStatus(input.varianceStatus);
+
+    if (status) data.status = status;
+    if (varianceStatus) data.varianceStatus = varianceStatus;
+    if (input.notes !== undefined) data.notes = input.notes;
+    if (input.varianceAmount !== undefined) data.varianceAmount = decimal(input.varianceAmount);
+    if (input.varianceExplanation !== undefined) data.varianceExplanation = input.varianceExplanation;
+
     return prisma.reconciliationMatch.update({
-      where: {
-        id,
-      },
-      data: {
-        ...(input.status ? { status: input.status as any } : {}),
-        ...(input.notes !== undefined ? { notes: input.notes } : {}),
-        ...(input.varianceAmount !== undefined
-          ? { varianceAmount: new Prisma.Decimal(input.varianceAmount) }
-          : {}),
-        ...(input.varianceExplanation !== undefined
-          ? { varianceExplanation: input.varianceExplanation }
-          : {}),
-        ...(input.varianceStatus ? { varianceStatus: input.varianceStatus as any } : {}),
-      },
+      where: { id },
+      data,
     });
   }
 
@@ -115,15 +173,16 @@ export class ReconciliationMatchService {
     const existing = await this.getById(input.tenantId, input.id);
 
     if (!existing) {
-      throw new Error('Reconciliation match not found.');
+      throw Object.assign(new Error('Reconciliation match not found'), {
+        statusCode: 404,
+        code: 'RECONCILIATION_MATCH_NOT_FOUND',
+      });
     }
 
     return prisma.reconciliationMatch.update({
-      where: {
-        id: input.id,
-      },
+      where: { id: input.id },
       data: {
-        varianceStatus: 'APPROVED' as any,
+        varianceStatus: ReconciliationVarianceStatus.APPROVED,
         varianceApprovedBy: input.approvedById,
         varianceApprovedAt: new Date(),
         ...(input.explanation ? { varianceExplanation: input.explanation } : {}),
@@ -139,15 +198,16 @@ export class ReconciliationMatchService {
     const existing = await this.getById(input.tenantId, input.id);
 
     if (!existing) {
-      throw new Error('Reconciliation match not found.');
+      throw Object.assign(new Error('Reconciliation match not found'), {
+        statusCode: 404,
+        code: 'RECONCILIATION_MATCH_NOT_FOUND',
+      });
     }
 
     return prisma.reconciliationMatch.update({
-      where: {
-        id: input.id,
-      },
+      where: { id: input.id },
       data: {
-        varianceStatus: 'REJECTED' as any,
+        varianceStatus: ReconciliationVarianceStatus.REJECTED,
         ...(input.explanation ? { varianceExplanation: input.explanation } : {}),
       },
     });
@@ -157,13 +217,14 @@ export class ReconciliationMatchService {
     const existing = await this.getById(tenantId, id);
 
     if (!existing) {
-      throw new Error('Reconciliation match not found.');
+      throw Object.assign(new Error('Reconciliation match not found'), {
+        statusCode: 404,
+        code: 'RECONCILIATION_MATCH_NOT_FOUND',
+      });
     }
 
     return prisma.reconciliationMatch.delete({
-      where: {
-        id,
-      },
+      where: { id },
     });
   }
 
@@ -180,21 +241,21 @@ export class ReconciliationMatchService {
           where: {
             tenantId,
             ...(runId ? { runId } : {}),
-            status: 'PENDING' as any,
+            status: ReconciliationStatus.PENDING,
           },
         }),
         prisma.reconciliationMatch.count({
           where: {
             tenantId,
             ...(runId ? { runId } : {}),
-            varianceStatus: 'APPROVED' as any,
+            varianceStatus: ReconciliationVarianceStatus.APPROVED,
           },
         }),
         prisma.reconciliationMatch.count({
           where: {
             tenantId,
             ...(runId ? { runId } : {}),
-            varianceStatus: 'REJECTED' as any,
+            varianceStatus: ReconciliationVarianceStatus.REJECTED,
           },
         }),
         prisma.reconciliationMatch.aggregate({

@@ -2,11 +2,14 @@ import { Prisma } from '@global-wakili/database';
 import type { Request } from 'express';
 import { TrustViolationService } from './TrustViolationService';
 
+const ZERO = new Prisma.Decimal(0);
+
 function toDecimal(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
   if (value === null || value === undefined) {
-    return new Prisma.Decimal(0);
+    return ZERO;
   }
-  return new Prisma.Decimal(value);
+
+  return value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
 }
 
 export class TrustDashboardService {
@@ -23,7 +26,7 @@ export class TrustDashboardService {
     ] = await Promise.all([
       db.trustAccount.aggregate({
         where: { tenantId },
-        _sum: { balance: true },
+        _sum: { currentBalance: true },
       }),
       db.trustAccount.count({
         where: { tenantId },
@@ -37,20 +40,20 @@ export class TrustDashboardService {
         orderBy: [{ trustAccountId: 'asc' }, { statementDate: 'desc' }],
         select: {
           trustAccountId: true,
-          isBalanced: true,
+          isCompleted: true,
         },
       }),
       TrustViolationService.getAllViolations(req),
     ]);
 
     const unreconciledAccounts = latestReconciliations.filter(
-      (row: any) => !row.isBalanced,
+      (row) => !row.isCompleted,
     ).length;
 
     return {
       generatedAt: new Date(),
       totalTrustAccounts: trustAccountsCount,
-      totalTrustBalance: toDecimal(trustAccountsAggregate._sum.balance),
+      totalTrustBalance: toDecimal(trustAccountsAggregate._sum?.currentBalance),
       activeClientLedgers,
       unreconciledAccounts,
       totalViolations: violations.totalViolations,

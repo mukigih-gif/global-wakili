@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import type { ClientInput } from './client.types';
+import type { ClientInput } from './client.type';
 import { ClientService } from './ClientService';
 import { ClientKYCService } from './ClientKYCService';
 import { RiskScoringService } from './RiskScoringService';

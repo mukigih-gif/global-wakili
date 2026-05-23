@@ -1,54 +1,115 @@
-import { Decimal } from '@prisma/client/runtime/library';
+﻿import { Prisma, prisma } from '@global-wakili/database';
+
+type DbClient = typeof prisma | Prisma.TransactionClient | any;
+
+type BankingRequestContext = {
+  tenantId: string;
+  req?: {
+    db?: DbClient;
+    user?: { id?: string | null } | null;
+  };
+};
+
+type BankAutoMatchResult = {
+  matchedCount: number;
+  pendingCount: number;
+};
+
+function requireTenantId(tenantId: string): string {
+  if (!tenantId?.trim()) {
+    throw Object.assign(new Error('Tenant ID is required for bank reconciliation'), {
+      statusCode: 400,
+      code: 'BANKING_TENANT_REQUIRED',
+    });
+  }
+
+  return tenantId;
+}
+
+function dbFromContext(context: BankingRequestContext): DbClient {
+  return context.req?.db ?? prisma;
+}
+
+function decimal(value: unknown): Prisma.Decimal {
+  if (value instanceof Prisma.Decimal) {
+    return value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'string') {
+    return new Prisma.Decimal(value);
+  }
+
+  return new Prisma.Decimal(0);
+}
 
 export class BankReconciliationService {
+  static async autoMatch(context: BankingRequestContext): Promise<BankAutoMatchResult> {
+    const tenantId = requireTenantId(context.tenantId);
+    const db = dbFromContext(context);
 
-  /**
-   * 🔍 AUTO MATCH ENGINE (AI-LIKE RULE ENGINE)
-   */
-  static async autoMatch(context: { tenantId: string; req: any }) {
-    const db = context.req.db;
-
-    const bankTxns = await db.bankTransaction.findMany({
-      where: { tenantId: context.tenantId, matched: false }
+    const bankTransactions = await db.bankTransaction.findMany({
+      where: {
+        tenantId,
+        isMatched: false,
+      },
+      take: 500,
+      orderBy: {
+        transactionDate: 'asc',
+      },
     });
 
-    const journalLines = await db.journalLine.findMany({
-      where: { tenantId: context.tenantId }
-    });
+    let matchedCount = 0;
 
-    const matches: any[] = [];
+    for (const bankTransaction of bankTransactions) {
+      const amount = decimal(bankTransaction.amount).abs();
 
-    for (const txn of bankTxns) {
-      for (const jl of journalLines) {
-        const amountMatch = new Decimal(jl.debit).minus(jl.credit).equals(txn.amount);
+      const trustMatch = await db.trustTransaction.findFirst({
+        where: {
+          tenantId,
+          isReconciled: false,
+          OR: [
+            bankTransaction.reference ? { reference: bankTransaction.reference } : undefined,
+            {
+              amount,
+              transactionDate: bankTransaction.transactionDate,
+            },
+          ].filter(Boolean),
+        },
+        orderBy: {
+          transactionDate: 'asc',
+        },
+      });
 
-        const dateDiff = Math.abs(
-          new Date(jl.createdAt).getTime() - new Date(txn.date).getTime()
-        ) / (1000 * 60 * 60 * 24);
-
-        const score =
-          (amountMatch ? 0.7 : 0) +
-          (dateDiff <= 2 ? 0.2 : 0) +
-          (txn.description?.includes(jl.reference || '') ? 0.1 : 0);
-
-        if (score >= 0.8) {
-          matches.push({
-            bankTxnId: txn.id,
-            journalLineId: jl.id,
-            confidence: score,
-            status: 'MATCHED'
-          });
-
-          await db.bankTransaction.update({
-            where: { id: txn.id },
-            data: { matched: true }
-          });
-
-          break;
-        }
+      if (!trustMatch) {
+        continue;
       }
+
+      await db.bankTransaction.update({
+        where: { id: bankTransaction.id },
+        data: { isMatched: true },
+      });
+
+      await db.trustTransaction.update({
+        where: { id: trustMatch.id },
+        data: { isReconciled: true },
+      });
+
+      matchedCount += 1;
     }
 
-    return matches;
+    const pendingCount = await db.bankTransaction.count({
+      where: {
+        tenantId,
+        isMatched: false,
+      },
+    });
+
+    return {
+      matchedCount,
+      pendingCount,
+    };
   }
 }
+
+export default BankReconciliationService;
+

@@ -1,7 +1,7 @@
-import type { Request } from 'express';
+﻿import type { Request } from 'express';
 import { ProcurementDashboardService } from './ProcurementDashboardService';
 import { PayablesAgingService } from './PayablesAgingService';
-import { VendorService } from './VendorService';
+import { VendorService } from '../vendor/VendorService';
 import { VendorBillService } from './VendorBillService';
 
 export class ProcurementService {

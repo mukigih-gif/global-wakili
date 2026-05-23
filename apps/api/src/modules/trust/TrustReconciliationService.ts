@@ -1,13 +1,38 @@
 import { Prisma } from '@global-wakili/database';
 import type { Request } from 'express';
 import { logAdminAction } from '../../utils/audit-logger';
-import { AuditSeverity } from '../../types/audit';
+import { AuditAction, AuditSeverity } from '../../types/audit';
+
+const ZERO = new Prisma.Decimal(0);
 
 function toDecimal(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
   if (value === null || value === undefined) {
-    return new Prisma.Decimal(0);
+    return ZERO;
   }
-  return new Prisma.Decimal(value);
+
+  return value instanceof Prisma.Decimal ? value : new Prisma.Decimal(value);
+}
+
+function requireTenantId(req: Request): string {
+  if (!req.tenantId?.trim()) {
+    throw Object.assign(new Error('Tenant context is required for trust reconciliation'), {
+      statusCode: 400,
+      code: 'TRUST_TENANT_REQUIRED',
+    });
+  }
+
+  return req.tenantId;
+}
+
+function requireTrustAccountId(trustAccountId?: string | null): string {
+  if (!trustAccountId?.trim()) {
+    throw Object.assign(new Error('Trust account context is required for trust reconciliation'), {
+      statusCode: 400,
+      code: 'TRUST_ACCOUNT_BOUNDARY_REQUIRED',
+    });
+  }
+
+  return trustAccountId.trim();
 }
 
 export class TrustReconciliationService {
@@ -19,20 +44,23 @@ export class TrustReconciliationService {
     },
   ) {
     const db = req.db;
-    const tenantId = req.tenantId!;
+    const tenantId = requireTenantId(req);
+    const trustAccountId = requireTrustAccountId(params.trustAccountId);
 
     const trustAccount = await db.trustAccount.findFirst({
       where: {
         tenantId,
-        id: params.trustAccountId,
+        id: trustAccountId,
       },
       select: {
         id: true,
-        name: true,
+        accountName: true,
         accountNumber: true,
-        currency: true,
-        balance: true,
-        clientId: true,
+        bankName: true,
+        currentBalance: true,
+        reconciliationBalance: true,
+        lastReconciled: true,
+        isActive: true,
       },
     });
 
@@ -40,48 +68,56 @@ export class TrustReconciliationService {
       throw Object.assign(new Error('Trust account not found'), {
         statusCode: 404,
         code: 'TRUST_ACCOUNT_NOT_FOUND',
-        details: { trustAccountId: params.trustAccountId },
+        details: { trustAccountId },
       });
     }
 
-    const trustMovementAggregate = await db.trustTransaction.aggregate({
-      where: {
-        tenantId,
-        trustAccountId: params.trustAccountId,
-        transactionDate: { lte: params.statementDate },
-      },
-      _sum: {
-        amount: true,
-      },
-    });
+    const [trustMovementAggregate, clientLedgerAggregate, bankAggregate] = await Promise.all([
+      db.trustTransaction.aggregate({
+        where: {
+          tenantId,
+          trustAccountId,
+          transactionDate: { lte: params.statementDate },
+        },
+        _sum: {
+          debit: true,
+          credit: true,
+        },
+      }),
+      db.clientTrustLedger.aggregate({
+        where: {
+          tenantId,
+          trustAccountId,
+          transactionDate: { lte: params.statementDate },
+        },
+        _sum: {
+          debit: true,
+          credit: true,
+        },
+      }),
+      db.bankTransaction.aggregate({
+        where: {
+          tenantId,
+          trustAccountId,
+          transactionDate: { lte: params.statementDate },
+        },
+        _sum: {
+          amount: true,
+        },
+      }),
+    ]);
 
-    const clientLedgerAggregate = await db.clientTrustLedger.aggregate({
-      where: {
-        tenantId,
-        trustAccountId: params.trustAccountId,
-      },
-      _sum: {
-        balance: true,
-      },
-    });
-
-    const bankAggregate = await db.bankTransaction.aggregate({
-      where: {
-        tenantId,
-        trustAccountId: params.trustAccountId,
-        transactionDate: { lte: params.statementDate },
-      },
-      _sum: {
-        amount: true,
-      },
-    });
-
-    const trustBookBalance = toDecimal(trustMovementAggregate._sum.amount);
-    const clientLedgerBalance = toDecimal(clientLedgerAggregate._sum.balance);
+    const trustBookBalance = toDecimal(trustMovementAggregate._sum.credit).minus(
+      toDecimal(trustMovementAggregate._sum.debit),
+    );
+    const clientLedgerBalance = toDecimal(clientLedgerAggregate._sum.credit).minus(
+      toDecimal(clientLedgerAggregate._sum.debit),
+    );
     const bankBalance = toDecimal(bankAggregate._sum.amount);
 
     return {
       trustAccount,
+      trustAccountId,
       statementDate: params.statementDate,
       trustBookBalance,
       clientLedgerBalance,
@@ -92,6 +128,11 @@ export class TrustReconciliationService {
       isThreeWayBalanced:
         trustBookBalance.equals(clientLedgerBalance) &&
         trustBookBalance.equals(bankBalance),
+      scope: {
+        bankBalanceScope: 'TRUST_ACCOUNT_SCOPE',
+        clientLedgerScope: 'TRUST_ACCOUNT_SCOPE',
+        trustBookScope: 'TRUST_ACCOUNT_SCOPE',
+      },
     };
   }
 
@@ -104,89 +145,99 @@ export class TrustReconciliationService {
     },
   ) {
     const db = req.db;
-    const tenantId = req.tenantId!;
+    const tenantId = requireTenantId(req);
+    const trustAccountId = requireTrustAccountId(params.trustAccountId);
 
     const existing = await db.trustReconciliation.findFirst({
       where: {
         tenantId,
-        trustAccountId: params.trustAccountId,
+        trustAccountId,
         statementDate: params.statementDate,
       },
       select: {
         id: true,
-        isBalanced: true,
-        reconciledAt: true,
+        isCompleted: true,
+        completedAt: true,
       },
     });
 
-    if (existing?.isBalanced) {
+    if (existing?.isCompleted) {
       throw Object.assign(
-        new Error('A balanced reconciliation already exists for this trust account and statement date'),
+        new Error('A completed reconciliation already exists for this trust account and statement date'),
         {
           statusCode: 409,
           code: 'TRUST_RECONCILIATION_LOCKED',
           details: {
-            trustAccountId: params.trustAccountId,
-            statementDate: params.statementDate,
+            trustAccountId,
+            statementDate: params.statementDate.toISOString(),
             reconciliationId: existing.id,
           },
         },
       );
     }
 
-    const snapshot = await this.getTrustAccountSnapshot(req, params);
+    const snapshot = await this.getTrustAccountSnapshot(req, {
+      trustAccountId,
+      statementDate: params.statementDate,
+    });
 
     const reconciliation = existing
       ? await db.trustReconciliation.update({
           where: { id: existing.id },
           data: {
-            trustBookBalance: snapshot.trustBookBalance,
-            clientLedgerBalance: snapshot.clientLedgerBalance,
-            bankBalance: snapshot.bankBalance,
-            varianceAmount: snapshot.ledgerVsBankVariance,
-            isBalanced: snapshot.isThreeWayBalanced,
-            notes: params.notes ?? null,
-            reconciledById: req.user?.sub ?? null,
-            reconciledAt: new Date(),
+            statementBalance: snapshot.bankBalance,
+            isCompleted: snapshot.isThreeWayBalanced,
+            completedAt: snapshot.isThreeWayBalanced ? new Date() : null,
           },
         })
       : await db.trustReconciliation.create({
           data: {
             tenantId,
-            trustAccountId: params.trustAccountId,
+            trustAccountId,
             statementDate: params.statementDate,
-            trustBookBalance: snapshot.trustBookBalance,
-            clientLedgerBalance: snapshot.clientLedgerBalance,
-            bankBalance: snapshot.bankBalance,
-            varianceAmount: snapshot.ledgerVsBankVariance,
-            isBalanced: snapshot.isThreeWayBalanced,
-            notes: params.notes ?? null,
-            reconciledById: req.user?.sub ?? null,
-            reconciledAt: new Date(),
+            statementBalance: snapshot.bankBalance,
+            isCompleted: snapshot.isThreeWayBalanced,
+            completedAt: snapshot.isThreeWayBalanced ? new Date() : null,
           },
         });
+
+    await db.trustAccount.update({
+      where: { id: trustAccountId },
+      data: {
+        lastReconciled: params.statementDate,
+        reconciliationBalance: snapshot.bankBalance,
+      },
+    });
 
     await logAdminAction({
       req,
       tenantId,
-      action: 'TRUST_RECONCILIATION_RECORDED',
-      severity: snapshot.isThreeWayBalanced ? AuditSeverity.INFO : AuditSeverity.HIGH,
+      action: AuditAction.UPDATE,
+      severity: snapshot.isThreeWayBalanced ? AuditSeverity.INFO : AuditSeverity.WARNING,
+      entityType: 'TrustReconciliation',
       entityId: reconciliation.id,
       payload: {
-        trustAccountId: params.trustAccountId,
-        statementDate: params.statementDate,
-        isBalanced: snapshot.isThreeWayBalanced,
+        eventCode: 'TRUST_RECONCILIATION_RECORDED',
+        trustAccountId,
+        statementDate: params.statementDate.toISOString(),
+        isThreeWayBalanced: snapshot.isThreeWayBalanced,
         ledgerVsBankVariance: snapshot.ledgerVsBankVariance.toString(),
         ledgerVsClientVariance: snapshot.ledgerVsClientVariance.toString(),
+        bankVsClientVariance: snapshot.bankVsClientVariance.toString(),
+        scope: snapshot.scope,
+        notes: params.notes ?? undefined,
       },
     });
 
-    return reconciliation;
+    return {
+      ...reconciliation,
+      snapshot,
+    };
   }
 
   static async listReconciliations(req: Request, trustAccountId?: string) {
     const db = req.db;
-    const tenantId = req.tenantId!;
+    const tenantId = requireTenantId(req);
 
     return db.trustReconciliation.findMany({
       where: {
@@ -194,18 +245,11 @@ export class TrustReconciliationService {
         ...(trustAccountId ? { trustAccountId } : {}),
       },
       include: {
-        trustAccount: {
+        account: {
           select: {
             id: true,
-            name: true,
+            accountName: true,
             accountNumber: true,
-          },
-        },
-        reconciledBy: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
           },
         },
       },

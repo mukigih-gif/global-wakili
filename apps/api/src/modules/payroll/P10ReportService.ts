@@ -1,4 +1,4 @@
-// apps/api/src/modules/payroll/P10ReportService.ts
+﻿// apps/api/src/modules/payroll/P10ReportService.ts
 
 import { Prisma, prisma } from '@global-wakili/database';
 
@@ -12,6 +12,22 @@ export type P10ReportInput = {
 };
 
 const ZERO = new Prisma.Decimal(0);
+
+type P10EmployeeLine = {
+  payrollRecordId: string;
+  employeeId: string;
+  staffNumber: string | null;
+  employeeName: string | null;
+  kraPin: string | null;
+  periodStart: Date;
+  periodEnd: Date;
+  grossPay: Prisma.Decimal;
+  taxablePay: Prisma.Decimal;
+  personalRelief: Prisma.Decimal;
+  insuranceRelief: Prisma.Decimal;
+  payeGrossTax: Prisma.Decimal;
+  paye: Prisma.Decimal;
+};
 
 function delegate(db: DbClient, name: string) {
   const modelDelegate = db[name];
@@ -93,7 +109,7 @@ export class P10ReportService {
       }),
     ]);
 
-    const employeeLines = records.map((record: any) => ({
+    const employeeLines: P10EmployeeLine[] = (records as any[]).map((record: any): P10EmployeeLine => ({
       payrollRecordId: record.id,
       employeeId: record.employeeId,
       staffNumber: record.employee?.staffNumber ?? null,

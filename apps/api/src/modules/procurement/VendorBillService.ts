@@ -1,4 +1,4 @@
-import { Prisma } from '@global-wakili/database';
+﻿import { Prisma } from '@global-wakili/database';
 import type {
   DecimalLike,
   TenantProcurementDbClient,
@@ -40,7 +40,7 @@ export class VendorBillService {
       const created = await tx.vendorBill.create({
         data: {
           tenantId,
-          vendorId: input.vendorId,
+          supplierId: input.vendorId,
           billNumber: input.billNumber.trim(),
           billDate: input.billDate,
           dueDate: input.dueDate ?? null,
@@ -77,7 +77,7 @@ export class VendorBillService {
         },
         include: {
           lines: true,
-          vendor: true,
+          supplier: true,
         },
       });
 
@@ -173,7 +173,7 @@ export class VendorBillService {
         },
       },
       include: {
-        vendor: true,
+        supplier: true,
       },
       orderBy: [{ billDate: 'desc' }],
     });

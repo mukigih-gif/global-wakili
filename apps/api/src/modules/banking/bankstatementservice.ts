@@ -1,153 +1,239 @@
-import { prisma } from '../../config/database';
-import { Decimal } from '@prisma/client/runtime/library';
-import { AppError } from '../../utils/AppError';
-import { withAudit } from '../../utils/audit-wrapper';
-import { AuditSeverity } from '../../types/audit';
+﻿import { Prisma, prisma } from '@global-wakili/database';
 
-/**
- * 🏦 BANK STATEMENT SERVICE v3
- * Unified: Idempotency, Status Tracking, Tenant Settings Integration, Historical Balances, Reconciliation Logging.
- */
-export class BankStatementService {
-  
-  /**
-   * 📥 IMPORT BANK STATEMENT
-   * Hardened: Upsert logic prevents duplicate references (Idempotency).
-   * Adds status tracking and reconciliation logging.
-   */
-  static async importBankStatement(
-    context: { tenantId: string; actor: any; req?: any }, 
-    transactions: {
-      date: Date;
-      description: string;
-      amount: Decimal;
-      reference: string;
-      accountNumber: string;
-    }[]
-  ) {
-    return await withAudit(async () => {
-      if (!transactions.length) {
-        throw new AppError('No transactions provided for import', 400, 'EMPTY_IMPORT');
-      }
+type DbClient = typeof prisma | Prisma.TransactionClient | any;
 
-      const results = await Promise.all(
-        transactions.map((tx) =>
-          prisma.bankStatement.upsert({
-            where: { 
-              tenantId_reference: { 
-                tenantId: context.tenantId, 
-                reference: tx.reference 
-              } 
-            },
-            update: {}, 
-            create: {
-              tenantId: context.tenantId,
-              date: tx.date,
-              description: tx.description,
-              amount: new Decimal(tx.amount || 0),
-              reference: tx.reference,
-              accountNumber: tx.accountNumber,
-              importedById: context.actor.id,
-              status: 'UNMATCHED'
-            }
-          })
-        )
-      );
+type BankStatementContext = {
+  tenantId: string;
+  actor?: { id?: string | null } | string | null;
+  req?: {
+    db?: DbClient;
+    user?: { id?: string | null } | null;
+  };
+};
 
-      // Immutable reconciliation log
-      await prisma.reconciliationLog.create({
-        data: {
-          tenantId: context.tenantId,
-          type: 'BANK_IMPORT',
-          reconciledById: context.actor.id,
-          status: 'IMPORTED',
-          discrepancyTrustClient: new Decimal(0),
-          discrepancyClientBank: new Decimal(0)
-        }
-      });
+type BankStatementTransactionInput = {
+  date?: Date | string | null;
+  transactionDate?: Date | string | null;
+  amount: Prisma.Decimal | number | string;
+  reference?: string | null;
+  description?: string | null;
+  externalId?: string | null;
+};
 
-      return { count: results.length };
-    }, context, { action: 'BANK_STATEMENT_IMPORT', severity: AuditSeverity.INFO });
+type BankStatementImportOptions = {
+  accountId?: string | null;
+  accountType?: string | null;
+  statementDate?: Date | string | null;
+  openingBalance?: Prisma.Decimal | number | string | null;
+  closingBalance?: Prisma.Decimal | number | string | null;
+  sourceFileUrl?: string | null;
+};
+
+type BankStatementImportResult = {
+  statement: unknown;
+  importedTransactionCount: number;
+};
+
+type BankMatchResult = {
+  matchedCount: number;
+  pendingCount: number;
+};
+
+function requireTenantId(tenantId: string): string {
+  if (!tenantId?.trim()) {
+    throw Object.assign(new Error('Tenant ID is required for bank statement operations'), {
+      statusCode: 400,
+      code: 'BANKING_TENANT_REQUIRED',
+    });
   }
 
-  /**
-   * 💰 GET TRUST BANK BALANCE
-   * Uses tenant settings to identify mapped Trust Bank account.
-   * Supports historical "as of date" reconciliation.
-   */
-  static async getTrustBankBalance(tenantId: string, asOfDate?: Date) {
-    const settings = await prisma.tenantSettings.findUnique({
-      where: { tenantId },
-      select: { trustBankAccountId: true }
-    });
+  return tenantId;
+}
 
-    if (!settings?.trustBankAccountId) {
-      throw new AppError('No Trust Bank Account mapped in tenant settings.', 400, 'NO_TRUST_BANK_ACCOUNT');
+function dbFromContext(context?: BankStatementContext): DbClient {
+  return context?.req?.db ?? prisma;
+}
+
+function actorIdFromContext(context: BankStatementContext): string | null {
+  if (typeof context.actor === 'string') {
+    return context.actor;
+  }
+
+  return context.actor?.id ?? context.req?.user?.id ?? null;
+}
+
+function decimal(value: unknown): Prisma.Decimal {
+  if (value instanceof Prisma.Decimal) {
+    return value;
+  }
+
+  if (typeof value === 'number' || typeof value === 'string') {
+    return new Prisma.Decimal(value);
+  }
+
+  return new Prisma.Decimal(0);
+}
+
+function dateValue(value: Date | string | null | undefined, fallback = new Date()): Date {
+  if (!value) {
+    return fallback;
+  }
+
+  return value instanceof Date ? value : new Date(value);
+}
+
+function inferStatementDate(transactions: BankStatementTransactionInput[], options?: BankStatementImportOptions): Date {
+  if (options?.statementDate) {
+    return dateValue(options.statementDate);
+  }
+
+  const first = transactions[0];
+
+  return dateValue(first?.transactionDate ?? first?.date ?? null);
+}
+
+function inferClosingBalance(transactions: BankStatementTransactionInput[], options?: BankStatementImportOptions): Prisma.Decimal {
+  if (options?.closingBalance !== undefined && options.closingBalance !== null) {
+    return decimal(options.closingBalance);
+  }
+
+  return transactions.reduce(
+    (acc, transaction) => acc.plus(decimal(transaction.amount)),
+    decimal(options?.openingBalance ?? 0),
+  );
+}
+
+export class BankStatementService {
+  static async importBankStatement(
+    context: BankStatementContext,
+    transactions: BankStatementTransactionInput[],
+    options: BankStatementImportOptions = {},
+  ): Promise<BankStatementImportResult> {
+    const tenantId = requireTenantId(context.tenantId);
+    const db = dbFromContext(context);
+
+    if (!Array.isArray(transactions) || transactions.length === 0) {
+      throw Object.assign(new Error('No transactions provided for bank statement import'), {
+        statusCode: 400,
+        code: 'BANKING_EMPTY_IMPORT',
+      });
     }
 
-    const bankAccount = await prisma.bankAccount.findUnique({
-      where: { id: settings.trustBankAccountId }
+    const statementDate = inferStatementDate(transactions, options);
+    const openingBalance = decimal(options.openingBalance ?? 0);
+    const closingBalance = inferClosingBalance(transactions, options);
+
+    const statement = await db.bankStatement.create({
+      data: {
+        tenantId,
+        importedById: actorIdFromContext(context),
+        accountType: options.accountType ?? 'BANK',
+        accountId: options.accountId ?? `unmapped:${tenantId}`,
+        statementDate,
+        openingBalance,
+        closingBalance,
+        sourceFileUrl: options.sourceFileUrl ?? null,
+        transactions: {
+          createMany: {
+            data: transactions.map((transaction) => ({
+              tenantId,
+              externalId: transaction.externalId ?? transaction.reference ?? null,
+              amount: decimal(transaction.amount),
+              description: transaction.description ?? null,
+              transactionDate: dateValue(transaction.transactionDate ?? transaction.date ?? null, statementDate),
+              reference: transaction.reference ?? transaction.externalId ?? null,
+              isMatched: false,
+            })),
+          },
+        },
+      },
+      include: {
+        transactions: true,
+      },
     });
 
-    if (!bankAccount) {
-      throw new AppError('Mapped Trust Bank Account not found.', 404, 'BANK_ACCOUNT_NOT_FOUND');
-    }
+    return {
+      statement,
+      importedTransactionCount: transactions.length,
+    };
+  }
 
-    const aggregate = await prisma.bankStatement.aggregate({
+  static async getTrustBankBalance(tenantId: string, asOfDate?: Date): Promise<Prisma.Decimal> {
+    const db = prisma;
+    const normalizedTenantId = requireTenantId(tenantId);
+
+    const transactions = await db.trustTransaction.findMany({
+      where: {
+        tenantId: normalizedTenantId,
+        ...(asOfDate ? { transactionDate: { lte: asOfDate } } : {}),
+      },
+      select: {
+        debit: true,
+        credit: true,
+      },
+    });
+
+    return transactions.reduce(
+      (balance, transaction) => balance.plus(decimal(transaction.credit)).minus(decimal(transaction.debit)),
+      new Prisma.Decimal(0),
+    );
+  }
+
+  static async matchTransactions(context: { tenantId: string; req?: { db?: DbClient } }): Promise<BankMatchResult> {
+    const tenantId = requireTenantId(context.tenantId);
+    const db = context.req?.db ?? prisma;
+
+    const unmatched = await db.bankTransaction.findMany({
       where: {
         tenantId,
-        accountNumber: bankAccount.accountNumber,
-        ...(asOfDate ? { date: { lte: asOfDate } } : {})
+        isMatched: false,
       },
-      _sum: { amount: true }
+      take: 500,
+      orderBy: {
+        transactionDate: 'asc',
+      },
     });
 
-    return new Decimal(aggregate._sum.amount || 0);
-  }
+    let matchedCount = 0;
 
-  /**
-   * 🔍 AUTOMATED RECONCILIATION MATCHING
-   * Matches bank transactions to journal entries by reference AND amount.
-   * Updates status and logs reconciliation.
-   */
-  static async matchTransactions(context: { tenantId: string }) {
-    return await withAudit(async () => {
-      const unmatched = await prisma.bankStatement.findMany({
-        where: { tenantId: context.tenantId, matchedJournalId: null, status: 'UNMATCHED' }
+    for (const bankTransaction of unmatched) {
+      const trustTransaction = await db.trustTransaction.findFirst({
+        where: {
+          tenantId,
+          isReconciled: false,
+          OR: [
+            bankTransaction.reference ? { reference: bankTransaction.reference } : undefined,
+            {
+              amount: decimal(bankTransaction.amount).abs(),
+              transactionDate: bankTransaction.transactionDate,
+            },
+          ].filter(Boolean),
+        },
       });
 
-      let matchedCount = 0;
-
-      for (const tx of unmatched) {
-        const match = await prisma.journalEntry.findFirst({
-          where: {
-            tenantId: context.tenantId,
-            reference: tx.reference,
-            amount: tx.amount
-          }
-        });
-
-        if (match) {
-          await prisma.bankStatement.update({
-            where: { id: tx.id },
-            data: { matchedJournalId: match.id, status: 'MATCHED' }
-          });
-          matchedCount++;
-        }
+      if (!trustTransaction) {
+        continue;
       }
 
-      await prisma.reconciliationLog.create({
-        data: {
-          tenantId: context.tenantId,
-          type: 'BANK_MATCH',
-          reconciledById: null,
-          status: matchedCount > 0 ? 'MATCHED' : 'NO_MATCH',
-          discrepancyTrustClient: new Decimal(0),
-          discrepancyClientBank: new Decimal(0)
-        }
+      await db.bankTransaction.update({
+        where: { id: bankTransaction.id },
+        data: { isMatched: true },
       });
 
-      return { matchedCount, pendingCount: unmatched.length - matchedCount };
-    }, context, { action: 'BANK_TRANSACTION_MATCHING', severity: AuditSeverity.LOW });
+      await db.trustTransaction.update({
+        where: { id: trustTransaction.id },
+        data: { isReconciled: true },
+      });
+
+      matchedCount += 1;
+    }
+
+    return {
+      matchedCount,
+      pendingCount: Math.max(unmatched.length - matchedCount, 0),
+    };
   }
 }
+
+export default BankStatementService;
+

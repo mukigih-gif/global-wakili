@@ -1,4 +1,4 @@
-// apps/api/src/modules/payroll/statutory-filing.service.ts
+﻿// apps/api/src/modules/payroll/statutory-filing.service.ts
 
 import { Prisma, prisma } from '@global-wakili/database';
 
@@ -22,6 +22,22 @@ type StatutoryFilingInput = {
 };
 
 const ZERO = new Prisma.Decimal(0);
+
+type StatutoryFilingRecord = Record<string, any>;
+
+type StatutoryFilingTotals = {
+  employeeCount: number;
+  grossPay: Prisma.Decimal;
+  taxablePay: Prisma.Decimal;
+  paye: Prisma.Decimal;
+  nssfEmployee: Prisma.Decimal;
+  nssfEmployer: Prisma.Decimal;
+  sha: Prisma.Decimal;
+  housingLevyEmployee: Prisma.Decimal;
+  housingLevyEmployer: Prisma.Decimal;
+  nitaEmployer: Prisma.Decimal;
+  netPay: Prisma.Decimal;
+};
 
 function delegate(db: DbClient, name: string) {
   const modelDelegate = db[name];
@@ -95,8 +111,8 @@ export class StatutoryFilingService {
       },
     });
 
-    const totals = records.reduce(
-      (acc, record) => ({
+    const totals = (records as StatutoryFilingRecord[]).reduce(
+      (acc: StatutoryFilingTotals, record: StatutoryFilingRecord): StatutoryFilingTotals => ({
         employeeCount: acc.employeeCount + 1,
         grossPay: acc.grossPay.plus(money(record.grossPay)),
         taxablePay: acc.taxablePay.plus(money(record.taxablePay)),
@@ -131,7 +147,7 @@ export class StatutoryFilingService {
       payrollBatchId: input.payrollBatchId ?? null,
       kind: input.kind ?? 'PAYE',
       totals,
-      employeeLines: records.map((record) => ({
+      employeeLines: (records as StatutoryFilingRecord[]).map((record: StatutoryFilingRecord) => ({
         employeeId: record.employeeId,
         staffNumber: record.employee?.staffNumber ?? null,
         employeeName:

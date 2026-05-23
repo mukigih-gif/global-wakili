@@ -1,4 +1,4 @@
-// apps/api/src/routes/index.ts
+﻿// apps/api/src/routes/index.ts
 
 import { Router } from 'express';
 
@@ -9,6 +9,7 @@ import paymentRoutes from '../modules/payments/payment.routes';
 import payrollRoutes from '../modules/payroll/payroll.routes';
 import hrRoutes from '../modules/hr/hr.routes';
 import procurementRoutes from '../modules/procurement/procurement.routes';
+import vendorRoutes from '../modules/vendor/vendor.routes';
 import clientRoutes from '../modules/client/client.routes';
 import matterRoutes from '../modules/matter/matter.routes';
 import documentRoutes from '../modules/document/document.routes';
@@ -25,7 +26,6 @@ import analyticsRoutes from '../modules/analytics/analytics.routes';
 import approvalRoutes from '../modules/approval/approval.routes';
 import reportingRoutes from '../modules/reporting/reporting.routes';
 import platformRoutes from '../modules/platform/platform.routes';
-import payrollRoutes from '../modules/payroll/payroll.routes';
 
 const router = Router();
 
@@ -47,6 +47,8 @@ router.use('/payments', paymentRoutes);
 router.use('/payroll', payrollRoutes);
 router.use('/hr', hrRoutes);
 router.use('/procurement', procurementRoutes);
+router.use('/vendors', vendorRoutes);
+router.use('/vendor', vendorRoutes);
 router.use('/clients', clientRoutes);
 router.use('/matters', matterRoutes);
 router.use('/tasks', taskRoutes);
@@ -74,10 +76,12 @@ router.use('/analytics', analyticsRoutes);
 router.use('/approvals', approvalRoutes);
 router.use('/approval', approvalRoutes);
 router.use('/reporting', reportingRoutes);
-router.use('/hr', payrollRoutes);
-router.use('/human-resources', payrollRoutes);
+router.use('/human-resources', hrRoutes);
 router.use('/ai', aiRoutes);
 router.use('/platform', platformRoutes);
 
 export default router;
+
+
+
 
