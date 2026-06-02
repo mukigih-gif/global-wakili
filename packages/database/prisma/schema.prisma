@@ -702,7 +702,7 @@ model GlobalAuditLog {
   severity       String   @default("INFO") // INFO, WARN, CRITICAL
   beforeState    Json?
   afterState     Json?
-  hash           String // The cryptographic link to the previous entry
+  hash           String   @unique // tamper-evidence fingerprint — each entry must be globally unique
   requestId      String?
   ipAddress      String?
   userAgent      String?
@@ -710,6 +710,7 @@ model GlobalAuditLog {
 
   @@index([actorId])
   @@index([targetTenantId])
+  @@index([createdAt])
 }
 
 model AuditLog {
