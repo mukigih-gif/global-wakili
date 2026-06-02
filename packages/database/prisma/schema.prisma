@@ -345,6 +345,7 @@ model Session {
   @@index([status, expiresAt])
   @@index([deviceId])
   @@index([lastActivityAt])
+  @@index([tenantId])
 }
 
 model MfaSecret {
@@ -509,6 +510,7 @@ model Role {
 
   @@unique([tenantId, name])
   @@index([tenantId])
+  @@index([parentRoleId])
 }
 
 model Permission {
@@ -533,6 +535,7 @@ model Permission {
   @@unique([tenantId, action, resource], name: "unique_tenant_action_resource")
   @@index([tenantId])
   @@index([resource])
+  @@index([tenantId])
 }
 
 model PermissionCondition {
@@ -693,6 +696,7 @@ model RateLimitLog {
 
   @@index([tenantId, ipAddress, endpoint])
   @@index([limitExceeded])
+  @@index([userId])
 }
 
 model GlobalAuditLog {
@@ -751,6 +755,7 @@ model AuditLog {
   @@index([action, severity])
   @@index([createdAt])
   @@index([sequenceNumber])
+  @@index([deviceId])
 }
 
 model AuditAlert {
@@ -791,6 +796,7 @@ model DataLineage {
 
   @@index([sourceEntity, sourceId])
   @@index([targetEntity, targetId])
+  @@index([tenantId])
 }
 
 model FeatureFlag {
@@ -843,6 +849,7 @@ model Workflow {
   tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   history           WorkflowHistory[]
 
+  @@index([tenantId])
   @@index([tenantId])
 }
 
@@ -922,6 +929,9 @@ model Approval {
   @@index([approvedBy])
   @@index([deadlineAt])
   @@index([createdAt])
+  @@index([escalatedTo])
+  @@index([delegatedFrom])
+  @@index([delegatedTo])
 }
 
 model Dispute {
@@ -1022,6 +1032,7 @@ model Contract {
   @@index([tenantId])
   @@index([matterId])
   @@index([status])
+  @@index([createdById])
 }
 
 model ContractVersion {
@@ -1041,6 +1052,7 @@ model ContractVersion {
   @@unique([contractId, versionNumber])
   @@index([tenantId])
   @@index([contractId])
+  @@index([createdById])
 }
 
 model ExpressService {
@@ -1053,6 +1065,7 @@ model ExpressService {
   mpesaRef    String?
   createdAt   DateTime @default(now())
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  @@index([tenantId])
 }
 
 model ExpenseEntry {
@@ -1095,6 +1108,7 @@ model ExpenseEntry {
   @@index([expenseAccountId])
   @@index([status])
   @@index([expenseDate])
+  @@index([recurringTemplateId])
 }
 
 model Matter {
@@ -1166,6 +1180,8 @@ model Matter {
   @@index([tenantId, caseNumber])
   @@index([tenantId, createdAt])
   @@index([tenantId, clientId])
+  @@index([branchId])
+  @@index([leadAdvocateId])
 }
 
 model MatterOriginator {
@@ -1236,6 +1252,7 @@ model RateCard {
   @@index([status])
   @@index([effectiveFrom])
   @@index([effectiveTo])
+  @@index([createdById])
 }
 
 model WriteOff {
@@ -1319,6 +1336,7 @@ model CourtHearing {
   @@index([calendarEventId])
   @@index([hearingDate])
   @@index([status])
+  @@index([createdById])
 }
 
 model MatterProfitabilitySnapshot {
@@ -1363,6 +1381,7 @@ model MatterProfitabilitySnapshot {
   @@index([snapshotDate])
   @@index([snapshotType])
   @@index([periodStart, periodEnd])
+  @@index([createdById])
 }
 
 model StatuteOfLimitations {
@@ -1457,6 +1476,7 @@ model TimeEntry {
   @@index([status])
   @@index([entryDate])
   @@index([invoiceId])
+  @@index([billingRunId])
 }
 
 model MatterTask {
@@ -1486,6 +1506,7 @@ model MatterTask {
   @@index([assignedTo])
   @@index([status])
   @@index([dueDate])
+  @@index([createdById])
 }
 
 model TaskComment {
@@ -1517,6 +1538,7 @@ model Disbursement {
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   @@index([tenantId])
+  @@index([matterId])
 }
 
 model OfficeTransaction {
@@ -1541,6 +1563,7 @@ model OfficeTransaction {
   @@index([tenantId])
   @@index([officeAccountId])
   @@index([transactionDate])
+  @@index([reconciliationId])
 }
 
 model RecurringExpenseTemplate {
@@ -1572,6 +1595,10 @@ model RecurringExpenseTemplate {
 
   @@index([tenantId])
   @@index([isActive])
+  @@index([expenseAccountId])
+  @@index([supplierId])
+  @@index([branchId])
+  @@index([matterId])
 }
 
 model UnbilledWip {
@@ -1654,6 +1681,9 @@ model Invoice {
   @@index([cancelledAt])
   @@index([clientId])
   @@index([tenantId, clientId])
+  @@index([billingRunId])
+  @@index([branchId])
+  @@index([cancelledById])
 }
 
 model WithholdingTaxCertificate {
@@ -1691,6 +1721,8 @@ model WithholdingTaxCertificate {
   @@index([matterId])
   @@index([clientId])
   @@index([status])
+  @@index([receivedById])
+  @@index([cancelledById])
 }
 
 model BillingRun {
@@ -1783,6 +1815,8 @@ model JournalEntry {
   @@index([date])
   @@index([postedById])
   @@index([matterId])
+  @@index([reversalOfId])
+  @@index([accountingPeriodId, tenantId])
 }
 
 model JournalLine {
@@ -1835,6 +1869,7 @@ model PayrollRecord {
   @@index([tenantId])
   @@index([batchId])
   @@index([userId])
+  @@index([employeeProfileId])
 }
 
 model StatutoryDeductionRecord {
@@ -1982,6 +2017,7 @@ model NotificationWebhookEvent {
   @@index([tenantId, providerMessageId])
   @@index([tenantId, verificationStatus])
   @@index([tenantId, createdAt])
+  @@index([notificationId])
 }
 
 model NotificationTemplate {
@@ -2188,6 +2224,7 @@ model Document {
   @@index([expiryDate])
   @@index([retainedUntil])
   @@index([malwareScanStatus])
+  @@index([uploadedBy])
 }
 
 model Client {
@@ -2290,6 +2327,7 @@ model ClientComplianceCheck {
   @@index([clientId])
   @@index([checkType])
   @@index([checkedAt])
+  @@index([createdById])
 }
 
 model ClientContact {
@@ -2337,6 +2375,7 @@ model ClientKycProfile {
   @@index([tenantId])
   @@index([clientId])
   @@index([status])
+  @@index([verifiedById])
 }
 
 model ClientTrustLedger {
@@ -2471,6 +2510,9 @@ model PurchaseOrder {
   @@index([tenantId])
   @@index([vendorId])
   @@index([status])
+  @@index([quotationId])
+  @@index([branchId])
+  @@index([matterId])
 }
 
 model PurchaseOrderLine {
@@ -2566,6 +2608,7 @@ model CalendarEvent {
   @@index([startTime])
   @@index([googleEventId])
   @@index([outlookEventId])
+  @@index([creatorId])
 }
 
 model CalendarReminder {
@@ -2608,6 +2651,7 @@ model CalendarReminder {
   @@index([status])
   @@index([remindAt])
   @@index([status, remindAt])
+  @@index([createdById])
 }
 
 model CalendarRecurrenceRule {
@@ -2789,6 +2833,9 @@ model DisbursementRequestNote {
   @@unique([tenantId, reference])
   @@index([tenantId])
   @@index([status])
+  @@index([clientId])
+  @@index([matterId])
+  @@index([createdById])
 }
 
 model Department {
@@ -2884,6 +2931,7 @@ model EmployeeProfile {
   @@index([departmentId])
   @@index([jobTitleId])
   @@index([employmentStatus])
+  @@index([reportingManagerId])
 }
 
 model Attendance {
@@ -2911,6 +2959,7 @@ model Attendance {
   @@index([tenantId])
   @@index([branchId])
   @@index([status])
+  @@index([employeeProfileId])
 }
 
 model LeaveRequest {
@@ -2940,6 +2989,8 @@ model LeaveRequest {
   @@index([status])
   @@index([startDate])
   @@index([endDate])
+  @@index([employeeProfileId])
+  @@index([approvedById])
 }
 
 model LeaveBalance {
@@ -2991,6 +3042,8 @@ model EmployeePerformance {
   @@index([userId])
   @@index([reviewPeriodStart])
   @@index([reviewPeriodEnd])
+  @@index([employeeProfileId])
+  @@index([reviewedById])
 }
 
 model EmployeeGoal {
@@ -3013,6 +3066,7 @@ model EmployeeGoal {
   @@index([tenantId])
   @@index([userId])
   @@index([status])
+  @@index([employeeProfileId])
 }
 
 model EmployeeDocument {
@@ -3039,6 +3093,8 @@ model EmployeeDocument {
   @@index([tenantId])
   @@index([userId])
   @@index([documentType])
+  @@index([employeeProfileId])
+  @@index([verifiedById])
 }
 
 model CommissionPayout {
@@ -3065,6 +3121,9 @@ model CommissionPayout {
   @@index([tenantId])
   @@index([userId])
   @@index([status])
+  @@index([payrollBatchId])
+  @@index([matterId])
+  @@index([approvedById])
 }
 
 model TrustAccount {
@@ -3095,6 +3154,7 @@ model TrustAccount {
 
   @@index([tenantId])
   @@index([tenantId, isActive])
+  @@index([branchId])
 }
 
 model OfficeAccount {
@@ -3118,6 +3178,7 @@ model OfficeAccount {
   transactions          OfficeTransaction[]
 
   @@index([tenantId])
+  @@index([branchId])
 }
 
 model TrustTransaction {
@@ -3159,6 +3220,8 @@ model TrustTransaction {
   @@index([createdById])
   @@index([matterId])
   @@index([transactionDate])
+  @@index([reconciliationId])
+  @@index([clientId])
 }
 
 model TrustReconciliation {
@@ -3352,6 +3415,8 @@ model RequestForQuotation {
   @@index([tenantId])
   @@index([status])
   @@index([closingDate])
+  @@index([branchId])
+  @@index([matterId])
 }
 
 model RequestForQuotationItem {
@@ -3449,6 +3514,11 @@ model PaymentRefund {
   @@index([matterId])
   @@index([status])
   @@index([createdAt])
+  @@index([requestedById])
+  @@index([approvedById])
+  @@index([rejectedById])
+  @@index([paidById])
+  @@index([paymentReceiptAllocationId])
 }
 
 model VendorBill {
@@ -3580,6 +3650,7 @@ model PaymentReceipt {
   @@index([invoiceId])
   @@index([status])
   @@index([receivedAt])
+  @@index([createdById])
 }
 
 model CreditNote {
@@ -3605,6 +3676,7 @@ model CreditNote {
   @@index([invoiceId])
   @@index([matterId])
   @@index([status])
+  @@index([createdById])
 }
 
 model ComplianceReport {
@@ -3629,6 +3701,8 @@ model ComplianceReport {
   @@index([tenantId])
   @@index([reportType])
   @@index([status])
+  @@index([createdById])
+  @@index([clientId])
 }
 
 model ExternalJobQueue {
@@ -3690,6 +3764,7 @@ model AccountingPeriod {
   @@unique([tenantId, month, year])
   @@index([tenantId])
   @@index([status])
+  @@index([closedById])
 }
 
 model PayrollBatch {
@@ -3721,6 +3796,8 @@ model PayrollBatch {
   @@index([tenantId])
   @@index([branchId])
   @@index([status])
+  @@index([generatedById])
+  @@index([approvedById])
 }
 
 model Payslip {
@@ -3752,6 +3829,7 @@ model Payslip {
   @@index([tenantId])
   @@index([batchId])
   @@index([userId])
+  @@index([employeeProfileId])
 }
 
 model BankStatement {
@@ -3770,6 +3848,7 @@ model BankStatement {
   transactions   BankTransaction[]
 
   @@index([tenantId])
+  @@index([importedById])
 }
 
 model BankTransaction {
@@ -5874,6 +5953,7 @@ model PlatformConfigVersion {
   @@index([status])
   @@index([targetTenantId])
   @@index([targetModuleKey])
+  @@index([platformGlobalSettingId])
 }
 
 model PlatformImpersonationSession {
