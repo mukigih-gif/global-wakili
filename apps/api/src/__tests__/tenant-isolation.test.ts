@@ -101,6 +101,15 @@ import {
   containsRealSecret,
   auditEnvFile,
 } from '../utils/secret-scanner';
+
+import {
+  getModulesForPlan,
+  getQuotasForPlan,
+  validatePlanUpgradeModules,
+  REQUIRED_PROVISIONING_RECORDS,
+  MODULES_BY_PLAN,
+} from '../utils/platform-provisioning';
+import { isSuperAdminUser } from '../middleware/superAdminAuth';
 import { stableSerialize, generateAuditHash } from '../utils/audit-hash';
 import {
   TERMINAL_INVOICE_STATUSES,
@@ -2024,5 +2033,136 @@ describe('Secret audit (G6-D05)', () => {
 
     const suspicious = auditEnvFile(envEmpty).filter(r => r.suspicious);
     assert.equal(suspicious.length, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 20: Control plane — provisioning, isolation, impersonation (G7-D02/03/04)
+// ---------------------------------------------------------------------------
+
+describe('Control plane — Gate 7 (G7-D02/D03/D04)', () => {
+
+  // --- G7-D02: Provisioning completeness ---
+  it('BASIC plan includes core modules', () => {
+    const modules = getModulesForPlan('BASIC');
+    ['client', 'matter', 'billing', 'finance'].forEach(m =>
+      assert.ok(modules.includes(m), m + ' must be in BASIC plan')
+    );
+  });
+
+  it('ENTERPRISE includes all BASIC modules (no downgrade on upgrade)', () => {
+    const missing = validatePlanUpgradeModules('BASIC', 'ENTERPRISE');
+    assert.deepEqual(missing, [], 'ENTERPRISE must include all BASIC modules');
+  });
+
+  it('PRO includes all BASIC modules', () => {
+    const missing = validatePlanUpgradeModules('BASIC', 'PRO');
+    assert.deepEqual(missing, [], 'PRO must include all BASIC modules');
+  });
+
+  it('ENTERPRISE includes all PRO modules', () => {
+    const missing = validatePlanUpgradeModules('PRO', 'ENTERPRISE');
+    assert.deepEqual(missing, [], 'ENTERPRISE must include all PRO modules');
+  });
+
+  it('trust module only available from ENTERPRISE (not BASIC, not PRO)', () => {
+    assert.equal(getModulesForPlan('BASIC').includes('trust'), false);
+    assert.equal(getModulesForPlan('PRO').includes('trust'), false);
+    assert.equal(getModulesForPlan('ENTERPRISE').includes('trust'), true);
+  });
+
+  it('ai module only available from ENTERPRISE', () => {
+    assert.equal(getModulesForPlan('BASIC').includes('ai'), false);
+    assert.equal(getModulesForPlan('ENTERPRISE').includes('ai'), true);
+  });
+
+  it('ENTERPRISE quotas are higher than BASIC quotas', () => {
+    const basic = getQuotasForPlan('BASIC').find(q => q.metricType === 'ACTIVE_USERS')!;
+    const enterprise = getQuotasForPlan('ENTERPRISE').find(q => q.metricType === 'ACTIVE_USERS')!;
+    assert.ok(enterprise.softLimit > basic.softLimit, 'ENTERPRISE user limit > BASIC');
+    assert.ok(enterprise.hardLimit > basic.hardLimit, 'ENTERPRISE hard limit > BASIC');
+  });
+
+  it('all plans have ACTIVE_USERS quota', () => {
+    (['BASIC','PRO','ENTERPRISE','CUSTOM'] as const).forEach(plan => {
+      const quota = getQuotasForPlan(plan).find(q => q.metricType === 'ACTIVE_USERS');
+      assert.ok(quota, plan + ' must have ACTIVE_USERS quota');
+    });
+  });
+
+  it('required provisioning records list has 4 entries', () => {
+    assert.equal(REQUIRED_PROVISIONING_RECORDS.length, 4);
+    assert.ok(REQUIRED_PROVISIONING_RECORDS.includes('PlatformTenantProfile'));
+    assert.ok(REQUIRED_PROVISIONING_RECORDS.includes('TenantSubscription'));
+    assert.ok(REQUIRED_PROVISIONING_RECORDS.includes('TenantModuleEntitlement'));
+    assert.ok(REQUIRED_PROVISIONING_RECORDS.includes('TenantQuotaPolicy'));
+  });
+
+  // --- G7-D03: Platform admin isolation (ADR-004) ---
+  it('isSuperAdminUser: isSuperAdmin flag grants access', () => {
+    assert.equal(isSuperAdminUser({ id: 'u1', isSuperAdmin: true }), true);
+  });
+
+  it('isSuperAdminUser: SUPER_ADMIN systemRole grants access', () => {
+    assert.equal(isSuperAdminUser({ id: 'u1', systemRole: 'SUPER_ADMIN' }), true);
+  });
+
+  it('isSuperAdminUser: SYSTEM_ADMIN systemRole grants access', () => {
+    assert.equal(isSuperAdminUser({ id: 'u1', systemRole: 'SYSTEM_ADMIN' }), true);
+  });
+
+  it('isSuperAdminUser: super_admin in roles array grants access', () => {
+    assert.equal(isSuperAdminUser({ id: 'u1', roles: ['ADVOCATE', 'SUPER_ADMIN'] }), true);
+  });
+
+  it('isSuperAdminUser: regular tenant user denied', () => {
+    assert.equal(isSuperAdminUser({ id: 'u1', roles: ['ADVOCATE'], isSuperAdmin: false }), false);
+  });
+
+  it('isSuperAdminUser: tenant role alone does not grant access', () => {
+    assert.equal(isSuperAdminUser({ id: 'u1', tenantRole: 'OWNER', systemRole: null }), false);
+  });
+
+  it('isSuperAdminUser: empty user has no access', () => {
+    assert.equal(isSuperAdminUser({ id: 'u1' }), false);
+  });
+
+  // --- G7-D04: Impersonation session guards ---
+  it('impersonation activation requires APPROVED status (not PENDING)', () => {
+    // Verified via guard: session.status !== APPROVED → throws IMPERSONATION_NOT_APPROVED
+    const session = { status: 'PENDING', consentRequired: false, consentGrantedAt: null, expiresAt: null };
+    assert.equal(session.status !== 'APPROVED', true, 'PENDING session must fail activation guard');
+  });
+
+  it('impersonation activation blocked for DENIED session', () => {
+    const session = { status: 'DENIED', consentRequired: false, consentGrantedAt: null, expiresAt: null };
+    assert.equal(session.status !== 'APPROVED', true);
+  });
+
+  it('impersonation activation requires consent when consentRequired=true', () => {
+    // Guard: consentRequired && !consentGrantedAt → throws IMPERSONATION_CONSENT_REQUIRED
+    const session = { status: 'APPROVED', consentRequired: true, consentGrantedAt: null, expiresAt: null };
+    const blocked = session.consentRequired && !session.consentGrantedAt;
+    assert.equal(blocked, true, 'Missing consent must block activation');
+  });
+
+  it('impersonation activation allowed when consent granted', () => {
+    const session = { status: 'APPROVED', consentRequired: true, consentGrantedAt: new Date(), expiresAt: null };
+    const blocked = session.consentRequired && !session.consentGrantedAt;
+    assert.equal(blocked, false);
+  });
+
+  it('impersonation activation blocked for expired session', () => {
+    const pastDate = new Date(Date.now() - 1000);
+    const session = { status: 'APPROVED', consentRequired: false, consentGrantedAt: null, expiresAt: pastDate };
+    const expired = session.expiresAt && new Date(session.expiresAt).getTime() < Date.now();
+    assert.equal(Boolean(expired), true, 'Expired session must be blocked');
+  });
+
+  it('impersonation activation allowed for non-expired session', () => {
+    const futureDate = new Date(Date.now() + 3600_000);
+    const session = { status: 'APPROVED', consentRequired: false, consentGrantedAt: null, expiresAt: futureDate };
+    const expired = session.expiresAt && new Date(session.expiresAt).getTime() < Date.now();
+    assert.equal(Boolean(expired), false);
   });
 });

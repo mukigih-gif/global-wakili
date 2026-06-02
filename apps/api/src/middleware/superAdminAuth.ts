@@ -16,7 +16,7 @@ function normalizeRoles(user: SuperAdminCandidate): string[] {
   ].map((role) => role.toLowerCase());
 }
 
-function isSuperAdminUser(user: SuperAdminCandidate): boolean {
+export function isSuperAdminUser(user: SuperAdminCandidate): boolean {
   const roles = normalizeRoles(user);
 
   return (

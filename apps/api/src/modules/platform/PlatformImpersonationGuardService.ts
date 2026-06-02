@@ -44,7 +44,7 @@ export class PlatformImpersonationGuardService {
     }
 
     return db.platformImpersonationSession.update({
-      where: { id: params.id },
+      where: { id: params.id, tenantId: session.tenantId },
       data: {
         status: 'ACTIVE',
         startedAt: new Date(),
@@ -70,7 +70,7 @@ export class PlatformImpersonationGuardService {
     for (const session of sessions) {
       if (session.expiresAt && new Date(session.expiresAt).getTime() < Date.now()) {
         await db.platformImpersonationSession.update({
-          where: { id: session.id },
+          where: { id: session.id, tenantId: session.tenantId },
           data: {
             status: 'EXPIRED',
             endedAt: new Date(),
