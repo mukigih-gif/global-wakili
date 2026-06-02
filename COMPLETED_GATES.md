@@ -492,7 +492,7 @@ Risk Assessment: LOW
 ## Gate Closure 010
 
 Title: Gate 9 — Document Platform Closure
-Status: CLOSED (pending merge) | Branch: gate-9/document-platform-closure
+Status: CLOSED | Merge Commit: 25acad7 | Branch: gate-9/document-platform-closure
 Date Closed: 2026-06-02
 Verification Evidence: tsc PASS | 365/365 tests (+21)
 Commit: 3f98c1a
