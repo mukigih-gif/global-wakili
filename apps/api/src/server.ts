@@ -4,6 +4,7 @@ import app from './app';
 import { env } from './config/env';
 import { connectPrisma, disconnectPrisma } from '@global-wakili/database';
 import { connectRedis, disconnectRedis } from './config/redis';
+import { initSocket } from './realtime/socket';
 
 const SHUTDOWN_TIMEOUT_MS = 30_000;
 
@@ -12,6 +13,8 @@ async function bootstrap(): Promise<void> {
   await connectRedis();
 
   const server = http.createServer(app);
+
+  initSocket(server);
 
   server.listen(env.PORT, () => {
     console.info(`✔ Global Wakili API listening on port ${env.PORT}`);
