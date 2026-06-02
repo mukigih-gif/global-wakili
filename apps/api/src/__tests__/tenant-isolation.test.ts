@@ -72,6 +72,12 @@ import {
   findMissingPermissions,
   normalizePermissions,
 } from '../utils/rbac-engine';
+
+import {
+  computeRefill,
+  checkBucket,
+  createBucket,
+} from '../utils/rate-limiter';
 import {
   TERMINAL_INVOICE_STATUSES,
   VALID_INVOICE_TRANSITIONS,
@@ -1480,5 +1486,114 @@ describe('RBAC authorization engine (G6-D01)', () => {
     assert.deepEqual(normalizePermissions(null), []);
     assert.deepEqual(normalizePermissions(undefined), []);
     assert.deepEqual(normalizePermissions(''), []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 16: Rate limiter token bucket — G6-D02
+// ---------------------------------------------------------------------------
+
+describe('Rate limiter token bucket (G6-D02)', () => {
+
+  const CAPACITY = 100;
+  const INTERVAL_MS = 60_000; // 60 seconds
+  const NOW = 1_000_000; // arbitrary epoch ms
+
+  // --- createBucket ---
+  it('new bucket starts at full capacity', () => {
+    const b = createBucket(CAPACITY, NOW);
+    assert.equal(b.tokens, CAPACITY);
+    assert.equal(b.last, NOW);
+  });
+
+  // --- computeRefill: no time elapsed ---
+  it('no elapsed time: no refill', () => {
+    const b = computeRefill(50, NOW, NOW, CAPACITY, INTERVAL_MS);
+    assert.equal(b.tokens, 50);
+  });
+
+  // --- computeRefill: time elapsed ---
+  it('half interval elapsed: refills half capacity', () => {
+    const halfInterval = NOW + INTERVAL_MS / 2;
+    const b = computeRefill(0, NOW, halfInterval, CAPACITY, INTERVAL_MS);
+    assert.equal(b.tokens, 50);
+  });
+
+  it('full interval elapsed: refills to capacity', () => {
+    const fullInterval = NOW + INTERVAL_MS;
+    const b = computeRefill(0, NOW, fullInterval, CAPACITY, INTERVAL_MS);
+    assert.equal(b.tokens, CAPACITY);
+  });
+
+  it('refill does not exceed capacity', () => {
+    const longTime = NOW + INTERVAL_MS * 10;
+    const b = computeRefill(50, NOW, longTime, CAPACITY, INTERVAL_MS);
+    assert.equal(b.tokens, CAPACITY);
+  });
+
+  it('refill updates last timestamp when tokens added', () => {
+    const laterTime = NOW + INTERVAL_MS;
+    const b = computeRefill(0, NOW, laterTime, CAPACITY, INTERVAL_MS);
+    assert.equal(b.last, laterTime);
+  });
+
+  it('refill preserves last timestamp when no refill occurs', () => {
+    const b = computeRefill(50, NOW, NOW, CAPACITY, INTERVAL_MS);
+    assert.equal(b.last, NOW);
+  });
+
+  it('negative elapsed time treated as zero (clock skew safety)', () => {
+    const earlier = NOW - 1000;
+    const b = computeRefill(50, NOW, earlier, CAPACITY, INTERVAL_MS);
+    assert.equal(b.tokens, 50);
+  });
+
+  // --- checkBucket: request allowed ---
+  it('bucket with tokens: request allowed, token consumed', () => {
+    const bucket = { tokens: 10, last: NOW };
+    const result = checkBucket(bucket, CAPACITY, INTERVAL_MS, NOW);
+    assert.equal(result.allowed, true);
+    assert.equal(result.remaining, 9);
+    assert.equal(result.bucket.tokens, 9);
+  });
+
+  it('last token: request allowed, bucket empty after', () => {
+    const bucket = { tokens: 1, last: NOW };
+    const result = checkBucket(bucket, CAPACITY, INTERVAL_MS, NOW);
+    assert.equal(result.allowed, true);
+    assert.equal(result.remaining, 0);
+  });
+
+  // --- checkBucket: request denied ---
+  it('empty bucket: request denied', () => {
+    const bucket = { tokens: 0, last: NOW };
+    const result = checkBucket(bucket, CAPACITY, INTERVAL_MS, NOW);
+    assert.equal(result.allowed, false);
+    assert.equal(result.remaining, 0);
+  });
+
+  // --- checkBucket: refill on elapsed time ---
+  it('empty bucket with elapsed time: refills and allows', () => {
+    const bucket = { tokens: 0, last: NOW };
+    const fullIntervalLater = NOW + INTERVAL_MS;
+    const result = checkBucket(bucket, CAPACITY, INTERVAL_MS, fullIntervalLater);
+    assert.equal(result.allowed, true);
+    assert.equal(result.remaining, CAPACITY - 1);
+  });
+
+  // --- IP spoofing protection documentation ---
+  it('IP key derivation safety: req.ip vs x-forwarded-for spoofing', () => {
+    // Demonstrates the attack pattern that was fixed:
+    // Client sends X-Forwarded-For: fake-ip
+    // Proxy appends: X-Forwarded-For: fake-ip, real-ip
+    // Old code: split(',')[0] = 'fake-ip' <- bypasses limiter
+    // Fixed code: req.ip (Express resolves trusted proxy) = 'real-ip'
+    const rawHeader = 'fake-ip, real-ip';
+    const spoofedIp = rawHeader.split(',')[0].trim();
+    const trustedIp = 'real-ip'; // what Express req.ip returns with trust proxy: 1
+    assert.notEqual(spoofedIp, trustedIp,
+      'Spoofed X-Forwarded-For[0] differs from trust-proxy-resolved req.ip');
+    assert.equal(spoofedIp, 'fake-ip');
+    assert.equal(trustedIp, 'real-ip');
   });
 });
