@@ -162,36 +162,67 @@ Reopen Conditions:
 
 ---
 
-## Gate Closure 004 (Partial)
+## Gate Closure 004
 
 Title:
-Gate 3 — Tenant Verification Matrix (IN PROGRESS)
+Gate 3 — Enterprise Tenant Isolation Verification
 
 Status:
-IN PROGRESS
+CLOSED
+
+Merge Commit:
+(pending principal architect review and merge)
 
 Branch:
 gate-3/tenant-verification
 
-Date Opened:
+Date Closed:
 2026-06-02
 
-Completed Deliverables So Far:
+Scope:
 
-* G3-D01: 7 unprotected models added to TENANT_SCOPED_MODELS (BankStatement,
-  RecurringExpenseTemplate, TimerSession, Disbursement, DisbursementRequestNote,
-  WithholdingTaxCertificate, PaymentRefund); 3 update() where clauses hardened
+Multi-tenant isolation completeness, realtime socket security, service type
+safety, orphaned model removal, and breach test matrix.
+
+Verified Deliverables:
+
+* G3-D01: 7 unprotected models registered in TENANT_SCOPED_MODELS
+  (BankStatement, RecurringExpenseTemplate, TimerSession, Disbursement,
+  DisbursementRequestNote, WithholdingTaxCertificate, PaymentRefund)
+  TENANT_SCOPED_MODELS: 86 → 93. 3 update() where clauses hardened.
   — commit fb5bd78
-* G3-D02: SensitiveField + PermissionCondition removed from schema; DROP TABLE
-  migration 20260602160000 — commit 4234096
-* G3-D03: Socket.IO hardened with JWT auth middleware, tenant room isolation,
-  CORS hardened, server wired — commit 7533dff
+* G3-D02: SensitiveField + PermissionCondition removed from schema and DB;
+  DROP TABLE migration 20260602160000 — commit 4234096
+* G3-D03: Socket.IO hardened — JWT auth on connection, tenant room isolation,
+  CORS restricted, server.ts wired — commit 7533dff
+* G3-D04: TimerDbClient = any replaced with structural delegate type;
+  timerSession.update/delete hardened with tenantId — commit b822a59
+* G3-D05: SKIPPED — any type reduction is code quality, not hardening
+  (per hardening-only directive)
+* G3-D06: 62-test breach matrix across 6 suites — all passing; npm run test:tenant
+  wired; TENANT_BREACH_TEST_MATRIX.md committed — commit 0ae466e
+* G3-D07: GATE_3_TENANT_VERIFICATION.md committed — this entry
 
-Remaining Deliverables:
+Governance Documents Produced:
 
-* G3-D04: TimerDbClient = any fix
-* G3-D06: Cross-tenant breach test matrix
-* G3-D07: Gate 3 close report
+* docs/governance/GATE_3_TENANT_VERIFICATION.md
+* docs/governance/TENANT_BREACH_TEST_MATRIX.md
+
+Verification Evidence:
+
+* tsc --noEmit: PASS (exit code 0)
+* npm run test:tenant: 62 pass / 0 fail
+* TENANT_SCOPED_MODELS.size = 93 (verified by test)
+
+Risk Assessment:
+LOW
+
+Reopen Conditions:
+
+* Discovery of cross-tenant data leak in any of the 7 newly registered models
+* Discovery of socket authentication bypass
+* Discovery that G3-D05 deferral (any types) masked a security-relevant type gap
+* Test suite regression (< 62 passing)
 
 ---
 
