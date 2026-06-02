@@ -111,6 +111,13 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   'WriteOff',
   'CourtHearing',
   'MatterProfitabilitySnapshot',
+
+  'AIProviderConfig',
+  'AIPromptAudit',
+  'AIUsageLog',
+  'AIArtifact',
+  'AIReviewTask',
+  'AIRecommendation',
 ]);
 
 const READ_OPERATIONS = new Set([
