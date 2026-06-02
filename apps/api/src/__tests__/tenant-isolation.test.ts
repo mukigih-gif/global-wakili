@@ -22,6 +22,13 @@ import {
 
 import { assertLinesBalanced } from '../utils/double-entry';
 import {
+  normalizeWhtRate,
+  calculateWhtAmount,
+  calculateNetVatPayable,
+  validateVatPeriod,
+  calculateVatAmount,
+} from '../utils/vat-wht-calculator';
+import {
   TERMINAL_INVOICE_STATUSES,
   VALID_INVOICE_TRANSITIONS,
   assertInvoiceNotTerminal,
@@ -497,5 +504,160 @@ describe('Invoice state machine (G4-D04)', () => {
   it('CANCELLED is terminal — no valid transitions', () => {
     const from = VALID_INVOICE_TRANSITIONS.get('CANCELLED' as any)!;
     assert.equal(from.size, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 9: VAT/WHT calculation correctness — G4-D05
+// ---------------------------------------------------------------------------
+
+describe('VAT/WHT calculation correctness (G4-D05)', () => {
+
+  // --- WHT rate normalization ---
+  it('normalizeWhtRate: 5 percent -> 0.050000 (legal fees resident rate)', () => {
+    assert.equal(normalizeWhtRate(5), '0.050000');
+  });
+
+  it('normalizeWhtRate: 20 percent -> 0.200000 (non-resident rate)', () => {
+    assert.equal(normalizeWhtRate(20), '0.200000');
+  });
+
+  it('normalizeWhtRate: 0.05 decimal passthrough', () => {
+    assert.equal(normalizeWhtRate(0.05), '0.050000');
+  });
+
+  it('normalizeWhtRate: negative returns zero', () => {
+    assert.equal(normalizeWhtRate(-1), '0.000000');
+  });
+
+  it('normalizeWhtRate: zero returns zero', () => {
+    assert.equal(normalizeWhtRate(0), '0.000000');
+  });
+
+  it('normalizeWhtRate: string "5" converts correctly', () => {
+    assert.equal(normalizeWhtRate('5'), '0.050000');
+  });
+
+  // --- WHT amount calculation (Kenya legal fee rates) ---
+  it('calculateWhtAmount: KES 100,000 at 5% = KES 5,000', () => {
+    assert.equal(calculateWhtAmount('100000', '5'), '5000.00');
+  });
+
+  it('calculateWhtAmount: KES 250,000 at 5% = KES 12,500', () => {
+    assert.equal(calculateWhtAmount('250000', '5'), '12500.00');
+  });
+
+  it('calculateWhtAmount: KES 100,000 at 20% (non-resident) = KES 20,000', () => {
+    assert.equal(calculateWhtAmount('100000', '20'), '20000.00');
+  });
+
+  it('calculateWhtAmount: accepts decimal rate 0.05', () => {
+    assert.equal(calculateWhtAmount('100000', '0.05'), '5000.00');
+  });
+
+  it('calculateWhtAmount: throws WHT_BASE_AMOUNT_INVALID for zero base', () => {
+    assert.throws(
+      () => calculateWhtAmount('0', '5'),
+      (err) => { assert.equal(err.code, 'WHT_BASE_AMOUNT_INVALID'); return true; },
+    );
+  });
+
+  it('calculateWhtAmount: throws WHT_RATE_INVALID for zero rate', () => {
+    assert.throws(
+      () => calculateWhtAmount('100000', '0'),
+      (err) => { assert.equal(err.code, 'WHT_RATE_INVALID'); return true; },
+    );
+  });
+
+  // --- VAT amount calculation (Kenya 16% standard rate) ---
+  it('calculateVatAmount: KES 100,000 at 16% = KES 16,000', () => {
+    assert.equal(calculateVatAmount('100000', '16'), '16000.00');
+  });
+
+  it('calculateVatAmount: KES 50,000 at 16% = KES 8,000', () => {
+    assert.equal(calculateVatAmount('50000', '16'), '8000.00');
+  });
+
+  it('calculateVatAmount: decimal rate 0.16 same result as 16', () => {
+    assert.equal(calculateVatAmount('100000', '0.16'), '16000.00');
+  });
+
+  it('calculateVatAmount: zero rate = zero VAT (tax-exempt)', () => {
+    assert.equal(calculateVatAmount('100000', '0'), '0.00');
+  });
+
+  // --- Net VAT payable (Kenya eTIMS filing formula) ---
+  it('calculateNetVatPayable: output 16000, input 8000, no adjustments = 8000', () => {
+    assert.equal(calculateNetVatPayable('16000', '8000', []), '8000.00');
+  });
+
+  it('calculateNetVatPayable: OUTPUT_VAT adjustment adds to payable', () => {
+    assert.equal(
+      calculateNetVatPayable('16000', '8000', [{ type: 'OUTPUT_VAT', amount: '2000' }]),
+      '10000.00',
+    );
+  });
+
+  it('calculateNetVatPayable: INPUT_VAT adjustment subtracts from payable', () => {
+    assert.equal(
+      calculateNetVatPayable('16000', '8000', [{ type: 'INPUT_VAT', amount: '1000' }]),
+      '7000.00',
+    );
+  });
+
+  it('calculateNetVatPayable: VAT_REFUND subtracts from payable', () => {
+    assert.equal(
+      calculateNetVatPayable('16000', '8000', [{ type: 'VAT_REFUND', amount: '3000' }]),
+      '5000.00',
+    );
+  });
+
+  it('calculateNetVatPayable: mixed adjustments apply correct signs', () => {
+    assert.equal(
+      calculateNetVatPayable('20000', '10000', [
+        { type: 'OUTPUT_VAT', amount: '2000' },
+        { type: 'INPUT_VAT', amount: '1500' },
+      ]),
+      '10500.00',
+    );
+  });
+
+  it('calculateNetVatPayable: input > output produces negative (refund due from KRA)', () => {
+    assert.equal(calculateNetVatPayable('5000', '12000', []), '-7000.00');
+  });
+
+  // --- VAT period validation ---
+  it('validateVatPeriod: January 2026 produces correct date range', () => {
+    const { periodStart, periodEnd } = validateVatPeriod(2026, 1);
+    assert.equal(periodStart.getFullYear(), 2026);
+    assert.equal(periodStart.getMonth(), 0);
+    assert.equal(periodEnd.getMonth(), 1);
+  });
+
+  it('validateVatPeriod: December 2026 crosses year boundary correctly', () => {
+    const { periodEnd } = validateVatPeriod(2026, 12);
+    assert.equal(periodEnd.getFullYear(), 2027);
+    assert.equal(periodEnd.getMonth(), 0);
+  });
+
+  it('validateVatPeriod: throws INVALID_VAT_YEAR for year 1999', () => {
+    assert.throws(
+      () => validateVatPeriod(1999, 6),
+      (err) => { assert.equal(err.code, 'INVALID_VAT_YEAR'); return true; },
+    );
+  });
+
+  it('validateVatPeriod: throws INVALID_VAT_MONTH for month 0', () => {
+    assert.throws(
+      () => validateVatPeriod(2026, 0),
+      (err) => { assert.equal(err.code, 'INVALID_VAT_MONTH'); return true; },
+    );
+  });
+
+  it('validateVatPeriod: throws INVALID_VAT_MONTH for month 13', () => {
+    assert.throws(
+      () => validateVatPeriod(2026, 13),
+      (err) => { assert.equal(err.code, 'INVALID_VAT_MONTH'); return true; },
+    );
   });
 });
