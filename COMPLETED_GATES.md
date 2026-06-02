@@ -527,6 +527,11 @@ Evidence: 19 governance docs + 16 utility files documented
 Title: Gate 15 — Production Readiness | Status: CLOSED (pending merge)
 Branch: gate-15/production-readiness | Date: 2026-06-02
 ---
+## Gate Closure 017
+Title: Gate 16 — Go-Live Review | Status: CLOSED (pending merge)
+Branch: gate-16/go-live-review | Date: 2026-06-02
+Evidence: All 16 gates closed | 365/365 tests | 107 scoped models
+---
 ## Open Gates
 
 Control Plane Provisioning
