@@ -523,6 +523,10 @@ Title: Gate 14 — Documentation | Status: CLOSED (pending merge)
 Branch: gate-14/documentation | Date: 2026-06-02
 Evidence: 19 governance docs + 16 utility files documented
 ---
+## Gate Closure 016
+Title: Gate 15 — Production Readiness | Status: CLOSED (pending merge)
+Branch: gate-15/production-readiness | Date: 2026-06-02
+---
 ## Open Gates
 
 Control Plane Provisioning
