@@ -138,7 +138,7 @@ export function isTenantScopedModel(model?: string): boolean {
   return Boolean(model && TENANT_SCOPED_MODELS.has(model));
 }
 
-function addTenantWhere(where: unknown, tenantId: string) {
+export function addTenantWhere(where: unknown, tenantId: string) {
   if (!where || typeof where !== 'object') {
     return { tenantId };
   }
@@ -151,7 +151,7 @@ function addTenantWhere(where: unknown, tenantId: string) {
   };
 }
 
-function addTenantToData(data: unknown, tenantId: string): unknown {
+export function addTenantToData(data: unknown, tenantId: string): unknown {
   if (Array.isArray(data)) {
     return data.map((item) => addTenantToData(item, tenantId));
   }
@@ -166,7 +166,7 @@ function addTenantToData(data: unknown, tenantId: string): unknown {
   };
 }
 
-function hasTenantWhere(where: unknown): boolean {
+export function hasTenantWhere(where: unknown): boolean {
   if (!where || typeof where !== 'object') {
     return false;
   }
