@@ -1,6 +1,6 @@
 // apps/api/src/modules/notifications/notification.types.ts
 
-export type NotificationChannel = 'SYSTEM_ALERT' | 'EMAIL' | 'SMS';
+export type NotificationChannel = 'SYSTEM_ALERT' | 'EMAIL' | 'SMS' | 'PUSH';
 
 export type SchemaNotificationChannel =
   | 'SYSTEM_ALERT'
