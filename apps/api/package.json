@@ -19,6 +19,7 @@
     "worker:passive-capture": "node --require tsx/cjs src/modules/matter/workers/passive-capture.worker.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
     "@aws-sdk/client-s3": "^3.1059.0",
     "@aws-sdk/s3-request-presigner": "^3.1059.0",
     "@global-wakili/database": "file:../../packages/database",

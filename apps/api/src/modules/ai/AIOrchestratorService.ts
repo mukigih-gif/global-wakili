@@ -18,6 +18,7 @@ import { AIProviderRegistry } from './AIProviderRegistry';
 import { AIPolicyService } from './AIPolicyService';
 import { AIPromptAuditService } from './AIPromptAuditService';
 import { AIUsageLogService } from './AIUsageLogService';
+import { callAnthropic } from './providers/AnthropicProvider';
 
 function pageParams(page?: number, limit?: number) {
   const safePage = page && page > 0 ? page : 1;
@@ -153,6 +154,11 @@ export class AIOrchestratorService {
       );
     }
 
+    let result: AIExecutionResult;
+    let inputTokens: number | null = null;
+    let outputTokens: number | null = null;
+    let modelUsed: string | null = null;
+
     const usageLog = await AIUsageLogService.startExecution(db, {
       tenantId: input.tenantId,
       provider: providerResolution.config.provider,
@@ -164,15 +170,28 @@ export class AIOrchestratorService {
       promptAuditId: promptAudit.id,
       modelName: providerResolution.config.defaultModel ?? null,
       redactionApplied: providerResolution.config.redactionRequired,
-      metadata: {
-        scope: input.scope,
-      },
+      metadata: { scope: input.scope },
     });
 
-    let result: AIExecutionResult;
-
     try {
-      result = this.dispatchScope(input.scope, input.payload);
+      // External LLM providers (ANTHROPIC, etc.) — call real AI
+      const isExternal = providerResolution.config.provider !== 'INTERNAL_RULES' &&
+                         providerResolution.config.provider !== 'OCR_ONLY';
+
+      if (isExternal && providerResolution.config.provider === 'ANTHROPIC') {
+        const llmResult = await callAnthropic({
+          tenantId: input.tenantId,
+          scope: input.scope,
+          payload: input.payload,
+          modelOverride: providerResolution.config.defaultModel ?? null,
+        });
+        result = llmResult.result;
+        inputTokens = llmResult.inputTokens;
+        outputTokens = llmResult.outputTokens;
+        modelUsed = llmResult.model;
+      } else {
+        result = this.dispatchScope(input.scope, input.payload);
+      }
 
       const requiresHumanReview = AIPolicyService.requiresHumanReview({
         provider: providerResolution.config.provider,
@@ -263,11 +282,15 @@ export class AIOrchestratorService {
       await AIUsageLogService.finishExecution(db, {
         usageLogId: usageLog.id,
         status: requiresHumanReview ? 'REVIEW_REQUIRED' : 'SUCCEEDED',
+        inputTokens,
+        outputTokens,
+        totalTokens: inputTokens !== null && outputTokens !== null ? inputTokens + outputTokens : null,
         metadata: {
           scope: input.scope,
           artifactId: artifact.id,
           recommendationCount: recommendationRecords.length,
           reviewTaskId: reviewTask?.id ?? null,
+          model: modelUsed,
         },
       });
 

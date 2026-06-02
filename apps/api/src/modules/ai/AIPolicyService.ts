@@ -1,4 +1,18 @@
-// apps/api/src/modules/ai/AIPolicyService.ts
+/**
+ * AIPolicyService.ts
+ *
+ * Governance policy layer for AI execution.
+ *
+ * Controls:
+ *   - Provider execution support (dynamic — checks env vars)
+ *   - Prompt injection detection (delegates to AnthropicProvider)
+ *   - PII redaction from payloads before audit logging
+ *   - Sensitivity classification per scope
+ *   - Human review requirement determination
+ *   - Input guardrails
+ *
+ * WIP-005 — hardened from rules-only to LLM-capable.
+ */
 
 import type {
   AIDataSensitivity,
@@ -7,6 +21,7 @@ import type {
   AIScope,
   AITaskType,
 } from './ai.types';
+import { detectPromptInjection } from './providers/AnthropicProvider';
 
 const SENSITIVE_KEY_PATTERN =
   /email|phone|mobile|national.?id|passport|kra|pin|tax|bank|account|swift|iban|address|secret|token|password/i;
@@ -36,37 +51,24 @@ function redactValue(value: unknown): unknown {
 export class AIPolicyService {
   static taskTypeForScope(scope: AIScope): AITaskType {
     switch (scope) {
-      case 'document-analysis':
-        return 'DOCUMENT_ANALYSIS';
-      case 'contract-review':
-        return 'CONTRACT_REVIEW';
-      case 'matter-risk':
-        return 'MATTER_RISK';
-      case 'deadline-intelligence':
-        return 'DEADLINE_INTELLIGENCE';
-      case 'billing-insights':
-        return 'BILLING_INSIGHT';
-      case 'trust-compliance-alerts':
-        return 'TRUST_COMPLIANCE_ALERT';
-      case 'client-intake-assistant':
-        return 'CLIENT_INTAKE_ASSISTANT';
-      case 'drafting-assistant':
-        return 'DRAFTING_ASSISTANT';
-      case 'knowledge-base':
-        return 'KNOWLEDGE_BASE';
-      case 'legal-research':
-        return 'LEGAL_RESEARCH';
-      default:
-        return 'RECOMMENDATION';
+      case 'document-analysis':      return 'DOCUMENT_ANALYSIS';
+      case 'contract-review':        return 'CONTRACT_REVIEW';
+      case 'matter-risk':            return 'MATTER_RISK';
+      case 'deadline-intelligence':  return 'DEADLINE_INTELLIGENCE';
+      case 'billing-insights':       return 'BILLING_INSIGHT';
+      case 'trust-compliance-alerts':return 'TRUST_COMPLIANCE_ALERT';
+      case 'client-intake-assistant':return 'CLIENT_INTAKE_ASSISTANT';
+      case 'drafting-assistant':     return 'DRAFTING_ASSISTANT';
+      case 'knowledge-base':         return 'KNOWLEDGE_BASE';
+      case 'legal-research':         return 'LEGAL_RESEARCH';
+      default:                       return 'RECOMMENDATION';
     }
   }
 
   static sensitivityForScope(scope: AIScope): AIDataSensitivity {
     if (scope === 'knowledge-base' || scope === 'legal-research') return 'INTERNAL';
     if (scope === 'drafting-assistant') return 'CONFIDENTIAL';
-    if (scope === 'trust-compliance-alerts' || scope === 'matter-risk') {
-      return 'HIGHLY_RESTRICTED';
-    }
+    if (scope === 'trust-compliance-alerts' || scope === 'matter-risk') return 'HIGHLY_RESTRICTED';
     if (scope === 'client-intake-assistant') return 'PRIVILEGED';
     return 'CONFIDENTIAL';
   }
@@ -85,8 +87,16 @@ export class AIPolicyService {
     ].join(' ');
   }
 
+  /**
+   * Dynamic provider execution support.
+   * ANTHROPIC: enabled when ANTHROPIC_API_KEY is set.
+   * INTERNAL_RULES / OCR_ONLY: always enabled.
+   * All others: disabled until explicit integration.
+   */
   static isProviderExecutionSupported(provider: AIProvider): boolean {
-    return provider === 'INTERNAL_RULES' || provider === 'OCR_ONLY';
+    if (provider === 'INTERNAL_RULES' || provider === 'OCR_ONLY') return true;
+    if (provider === 'ANTHROPIC') return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+    return false;
   }
 
   static requiresHumanReview(params: {
@@ -99,9 +109,15 @@ export class AIPolicyService {
     if (params.sensitivity === 'HIGHLY_RESTRICTED') return true;
     if (params.scope === 'trust-compliance-alerts') return true;
     if (params.scope === 'matter-risk') return true;
-    return params.provider !== 'INTERNAL_RULES' ? true : Boolean(params.configuredHumanReviewRequired);
+    // All external LLM outputs require human review
+    if (params.provider !== 'INTERNAL_RULES' && params.provider !== 'OCR_ONLY') return true;
+    return Boolean(params.configuredHumanReviewRequired);
   }
 
+  /**
+   * Validates execution guardrails.
+   * Also detects prompt injection attacks in the input payload.
+   */
   static validateExecutionGuardrails(input: AIExecutionInput): void {
     if (!input.tenantId?.trim()) {
       throw Object.assign(new Error('Tenant ID is required for AI execution'), {
@@ -115,6 +131,21 @@ export class AIPolicyService {
         statusCode: 401,
         code: 'AI_REQUESTER_REQUIRED',
       });
+    }
+
+    // Prompt injection detection on raw payload before any processing
+    if (input.payload && typeof input.payload === 'object') {
+      const injectionReason = detectPromptInjection(input.payload);
+      if (injectionReason) {
+        throw Object.assign(
+          new Error(`AI execution blocked: prompt injection detected. ${injectionReason}`),
+          {
+            statusCode: 422,
+            code: 'AI_PROMPT_INJECTION_BLOCKED',
+            details: { reason: injectionReason, tenantId: input.tenantId },
+          },
+        );
+      }
     }
   }
 }

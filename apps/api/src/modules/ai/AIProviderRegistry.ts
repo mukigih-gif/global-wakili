@@ -42,12 +42,15 @@ export class AIProviderRegistry {
       },
       {
         provider: 'ANTHROPIC',
-        label: 'Anthropic',
+        label: 'Anthropic Claude',
         executionMode: 'external',
-        executionSupported: false,
+        executionSupported: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
         notes: [
-          'Governed provider abstraction reserved.',
-          'Execution remains fail-closed until explicit provider integration is completed.',
+          'Anthropic Claude integration via @anthropic-ai/sdk.',
+          'Enabled when ANTHROPIC_API_KEY is set.',
+          'Prompt caching enabled for repeated system prompts.',
+          'Prompt injection detection active on all inputs.',
+          'All outputs require human review before operational reliance.',
         ],
       },
       {
