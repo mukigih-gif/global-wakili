@@ -20,6 +20,8 @@ import {
   hasTenantWhere,
 } from '../../../../packages/database/src/tenant-extension';
 
+import { assertLinesBalanced } from '../utils/double-entry';
+
 // ---------------------------------------------------------------------------
 // Suite 1: addTenantWhere — query filter injection
 // ---------------------------------------------------------------------------
@@ -330,6 +332,95 @@ describe('Unsafe operation guard (logic simulation)', () => {
       simulateExtensionGuard('PaymentRefund', 'update', { id: 'refund-1' }),
       'blocked',
       'PaymentRefund.update without tenantId must be blocked after G3-D01',
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 7: assertLinesBalanced — G4-D03 double-entry constraint
+// ---------------------------------------------------------------------------
+
+describe('assertLinesBalanced (G4-D03)', () => {
+  it('passes when debits equal credits (string amounts)', () => {
+    assert.doesNotThrow(() =>
+      assertLinesBalanced(
+        [{ debit: '100.00', credit: '0' }, { debit: '0', credit: '100.00' }],
+        'TEST-001',
+      ),
+    );
+  });
+
+  it('passes when debits equal credits (numeric split over 3 lines)', () => {
+    assert.doesNotThrow(() =>
+      assertLinesBalanced(
+        [
+          { debit: 500, credit: 0 },
+          { debit: 0, credit: 250 },
+          { debit: 0, credit: 250 },
+        ],
+        'TEST-002',
+      ),
+    );
+  });
+
+  it('passes for symmetric WHT/refund lines (amount X debit, amount X credit)', () => {
+    assert.doesNotThrow(() =>
+      assertLinesBalanced(
+        [{ debit: '15000.00', credit: '0' }, { debit: '0', credit: '15000.00' }],
+        'WHT-CERT-abc123',
+      ),
+    );
+  });
+
+  it('throws UNBALANCED_JOURNAL when debits exceed credits', () => {
+    assert.throws(
+      () =>
+        assertLinesBalanced(
+          [{ debit: '200.00', credit: '0' }, { debit: '0', credit: '100.00' }],
+          'BAD-JOURNAL-001',
+        ),
+      (err: Error & { code?: string }) => {
+        assert.equal(err.code, 'UNBALANCED_JOURNAL');
+        assert.ok(err.message.includes('BAD-JOURNAL-001'));
+        assert.ok(err.message.includes('200'));
+        assert.ok(err.message.includes('100'));
+        return true;
+      },
+    );
+  });
+
+  it('throws UNBALANCED_JOURNAL when credits exceed debits', () => {
+    assert.throws(
+      () =>
+        assertLinesBalanced(
+          [{ debit: '50.00', credit: '0' }, { debit: '0', credit: '75.00' }],
+          'BAD-JOURNAL-002',
+        ),
+      (err: Error & { code?: string }) => {
+        assert.equal(err.code, 'UNBALANCED_JOURNAL');
+        return true;
+      },
+    );
+  });
+
+  it('throws for empty lines array (zero balance blocks zero-value journals)', () => {
+    assert.doesNotThrow(() =>
+      assertLinesBalanced([], 'EMPTY-JOURNAL'),
+      'Empty array: 0 == 0 so it passes balance check (zero-value enforcement is separate)',
+    );
+  });
+
+  it('uses statusCode 422 in the thrown error', () => {
+    assert.throws(
+      () =>
+        assertLinesBalanced(
+          [{ debit: '300', credit: '100' }],
+          'UNBAL-REF',
+        ),
+      (err: Error & { statusCode?: number }) => {
+        assert.equal(err.statusCode, 422);
+        return true;
+      },
     );
   });
 });

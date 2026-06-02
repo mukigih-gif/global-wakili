@@ -9,6 +9,7 @@ import {
   prisma,
 } from '@global-wakili/database';
 import { assertPeriodOpen } from '../../utils/period-lock';
+import { assertLinesBalanced } from '../../utils/double-entry';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -318,6 +319,11 @@ export class RefundService {
 
     const refundPostingDate = new Date();
     await assertPeriodOpen(tx, input.tenantId, refundPostingDate);
+
+    assertLinesBalanced([
+      { debit: input.amount, credit: new Prisma.Decimal(0) },
+      { debit: new Prisma.Decimal(0), credit: input.amount },
+    ], `PAYMENT-REFUND-${input.refundId}`);
 
     await tx.journalEntry.create({
       data: {
