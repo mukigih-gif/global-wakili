@@ -510,7 +510,7 @@ Branch: gate-11/external-integrations | Date: 2026-06-02
 Evidence: tsc PASS | 365/365 | Commit: e102f06
 ---
 ## Gate Closure 013
-Title: Gate 12 — Frontend Completion (Security Hardening) | Status: CLOSED (pending merge)
+Title: Gate 12 — Frontend Completion (Security Hardening) | Status: CLOSED | Merge: 5ade24e
 Branch: gate-12/frontend-completion | Commit: d5f02c2
 ---
 ## Open Gates
