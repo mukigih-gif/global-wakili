@@ -117,6 +117,16 @@ import {
   isValidTemplateKey,
   extractTemplateKeys,
 } from '../utils/notification-security';
+
+import {
+  assertStorageKey,
+  sanitizePathSegment,
+  sanitizeFileName,
+  assertPathWithinRoot,
+  clampSignedUrlTtl,
+  MAX_SIGNED_URL_TTL_SECONDS,
+  DEFAULT_SIGNED_URL_TTL_SECONDS,
+} from '../utils/document-security';
 import { stableSerialize, generateAuditHash } from '../utils/audit-hash';
 import {
   TERMINAL_INVOICE_STATUSES,
@@ -2286,5 +2296,115 @@ describe('Notification security (G8-D01/D02/D03)', () => {
       () => assertNotificationTenant(null),
       (err) => { assert.equal(err.code, 'NOTIFICATION_TENANT_REQUIRED'); return true; },
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 22: Document platform security — G9-D01/D02
+// ---------------------------------------------------------------------------
+
+describe('Document platform security (G9-D01/D02)', () => {
+
+  // --- assertStorageKey: path traversal prevention ---
+  it('valid key passes', () => {
+    assert.doesNotThrow(() => assertStorageKey('tenant-a/docs/contract.pdf'));
+  });
+
+  it('path traversal .. blocked', () => {
+    assert.throws(() => assertStorageKey('../../../etc/passwd'),
+      (err) => { assert.equal(err.code, 'UNSAFE_STORAGE_KEY'); return true; });
+  });
+
+  it('embedded .. traversal blocked', () => {
+    assert.throws(() => assertStorageKey('docs/../../../secret'),
+      (err) => { assert.equal(err.code, 'UNSAFE_STORAGE_KEY'); return true; });
+  });
+
+  it('backslash traversal blocked', () => {
+    assert.throws(() => assertStorageKey('docs..secret'),
+      (err) => { assert.equal(err.code, 'UNSAFE_STORAGE_KEY'); return true; });
+  });
+
+  it('leading slash blocked', () => {
+    assert.throws(() => assertStorageKey('/etc/passwd'),
+      (err) => { assert.equal(err.code, 'UNSAFE_STORAGE_KEY'); return true; });
+  });
+
+  it('empty key blocked', () => {
+    assert.throws(() => assertStorageKey(''),
+      (err) => { assert.equal(err.code, 'INVALID_STORAGE_KEY'); return true; });
+  });
+
+  it('whitespace-only key blocked', () => {
+    assert.throws(() => assertStorageKey('   '),
+      (err) => { assert.equal(err.code, 'INVALID_STORAGE_KEY'); return true; });
+  });
+
+  // --- sanitizePathSegment ---
+  it('alphanumeric and safe chars preserved', () => {
+    assert.equal(sanitizePathSegment('contract-v1.pdf'), 'contract-v1.pdf');
+  });
+
+  it('spaces replaced with underscore', () => {
+    assert.equal(sanitizePathSegment('my document'), 'my_document');
+  });
+
+  it('path separators (slashes) replaced with underscores', () => {
+    const result = sanitizePathSegment('../../../etc/passwd');
+    assert.ok(!result.includes('/'), 'Forward slashes must be replaced');
+    assert.ok(result.length > 0);
+  });
+
+  it('output is lowercase', () => {
+    assert.equal(sanitizePathSegment('CONTRACT.PDF'), 'contract.pdf');
+  });
+
+  it('multiple underscores collapsed', () => {
+    const r = sanitizePathSegment('a   b');
+    assert.equal(r, 'a_b');
+  });
+
+  // --- sanitizeFileName ---
+  it('strips directory component from filename', () => {
+    const result = sanitizeFileName('../../../etc/passwd');
+    assert.equal(result, 'passwd');
+  });
+
+  it('normal filename preserved (lowercased)', () => {
+    assert.equal(sanitizeFileName('Contract.PDF'), 'contract.pdf');
+  });
+
+  // --- assertPathWithinRoot: double-check path escapes ---
+  it('path within root passes', () => {
+    assert.doesNotThrow(() =>
+      assertPathWithinRoot('/storage/docs/file.pdf', '/storage/docs'));
+  });
+
+  it('path escaping root blocked', () => {
+    assert.throws(() =>
+      assertPathWithinRoot('/storage/docs/../../etc/passwd', '/storage/docs'),
+      (err) => { assert.equal(err.code, 'UNSAFE_LOCAL_STORAGE_PATH'); return true; });
+  });
+
+  // --- clampSignedUrlTtl: TTL enforcement ---
+  it('TTL within max returned unchanged', () => {
+    assert.equal(clampSignedUrlTtl(300), 300);
+  });
+
+  it('TTL exceeding max clamped to 900 seconds', () => {
+    assert.equal(clampSignedUrlTtl(3600), MAX_SIGNED_URL_TTL_SECONDS);
+    assert.equal(MAX_SIGNED_URL_TTL_SECONDS, 900);
+  });
+
+  it('zero TTL returns default', () => {
+    assert.equal(clampSignedUrlTtl(0), DEFAULT_SIGNED_URL_TTL_SECONDS);
+  });
+
+  it('negative TTL returns default', () => {
+    assert.equal(clampSignedUrlTtl(-1), DEFAULT_SIGNED_URL_TTL_SECONDS);
+  });
+
+  it('default TTL is 300 seconds', () => {
+    assert.equal(DEFAULT_SIGNED_URL_TTL_SECONDS, 300);
   });
 });
