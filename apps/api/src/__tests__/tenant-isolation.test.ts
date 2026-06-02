@@ -28,6 +28,13 @@ import {
   validateVatPeriod,
   calculateVatAmount,
 } from '../utils/vat-wht-calculator';
+
+import {
+  buildBillingScope,
+  buildPeriodFilter,
+  getLedgerBalanceImpact,
+  calculateOverdueAmount,
+} from '../utils/billing-scope';
 import {
   TERMINAL_INVOICE_STATUSES,
   VALID_INVOICE_TRANSITIONS,
@@ -220,7 +227,7 @@ describe('TENANT_SCOPED_MODELS integrity', () => {
   it('has the expected model count after Gate 3 additions', () => {
     assert.equal(
       TENANT_SCOPED_MODELS.size,
-      93,
+      94,
       `Expected 93 scoped models; got ${TENANT_SCOPED_MODELS.size}. ` +
       'If this fails, a model was added or removed without updating this test.',
     );
@@ -659,5 +666,145 @@ describe('VAT/WHT calculation correctness (G4-D05)', () => {
       () => validateVatPeriod(2026, 13),
       (err) => { assert.equal(err.code, 'INVALID_VAT_MONTH'); return true; },
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 10: Billing run isolation — G4-D06
+// ---------------------------------------------------------------------------
+
+describe('Billing run isolation (G4-D06)', () => {
+
+  it('BillingRun is now in TENANT_SCOPED_MODELS (G4-D06 addition)', () => {
+    assert.equal(TENANT_SCOPED_MODELS.has('BillingRun'), true);
+  });
+
+  it('TENANT_SCOPED_MODELS count updated to 94 after BillingRun', () => {
+    assert.equal(TENANT_SCOPED_MODELS.size, 94);
+  });
+
+  it('buildBillingScope always includes tenantId', () => {
+    const scope = buildBillingScope({ tenantId: 'tenant-a' });
+    assert.equal(scope.tenantId, 'tenant-a');
+  });
+
+  it('buildBillingScope includes clientId only when provided', () => {
+    const w = buildBillingScope({ tenantId: 'tenant-a', clientId: 'client-1' });
+    const wo = buildBillingScope({ tenantId: 'tenant-a' });
+    assert.equal(w.clientId, 'client-1');
+    assert.equal('clientId' in wo, false);
+  });
+
+  it('buildBillingScope includes matterId only when provided', () => {
+    const w = buildBillingScope({ tenantId: 'tenant-a', matterId: 'matter-1' });
+    const wo = buildBillingScope({ tenantId: 'tenant-a', matterId: null });
+    assert.equal(w.matterId, 'matter-1');
+    assert.equal('matterId' in wo, false);
+  });
+
+  it('buildBillingScope throws BILLING_TENANT_REQUIRED for empty tenantId', () => {
+    assert.throws(() => buildBillingScope({ tenantId: '' }),
+      (err) => { assert.equal(err.code, 'BILLING_TENANT_REQUIRED'); return true; });
+  });
+
+  it('tenant-A and tenant-B scopes are distinct', () => {
+    const a = buildBillingScope({ tenantId: 'tenant-a' });
+    const b = buildBillingScope({ tenantId: 'tenant-b' });
+    assert.notEqual(a.tenantId, b.tenantId);
+  });
+
+  it('buildPeriodFilter: no dates returns empty object', () => {
+    assert.deepEqual(buildPeriodFilter(), {});
+  });
+
+  it('buildPeriodFilter: from only applies gte', () => {
+    const from = new Date('2026-01-01');
+    assert.deepEqual(buildPeriodFilter(from, null, 'invoiceDate'), { invoiceDate: { gte: from } });
+  });
+
+  it('buildPeriodFilter: to only applies lte', () => {
+    const to = new Date('2026-12-31');
+    assert.deepEqual(buildPeriodFilter(null, to, 'invoiceDate'), { invoiceDate: { lte: to } });
+  });
+
+  it('buildPeriodFilter: both from and to applied together', () => {
+    const from = new Date('2026-01-01');
+    const to = new Date('2026-12-31');
+    assert.deepEqual(buildPeriodFilter(from, to, 'invoiceDate'), { invoiceDate: { gte: from, lte: to } });
+  });
+
+  it('getLedgerBalanceImpact: INVOICE debit positive', () => {
+    const r = getLedgerBalanceImpact('INVOICE', '10000');
+    assert.equal(r.debit, '10000.00');
+    assert.equal(r.credit, '0.00');
+    assert.equal(r.balanceImpact, '10000.00');
+  });
+
+  it('getLedgerBalanceImpact: PAYMENT negative impact', () => {
+    const r = getLedgerBalanceImpact('PAYMENT', '5000');
+    assert.equal(r.debit, '0.00');
+    assert.equal(r.balanceImpact, '-5000.00');
+  });
+
+  it('getLedgerBalanceImpact: CREDIT_NOTE negative impact', () => {
+    assert.equal(getLedgerBalanceImpact('CREDIT_NOTE', '2000').balanceImpact, '-2000.00');
+  });
+
+  it('getLedgerBalanceImpact: RETAINER negative impact', () => {
+    assert.equal(getLedgerBalanceImpact('RETAINER', '15000').balanceImpact, '-15000.00');
+  });
+
+  it('getLedgerBalanceImpact: PROFORMA zero impact', () => {
+    assert.equal(getLedgerBalanceImpact('PROFORMA', '99999').balanceImpact, '0.00');
+  });
+
+  it('getLedgerBalanceImpact: REMINDER zero impact', () => {
+    assert.equal(getLedgerBalanceImpact('REMINDER', '500').balanceImpact, '0.00');
+  });
+
+  it('calculateOverdueAmount: past-due INVOICED invoice is overdue', () => {
+    const now = new Date('2026-06-02');
+    const result = calculateOverdueAmount(
+      [{ dueDate: new Date('2026-01-01'), status: 'INVOICED', balanceDue: '5000' }], now);
+    assert.equal(result, '5000.00');
+  });
+
+  it('calculateOverdueAmount: PAID invoice excluded from overdue', () => {
+    const now = new Date('2026-06-02');
+    assert.equal(
+      calculateOverdueAmount([{ dueDate: new Date('2026-01-01'), status: 'PAID', balanceDue: '5000' }], now),
+      '0.00');
+  });
+
+  it('calculateOverdueAmount: CANCELLED invoice excluded', () => {
+    const now = new Date('2026-06-02');
+    assert.equal(
+      calculateOverdueAmount([{ dueDate: new Date('2026-01-01'), status: 'CANCELLED', balanceDue: '5000' }], now),
+      '0.00');
+  });
+
+  it('calculateOverdueAmount: future-dated invoice is not overdue', () => {
+    const now = new Date('2026-06-02');
+    assert.equal(
+      calculateOverdueAmount([{ dueDate: new Date('2027-01-01'), status: 'INVOICED', balanceDue: '5000' }], now),
+      '0.00');
+  });
+
+  it('calculateOverdueAmount: accumulates multiple overdue invoices', () => {
+    const now = new Date('2026-06-02');
+    const past = new Date('2026-01-01');
+    assert.equal(
+      calculateOverdueAmount([
+        { dueDate: past, status: 'INVOICED', balanceDue: '3000' },
+        { dueDate: past, status: 'PARTIALLY_PAID', balanceDue: '2000' },
+        { dueDate: past, status: 'PAID', balanceDue: '5000' },
+      ], now), '5000.00');
+  });
+
+  it('calculateOverdueAmount: invoice without dueDate is not overdue', () => {
+    const now = new Date('2026-06-02');
+    assert.equal(
+      calculateOverdueAmount([{ dueDate: null, status: 'INVOICED', balanceDue: '10000' }], now),
+      '0.00');
   });
 });
