@@ -25,7 +25,7 @@ A programmatic audit was run across all 168 Prisma models in `schema.prisma`. Fo
 | `AuditLog(tenantId, sequenceNumber)` | ✅ Added in D-03 | Race-condition fix query path |
 | `TrustTransaction(trustAccountId, tenantId)` | ✅ Pre-existing | Trust ledger lookup |
 | `Matter(tenantId, status)` | ✅ Pre-existing | Matter list/filter path |
-| `JournalEntry(accountingPeriodId, tenantId)` | ✅ Added in D-05 | Period-close query path — was missing |
+| `JournalEntry(tenantId, date)` | ✅ Added in D-05 | Period-close query path — `accountingPeriodId` field does not exist in schema; `date` is the correct period-query field |
 
 ---
 

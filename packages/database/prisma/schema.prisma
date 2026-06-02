@@ -535,7 +535,6 @@ model Permission {
   @@unique([tenantId, action, resource], name: "unique_tenant_action_resource")
   @@index([tenantId])
   @@index([resource])
-  @@index([tenantId])
 }
 
 model PermissionCondition {
@@ -849,7 +848,6 @@ model Workflow {
   tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   history           WorkflowHistory[]
 
-  @@index([tenantId])
   @@index([tenantId])
 }
 
@@ -1816,7 +1814,7 @@ model JournalEntry {
   @@index([postedById])
   @@index([matterId])
   @@index([reversalOfId])
-  @@index([accountingPeriodId, tenantId])
+  @@index([tenantId, date])
 }
 
 model JournalLine {

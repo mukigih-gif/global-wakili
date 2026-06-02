@@ -4,7 +4,7 @@
 -- Priority composites verified: AuditLog(tenantId,createdAt) ✓
 --   TrustTransaction(trustAccountId,tenantId) ✓
 --   Matter(tenantId,status) ✓
---   JournalEntry(accountingPeriodId,tenantId) — added here ✓
+--   JournalEntry(tenantId,date) — added here ✓ (accountingPeriodId does not exist in schema; date is the period-query field)
 
 -- Session
 CREATE INDEX IF NOT EXISTS "Session_tenantId_idx" ON "Session"("tenantId");
@@ -86,7 +86,7 @@ CREATE INDEX IF NOT EXISTS "WithholdingTaxCertificate_cancelledById_idx" ON "Wit
 
 -- JournalEntry
 CREATE INDEX IF NOT EXISTS "JournalEntry_reversalOfId_idx" ON "JournalEntry"("reversalOfId");
-CREATE INDEX IF NOT EXISTS "JournalEntry_accountingPeriodId_tenantId_idx" ON "JournalEntry"("accountingPeriodId", "tenantId");
+CREATE INDEX IF NOT EXISTS "JournalEntry_tenantId_date_idx" ON "JournalEntry"("tenantId", "date");
 
 -- PayrollRecord
 CREATE INDEX IF NOT EXISTS "PayrollRecord_employeeProfileId_idx" ON "PayrollRecord"("employeeProfileId");
