@@ -232,7 +232,10 @@ Title:
 Gate 4 — Financial Ledger Integrity Verification
 
 Status:
-CLOSED (pending merge)
+CLOSED
+
+Merge Commit:
+42bccb0
 
 Branch:
 gate-4/finance-verification
