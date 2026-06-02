@@ -28,7 +28,14 @@ app.use(compression());
 
 app.use(
   cors({
-    origin: env.CORS_ORIGIN && env.CORS_ORIGIN.length > 0 ? env.CORS_ORIGIN : true,
+    // In production: require CORS_ORIGIN to be explicitly configured.
+    // origin: true with credentials: true allows ANY website to make
+    // authenticated cross-origin requests — a credentialed CORS bypass.
+    // In development: allow all origins for localhost convenience.
+    origin: (() => {
+      if (env.CORS_ORIGIN && env.CORS_ORIGIN.length > 0) return env.CORS_ORIGIN;
+      return env.NODE_ENV === 'production' ? false : true;
+    })(),
     credentials: true,
     allowedHeaders: ['Content-Type', 'Authorization', 'x-tenant-id', 'x-request-id'],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],

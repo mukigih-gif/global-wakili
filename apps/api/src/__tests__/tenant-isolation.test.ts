@@ -78,6 +78,14 @@ import {
   checkBucket,
   createBucket,
 } from '../utils/rate-limiter';
+
+import {
+  resolveCorsOrigin,
+  isOriginAllowed,
+  isCorsProductionSafe,
+  findMissingSecurityHeaders,
+  REQUIRED_SECURITY_HEADERS,
+} from '../utils/security-headers';
 import {
   TERMINAL_INVOICE_STATUSES,
   VALID_INVOICE_TRANSITIONS,
@@ -1595,5 +1603,132 @@ describe('Rate limiter token bucket (G6-D02)', () => {
       'Spoofed X-Forwarded-For[0] differs from trust-proxy-resolved req.ip');
     assert.equal(spoofedIp, 'fake-ip');
     assert.equal(trustedIp, 'real-ip');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 17: CORS and security headers audit — G6-D03
+// ---------------------------------------------------------------------------
+
+describe('CORS and security headers (G6-D03)', () => {
+
+  // --- resolveCorsOrigin: production hardening ---
+  it('explicit CORS_ORIGIN list: used in all environments', () => {
+    const origins = ['https://app.globalwakili.co.ke'];
+    assert.deepEqual(resolveCorsOrigin(origins, 'production'), origins);
+    assert.deepEqual(resolveCorsOrigin(origins, 'development'), origins);
+  });
+
+  it('production + no CORS_ORIGIN: returns false (deny all cross-origin)', () => {
+    assert.equal(resolveCorsOrigin(undefined, 'production'), false,
+      'Production must deny all cross-origin when CORS_ORIGIN is not configured');
+  });
+
+  it('production + empty array: returns false (deny all)', () => {
+    assert.equal(resolveCorsOrigin([], 'production'), false);
+  });
+
+  it('development + no CORS_ORIGIN: returns true (allow all for dev convenience)', () => {
+    assert.equal(resolveCorsOrigin(undefined, 'development'), true);
+  });
+
+  it('development + empty array: returns true', () => {
+    assert.equal(resolveCorsOrigin([], 'development'), true);
+  });
+
+  // --- isOriginAllowed ---
+  it('origin: true allows any origin', () => {
+    assert.equal(isOriginAllowed('https://evil.com', true), true);
+    assert.equal(isOriginAllowed('https://legit.com', true), true);
+  });
+
+  it('origin: false denies all origins', () => {
+    assert.equal(isOriginAllowed('https://app.globalwakili.co.ke', false), false);
+    assert.equal(isOriginAllowed('https://evil.com', false), false);
+  });
+
+  it('origin: list allows only listed origins', () => {
+    const allowed = ['https://app.globalwakili.co.ke', 'https://portal.globalwakili.co.ke'];
+    assert.equal(isOriginAllowed('https://app.globalwakili.co.ke', allowed), true);
+    assert.equal(isOriginAllowed('https://portal.globalwakili.co.ke', allowed), true);
+    assert.equal(isOriginAllowed('https://evil.com', allowed), false);
+  });
+
+  // --- isCorsProductionSafe: credentialed CORS bypass detection ---
+  it('UNSAFE: origin: true + credentials: true (credentialed bypass)', () => {
+    assert.equal(isCorsProductionSafe(true, true), false,
+      'origin: true with credentials: true allows any site to make credentialed requests');
+  });
+
+  it('SAFE: origin: true + credentials: false (no auth headers sent)', () => {
+    assert.equal(isCorsProductionSafe(true, false), true);
+  });
+
+  it('SAFE: origin: false (deny all cross-origin)', () => {
+    assert.equal(isCorsProductionSafe(false, true), true);
+    assert.equal(isCorsProductionSafe(false, false), true);
+  });
+
+  it('SAFE: explicit origin list + credentials: true (only trusted origins)', () => {
+    assert.equal(
+      isCorsProductionSafe(['https://app.globalwakili.co.ke'], true),
+      true,
+    );
+  });
+
+  it('SAFE: empty origin list + credentials: true (deny all = safe)', () => {
+    assert.equal(isCorsProductionSafe([], true), true);
+  });
+
+  // --- findMissingSecurityHeaders ---
+  it('all required headers present: returns empty array', () => {
+    const headers = {
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'X-XSS-Protection': '0',
+      'Referrer-Policy': 'no-referrer',
+    };
+    const missing = findMissingSecurityHeaders(headers);
+    assert.equal(missing.length, 0, 'All required security headers present');
+  });
+
+  it('missing X-Frame-Options: detected', () => {
+    const headers = {
+      'X-Content-Type-Options': 'nosniff',
+      'X-XSS-Protection': '0',
+      'Referrer-Policy': 'no-referrer',
+    };
+    const missing = findMissingSecurityHeaders(headers);
+    assert.ok(missing.includes('x-frame-options'));
+  });
+
+  it('header comparison is case-insensitive', () => {
+    const headers = {
+      'x-content-type-options': 'nosniff',
+      'X-FRAME-OPTIONS': 'SAMEORIGIN',
+      'x-xss-protection': '0',
+      'referrer-policy': 'no-referrer',
+    };
+    const missing = findMissingSecurityHeaders(headers);
+    assert.equal(missing.length, 0);
+  });
+
+  it('empty headers: all required headers missing', () => {
+    const missing = findMissingSecurityHeaders({});
+    assert.equal(missing.length, REQUIRED_SECURITY_HEADERS.length);
+  });
+
+  // --- App.ts CORS configuration audit ---
+  it('production CORS config is safe (no wildcard with credentials)', () => {
+    // Mirrors the fix applied to app.ts
+    const prodConfig = resolveCorsOrigin(undefined, 'production');
+    assert.equal(isCorsProductionSafe(prodConfig, true), true,
+      'Production CORS with no CORS_ORIGIN must deny all, not wildcard');
+  });
+
+  it('production CORS with explicit origin is safe', () => {
+    const origins = ['https://app.globalwakili.co.ke'];
+    const config = resolveCorsOrigin(origins, 'production');
+    assert.equal(isCorsProductionSafe(config, true), true);
   });
 });
