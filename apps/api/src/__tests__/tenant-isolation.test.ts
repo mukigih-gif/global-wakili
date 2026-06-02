@@ -110,6 +110,13 @@ import {
   MODULES_BY_PLAN,
 } from '../utils/platform-provisioning';
 import { isSuperAdminUser } from '../middleware/superAdminAuth';
+
+import {
+  interpolateTemplate,
+  assertNotificationTenant,
+  isValidTemplateKey,
+  extractTemplateKeys,
+} from '../utils/notification-security';
 import { stableSerialize, generateAuditHash } from '../utils/audit-hash';
 import {
   TERMINAL_INVOICE_STATUSES,
@@ -303,8 +310,8 @@ describe('TENANT_SCOPED_MODELS integrity', () => {
   it('has the expected model count after Gate 3 additions', () => {
     assert.equal(
       TENANT_SCOPED_MODELS.size,
-      94,
-      `Expected 93 scoped models; got ${TENANT_SCOPED_MODELS.size}. ` +
+      99,
+      `Expected 99 scoped models; got ${TENANT_SCOPED_MODELS.size}. ` +
       'If this fails, a model was added or removed without updating this test.',
     );
   });
@@ -756,7 +763,7 @@ describe('Billing run isolation (G4-D06)', () => {
   });
 
   it('TENANT_SCOPED_MODELS count updated to 94 after BillingRun', () => {
-    assert.equal(TENANT_SCOPED_MODELS.size, 94);
+    assert.equal(TENANT_SCOPED_MODELS.size, 99);
   });
 
   it('buildBillingScope always includes tenantId', () => {
@@ -2164,5 +2171,120 @@ describe('Control plane — Gate 7 (G7-D02/D03/D04)', () => {
     const session = { status: 'APPROVED', consentRequired: false, consentGrantedAt: null, expiresAt: futureDate };
     const expired = session.expiresAt && new Date(session.expiresAt).getTime() < Date.now();
     assert.equal(Boolean(expired), false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 21: Notification security — G8-D01/D02/D03
+// ---------------------------------------------------------------------------
+
+describe('Notification security (G8-D01/D02/D03)', () => {
+
+  // --- G8-D01: TENANT_SCOPED_MODELS additions ---
+  it('NotificationDeliveryAttempt is now tenant-scoped', () => {
+    assert.equal(TENANT_SCOPED_MODELS.has('NotificationDeliveryAttempt'), true);
+  });
+
+  it('NotificationProviderConfig is now tenant-scoped', () => {
+    assert.equal(TENANT_SCOPED_MODELS.has('NotificationProviderConfig'), true);
+  });
+
+  it('NotificationWebhookEvent is now tenant-scoped', () => {
+    assert.equal(TENANT_SCOPED_MODELS.has('NotificationWebhookEvent'), true);
+  });
+
+  it('NotificationTemplate is now tenant-scoped', () => {
+    assert.equal(TENANT_SCOPED_MODELS.has('NotificationTemplate'), true);
+  });
+
+  it('NotificationPreference is now tenant-scoped', () => {
+    assert.equal(TENANT_SCOPED_MODELS.has('NotificationPreference'), true);
+  });
+
+  it('TENANT_SCOPED_MODELS count updated to 99 after notification additions', () => {
+    assert.equal(TENANT_SCOPED_MODELS.size, 99,
+      'Expected 99 — 5 notification models added in G8-D01');
+  });
+
+  // --- G8-D02: Template interpolation security ---
+  it('basic variable substitution works', () => {
+    assert.equal(
+      interpolateTemplate('Hello {{ name }}!', { name: 'Advocate' }),
+      'Hello Advocate!',
+    );
+  });
+
+  it('multiple variables interpolated', () => {
+    const result = interpolateTemplate('{{ greeting }}, {{ firm }}', {
+      greeting: 'Dear',
+      firm: 'Wanjiku & Associates',
+    });
+    assert.equal(result, 'Dear, Wanjiku & Associates');
+  });
+
+  it('missing variable produces empty string (no error, no undefined)', () => {
+    assert.equal(interpolateTemplate('Hello {{ missing }}!', {}), 'Hello !');
+  });
+
+  it('null template returns null safely', () => {
+    assert.equal(interpolateTemplate(null), null);
+  });
+
+  it('undefined template returns null safely', () => {
+    assert.equal(interpolateTemplate(undefined), null);
+  });
+
+  it('null variables is safe (all variables produce empty string)', () => {
+    assert.equal(interpolateTemplate('Hello {{ name }}!', null), 'Hello !');
+  });
+
+  it('key pattern rejects expression injection — {{ 7*7 }} not substituted', () => {
+    // w+ cannot match spaces, operators, or numbers with operators
+    const result = interpolateTemplate('{{ 7*7 }}', {});
+    // 7*7 does NOT match w+ (contains * operator) — left unchanged
+    assert.equal(result, '{{ 7*7 }}', 'Expression injection must not be evaluated');
+  });
+
+  it('key pattern rejects prototype injection — {{ __proto__ }} stays safe', () => {
+    // __proto__ matches w+ but value access via variables?.__proto__ is safe
+    const result = interpolateTemplate('{{ __proto__ }}', {});
+    assert.equal(result, '', 'Missing variables always produce empty string');
+  });
+
+  it('template keys are only word characters', () => {
+    assert.equal(isValidTemplateKey('invoiceNumber'), true);
+    assert.equal(isValidTemplateKey('client_name'), true);
+    assert.equal(isValidTemplateKey('7*7'), false);
+    assert.equal(isValidTemplateKey('../path'), false);
+    assert.equal(isValidTemplateKey(''), false);
+  });
+
+  it('extractTemplateKeys finds all variables in template', () => {
+    const keys = extractTemplateKeys('Dear {{ name }}, your invoice {{ invoiceNumber }} is due');
+    assert.deepEqual(keys, ['name', 'invoiceNumber']);
+  });
+
+  it('extractTemplateKeys ignores non-word patterns', () => {
+    const keys = extractTemplateKeys('{{ valid }} and {{ 7*7 }}');
+    assert.deepEqual(keys, ['valid']);
+  });
+
+  // --- G8-D03: Notification tenant guard ---
+  it('assertNotificationTenant passes for valid tenantId', () => {
+    assert.doesNotThrow(() => assertNotificationTenant('tenant-a'));
+  });
+
+  it('assertNotificationTenant throws NOTIFICATION_TENANT_REQUIRED for empty', () => {
+    assert.throws(
+      () => assertNotificationTenant(''),
+      (err) => { assert.equal(err.code, 'NOTIFICATION_TENANT_REQUIRED'); return true; },
+    );
+  });
+
+  it('assertNotificationTenant throws for null', () => {
+    assert.throws(
+      () => assertNotificationTenant(null),
+      (err) => { assert.equal(err.code, 'NOTIFICATION_TENANT_REQUIRED'); return true; },
+    );
   });
 });

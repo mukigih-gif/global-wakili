@@ -88,6 +88,11 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   'FieldAccessPolicy',
   'ComplianceReport',
   'Notification',
+  'NotificationDeliveryAttempt',
+  'NotificationProviderConfig',
+  'NotificationWebhookEvent',
+  'NotificationTemplate',
+  'NotificationPreference',
   'ExternalJobQueue',
 
   'DataLineage',
