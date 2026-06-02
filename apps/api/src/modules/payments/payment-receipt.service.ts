@@ -179,6 +179,7 @@ export class PaymentReceiptService {
     return tx.paymentReceipt.update({
       where: {
         id: input.paymentReceiptId,
+        tenantId: input.tenantId,
       },
       data: {
         status: PaymentReceiptStatus.REVERSED,

@@ -462,6 +462,7 @@ export class PaymentService {
       await tx.invoice.update({
         where: {
           id: invoice.id,
+          tenantId: invoice.tenantId,
         },
         data: {
           paidAmount: newPaidAmount,

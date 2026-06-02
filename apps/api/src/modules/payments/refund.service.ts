@@ -140,6 +140,7 @@ export class RefundService {
       await tx.paymentReceipt.update({
         where: {
           id: refund.paymentReceiptId,
+          tenantId: input.tenantId,
         },
         data: {
           unallocatedAmount: {
@@ -151,6 +152,7 @@ export class RefundService {
       return tx.paymentRefund.update({
         where: {
           id: refund.id,
+          tenantId: input.tenantId,
         },
         data: {
           status: 'PAID',
@@ -383,7 +385,7 @@ export class RefundService {
       if (!existing.isSystem) return existing;
 
       return tx.chartOfAccount.update({
-        where: { id: existing.id },
+        where: { id: existing.id, tenantId: input.tenantId },
         data: {
           type: input.type,
           subtype: input.subtype,

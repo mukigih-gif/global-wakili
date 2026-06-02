@@ -263,7 +263,7 @@ export class BillingPostingService {
       }
 
       return tx.chartOfAccount.update({
-        where: { id: existing.id },
+        where: { id: existing.id, tenantId: input.tenantId },
         data: {
           type: input.type,
           subtype: input.subtype,

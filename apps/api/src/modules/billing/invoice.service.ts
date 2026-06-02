@@ -375,7 +375,7 @@ export class InvoiceService {
       });
 
       return tx.invoice.update({
-        where: { id: invoice.id },
+        where: { id: invoice.id, tenantId: input.tenantId },
         data: {
           status: InvoiceStatus.CANCELLED,
           cancelledAt,
@@ -413,7 +413,7 @@ export class InvoiceService {
           : InvoiceStatus.INVOICED;
 
     return prisma.invoice.update({
-      where: { id: invoice.id },
+      where: { id: invoice.id, tenantId },
       data: {
         paidAmount,
         status: nextStatus,

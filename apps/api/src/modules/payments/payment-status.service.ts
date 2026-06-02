@@ -99,6 +99,7 @@ export class PaymentStatusService {
     return tx.paymentReceipt.update({
       where: {
         id: receipt.id,
+        tenantId: input.tenantId,
       },
       data: {
         status,
@@ -211,6 +212,7 @@ export class PaymentStatusService {
     await tx.invoice.update({
       where: {
         id: invoice.id,
+        tenantId,
       },
       data: {
         paidAmount: cashAllocatedAmount,

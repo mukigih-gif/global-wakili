@@ -313,7 +313,7 @@ export class PaymentPostingService {
 
     if (!money(receipt.unallocatedAmount).equals(unallocatedAmount)) {
       await tx.paymentReceipt.update({
-        where: { id: receipt.id },
+        where: { id: receipt.id, tenantId: input.tenantId },
         data: { unallocatedAmount },
       });
     }
@@ -438,7 +438,7 @@ export class PaymentPostingService {
     });
 
     await tx.paymentReceipt.update({
-      where: { id: receipt.id },
+      where: { id: receipt.id, tenantId: input.tenantId },
       data: {
         unallocatedAmount: {
           decrement: amount,
@@ -512,7 +512,7 @@ export class PaymentPostingService {
     });
 
     await tx.paymentReceipt.update({
-      where: { id: input.paymentReceiptId },
+      where: { id: input.paymentReceiptId, tenantId: input.tenantId },
       data: {
         unallocatedAmount: {
           increment: amount,
@@ -784,7 +784,7 @@ export class PaymentPostingService {
       }
 
       return tx.chartOfAccount.update({
-        where: { id: existing.id },
+        where: { id: existing.id, tenantId: input.tenantId },
         data: {
           type: input.type,
           subtype: input.subtype,
