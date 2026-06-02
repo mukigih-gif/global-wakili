@@ -180,7 +180,7 @@ export class ReconciliationMatchService {
     }
 
     return prisma.reconciliationMatch.update({
-      where: { id: input.id },
+      where: { id: input.id, tenantId: input.tenantId },
       data: {
         varianceStatus: ReconciliationVarianceStatus.APPROVED,
         varianceApprovedBy: input.approvedById,
@@ -205,7 +205,7 @@ export class ReconciliationMatchService {
     }
 
     return prisma.reconciliationMatch.update({
-      where: { id: input.id },
+      where: { id: input.id, tenantId: input.tenantId },
       data: {
         varianceStatus: ReconciliationVarianceStatus.REJECTED,
         ...(input.explanation ? { varianceExplanation: input.explanation } : {}),

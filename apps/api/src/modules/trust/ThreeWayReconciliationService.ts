@@ -196,7 +196,7 @@ export class ThreeWayReconciliationService {
           : ReconciliationStatus.FLAGGED;
 
       const completed = await db.reconciliationRun.update({
-        where: { id: run.id },
+        where: { id: run.id, tenantId },
         data: {
           status: finalStatus,
         },
@@ -225,7 +225,7 @@ export class ThreeWayReconciliationService {
       };
     } catch (error) {
       await db.reconciliationRun.update({
-        where: { id: run.id },
+        where: { id: run.id, tenantId },
         data: {
           status: ReconciliationStatus.FLAGGED,
         },

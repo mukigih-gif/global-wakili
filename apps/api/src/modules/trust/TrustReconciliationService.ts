@@ -183,7 +183,7 @@ export class TrustReconciliationService {
 
     const reconciliation = existing
       ? await db.trustReconciliation.update({
-          where: { id: existing.id },
+          where: { id: existing.id, tenantId },
           data: {
             statementBalance: snapshot.bankBalance,
             isCompleted: snapshot.isThreeWayBalanced,
@@ -202,7 +202,7 @@ export class TrustReconciliationService {
         });
 
     await db.trustAccount.update({
-      where: { id: trustAccountId },
+      where: { id: trustAccountId, tenantId },
       data: {
         lastReconciled: params.statementDate,
         reconciliationBalance: snapshot.bankBalance,

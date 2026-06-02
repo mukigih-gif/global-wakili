@@ -425,7 +425,7 @@ export class TrustTransactionService {
       });
 
       await tx.trustAccount.update({
-        where: { id: trustAccountId },
+        where: { id: trustAccountId, tenantId },
         data: {
           currentBalance: {
             increment: delta,
@@ -537,7 +537,7 @@ const trustLiability = await this.resolveAccountId(tx, tenantId, AccountSubtype.
           const nextStatus = nextPaidAmount.gte(total) ? 'PAID' : 'PARTIALLY_PAID';
 
           await tx.invoice.update({
-            where: { id: input.invoiceId },
+            where: { id: input.invoiceId, tenantId },
             data: {
               paidAmount: nextPaidAmount,
               status: nextStatus,
@@ -547,7 +547,7 @@ const trustLiability = await this.resolveAccountId(tx, tenantId, AccountSubtype.
 
         if (input.drnId) {
           await tx.disbursementRequestNote.update({
-            where: { id: input.drnId },
+            where: { id: input.drnId, tenantId },
             data: {
               status: 'SETTLED',
             },

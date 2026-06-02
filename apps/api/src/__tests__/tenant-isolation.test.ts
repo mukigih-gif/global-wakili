@@ -35,6 +35,36 @@ import {
   getLedgerBalanceImpact,
   calculateOverdueAmount,
 } from '../utils/billing-scope';
+
+import {
+  computeTrustNetBalance,
+  computeThreeWayVariances,
+  assessVarianceStatus,
+  assessThreeWayStatus,
+  isOverdrawn,
+  computeLedgerVariance,
+} from '../utils/trust-reconciliation';
+
+import {
+  checkTrustAccountBalance,
+  checkMatterTrustBalance,
+  isTrustOutflow,
+  isTrustInflow,
+  computeTransactionDelta,
+} from '../utils/trust-balance';
+
+import {
+  applyLedgerDelta,
+  computeLedgerDebitCredit,
+  allocateInterestProRata,
+  verifyAllocationSum,
+} from '../utils/trust-calculator';
+
+import {
+  detectCommingling,
+  isTrustToOfficeSettlement,
+  getTrustPostingContext,
+} from '../utils/trust-commingling';
 import {
   TERMINAL_INVOICE_STATUSES,
   VALID_INVOICE_TRANSITIONS,
@@ -806,5 +836,514 @@ describe('Billing run isolation (G4-D06)', () => {
     assert.equal(
       calculateOverdueAmount([{ dueDate: null, status: 'INVOICED', balanceDue: '10000' }], now),
       '0.00');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 11: Trust three-way reconciliation integrity — G5-D02
+// ---------------------------------------------------------------------------
+
+describe('Trust reconciliation integrity (G5-D02)', () => {
+
+  // --- computeTrustNetBalance ---
+  it('computeTrustNetBalance: 10000 credit, 3000 debit = 7000 net', () => {
+    assert.equal(computeTrustNetBalance('10000', '3000'), '7000.00');
+  });
+
+  it('computeTrustNetBalance: equal credits and debits = zero', () => {
+    assert.equal(computeTrustNetBalance('5000', '5000'), '0.00');
+  });
+
+  it('computeTrustNetBalance: debits exceed credits = negative (overdraw)', () => {
+    assert.equal(computeTrustNetBalance('3000', '5000'), '-2000.00');
+  });
+
+  it('computeTrustNetBalance: zero inputs = zero', () => {
+    assert.equal(computeTrustNetBalance('0', '0'), '0.00');
+  });
+
+  // --- computeThreeWayVariances ---
+  it('computeThreeWayVariances: all equal = all variances zero (perfect reconciliation)', () => {
+    const v = computeThreeWayVariances('100000', '100000', '100000');
+    assert.equal(v.bankVsTrust, '0.00');
+    assert.equal(v.trustVsClient, '0.00');
+    assert.equal(v.bankVsClient, '0.00');
+  });
+
+  it('computeThreeWayVariances: bank > trust detects bankVsTrust variance', () => {
+    const v = computeThreeWayVariances('105000', '100000', '100000');
+    assert.equal(v.bankVsTrust, '5000.00');
+    assert.equal(v.trustVsClient, '0.00');
+    assert.equal(v.bankVsClient, '5000.00');
+  });
+
+  it('computeThreeWayVariances: trust > client detects trustVsClient variance', () => {
+    const v = computeThreeWayVariances('100000', '100000', '95000');
+    assert.equal(v.bankVsTrust, '0.00');
+    assert.equal(v.trustVsClient, '5000.00');
+    assert.equal(v.bankVsClient, '5000.00');
+  });
+
+  it('computeThreeWayVariances: all differ = all variances non-zero', () => {
+    const v = computeThreeWayVariances('110000', '100000', '90000');
+    assert.equal(v.bankVsTrust, '10000.00');
+    assert.equal(v.trustVsClient, '10000.00');
+    assert.equal(v.bankVsClient, '20000.00');
+  });
+
+  // --- assessVarianceStatus ---
+  it('assessVarianceStatus: zero variance with zero tolerance = MATCHED', () => {
+    assert.equal(assessVarianceStatus('0', '0'), 'MATCHED');
+  });
+
+  it('assessVarianceStatus: variance within tolerance = MATCHED', () => {
+    assert.equal(assessVarianceStatus('3', '5'), 'MATCHED');
+  });
+
+  it('assessVarianceStatus: variance equals tolerance = MATCHED', () => {
+    assert.equal(assessVarianceStatus('5', '5'), 'MATCHED');
+  });
+
+  it('assessVarianceStatus: variance exceeds tolerance = FLAGGED', () => {
+    assert.equal(assessVarianceStatus('10', '5'), 'FLAGGED');
+  });
+
+  it('assessVarianceStatus: negative variance uses absolute value', () => {
+    assert.equal(assessVarianceStatus('-3', '5'), 'MATCHED');
+    assert.equal(assessVarianceStatus('-10', '5'), 'FLAGGED');
+  });
+
+  // --- assessThreeWayStatus ---
+  it('assessThreeWayStatus: all zero variances = MATCHED overall', () => {
+    const v = computeThreeWayVariances('100000', '100000', '100000');
+    const s = assessThreeWayStatus(v, '0');
+    assert.equal(s.finalStatus, 'MATCHED');
+    assert.equal(s.bankVsTrustStatus, 'MATCHED');
+    assert.equal(s.trustVsClientStatus, 'MATCHED');
+    assert.equal(s.bankVsClientStatus, 'MATCHED');
+  });
+
+  it('assessThreeWayStatus: ONE leg FLAGGED makes overall FLAGGED', () => {
+    const v = computeThreeWayVariances('105000', '100000', '100000');
+    const s = assessThreeWayStatus(v, '0');
+    assert.equal(s.finalStatus, 'FLAGGED');
+    assert.equal(s.bankVsTrustStatus, 'FLAGGED');
+    assert.equal(s.trustVsClientStatus, 'MATCHED');
+  });
+
+  it('assessThreeWayStatus: tolerance absorbs small variance = MATCHED', () => {
+    const v = computeThreeWayVariances('100001', '100000', '100000');
+    const s = assessThreeWayStatus(v, '5');
+    assert.equal(s.finalStatus, 'MATCHED');
+  });
+
+  it('assessThreeWayStatus: tolerance exceeded = FLAGGED', () => {
+    const v = computeThreeWayVariances('100010', '100000', '100000');
+    const s = assessThreeWayStatus(v, '5');
+    assert.equal(s.finalStatus, 'FLAGGED');
+  });
+
+  // --- isOverdrawn ---
+  it('isOverdrawn: positive balance is not overdrawn', () => {
+    assert.equal(isOverdrawn('10000'), false);
+  });
+
+  it('isOverdrawn: zero balance is not overdrawn', () => {
+    assert.equal(isOverdrawn('0'), false);
+  });
+
+  it('isOverdrawn: negative balance IS overdrawn (regulatory violation)', () => {
+    assert.equal(isOverdrawn('-1'), true);
+  });
+
+  it('isOverdrawn: large negative = overdrawn', () => {
+    assert.equal(isOverdrawn('-50000'), true);
+  });
+
+  // --- computeLedgerVariance ---
+  it('computeLedgerVariance: equal balances = zero variance', () => {
+    assert.equal(computeLedgerVariance('100000', '100000'), '0.00');
+  });
+
+  it('computeLedgerVariance: trust > client ledger = positive variance (mismatch)', () => {
+    assert.equal(computeLedgerVariance('100000', '95000'), '5000.00');
+  });
+
+  it('computeLedgerVariance: client ledger > trust balance = negative variance (mismatch)', () => {
+    assert.equal(computeLedgerVariance('95000', '100000'), '-5000.00');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 12: Trust assertSufficientBalance audit — G5-D03
+// ---------------------------------------------------------------------------
+
+describe('Trust assertSufficientBalance audit (G5-D03)', () => {
+
+  // --- checkTrustAccountBalance: overdraw prevention ---
+  it('allows withdrawal when balance exactly equals amount', () => {
+    const r = checkTrustAccountBalance('10000', '10000');
+    assert.equal(r.allowed, true);
+    assert.equal(r.shortfall, '0.00');
+  });
+
+  it('allows withdrawal when balance exceeds amount', () => {
+    const r = checkTrustAccountBalance('50000', '10000');
+    assert.equal(r.allowed, true);
+    assert.equal(r.available, '50000.00');
+    assert.equal(r.requested, '10000.00');
+    assert.equal(r.shortfall, '0.00');
+  });
+
+  it('blocks withdrawal when balance is insufficient', () => {
+    const r = checkTrustAccountBalance('5000', '10000');
+    assert.equal(r.allowed, false);
+    assert.equal(r.shortfall, '5000.00');
+  });
+
+  it('blocks withdrawal when balance is zero', () => {
+    const r = checkTrustAccountBalance('0', '1000');
+    assert.equal(r.allowed, false);
+    assert.equal(r.shortfall, '1000.00');
+  });
+
+  it('blocks withdrawal when balance is negative (already overdrawn)', () => {
+    const r = checkTrustAccountBalance('-100', '500');
+    assert.equal(r.allowed, false);
+    assert.equal(r.shortfall, '600.00');
+  });
+
+  // --- checkMatterTrustBalance: matter sub-ledger ---
+  it('matter balance check: sufficient matter funds allowed', () => {
+    const r = checkMatterTrustBalance('20000', '15000');
+    assert.equal(r.allowed, true);
+  });
+
+  it('matter balance check: insufficient matter funds blocked', () => {
+    const r = checkMatterTrustBalance('5000', '10000');
+    assert.equal(r.allowed, false);
+    assert.equal(r.shortfall, '5000.00');
+  });
+
+  it('matter balance check: exact match allowed', () => {
+    const r = checkMatterTrustBalance('7500', '7500');
+    assert.equal(r.allowed, true);
+    assert.equal(r.shortfall, '0.00');
+  });
+
+  // --- isTrustOutflow / isTrustInflow ---
+  it('WITHDRAWAL is a trust outflow', () => {
+    assert.equal(isTrustOutflow('WITHDRAWAL'), true);
+  });
+
+  it('TRANSFER_TO_OFFICE is a trust outflow', () => {
+    assert.equal(isTrustOutflow('TRANSFER_TO_OFFICE'), true);
+  });
+
+  it('DEPOSIT is NOT an outflow', () => {
+    assert.equal(isTrustOutflow('DEPOSIT'), false);
+  });
+
+  it('INTEREST is NOT an outflow', () => {
+    assert.equal(isTrustOutflow('INTEREST'), false);
+  });
+
+  it('DEPOSIT is a trust inflow', () => {
+    assert.equal(isTrustInflow('DEPOSIT'), true);
+  });
+
+  it('INTEREST is a trust inflow', () => {
+    assert.equal(isTrustInflow('INTEREST'), true);
+  });
+
+  it('WITHDRAWAL is NOT an inflow', () => {
+    assert.equal(isTrustInflow('WITHDRAWAL'), false);
+  });
+
+  // --- computeTransactionDelta ---
+  it('WITHDRAWAL produces negative delta (reduces balance)', () => {
+    assert.equal(computeTransactionDelta('WITHDRAWAL', '10000'), '-10000.00');
+  });
+
+  it('TRANSFER_TO_OFFICE produces negative delta', () => {
+    assert.equal(computeTransactionDelta('TRANSFER_TO_OFFICE', '5000'), '-5000.00');
+  });
+
+  it('DEPOSIT produces positive delta (increases balance)', () => {
+    assert.equal(computeTransactionDelta('DEPOSIT', '10000'), '10000.00');
+  });
+
+  it('INTEREST produces positive delta', () => {
+    assert.equal(computeTransactionDelta('INTEREST', '250'), '250.00');
+  });
+
+  it('REVERSAL produces zero delta (explicit case-by-case handling required)', () => {
+    assert.equal(computeTransactionDelta('REVERSAL', '5000'), '0.00');
+  });
+
+  // --- Settlement service guard coverage ---
+  it('settlement overdraw scenario: KES 15,000 withdrawal against KES 10,000 balance is blocked', () => {
+    const r = checkTrustAccountBalance('10000', '15000');
+    assert.equal(r.allowed, false,
+      'settleInvoiceFromTrust must call assertSufficientBalance BEFORE creating the transaction');
+    assert.equal(r.shortfall, '5000.00');
+  });
+
+  it('settlement scenario: exact balance withdrawal is allowed', () => {
+    const r = checkTrustAccountBalance('50000', '50000');
+    assert.equal(r.allowed, true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 13: Trust calculation correctness — G5-D04
+// ---------------------------------------------------------------------------
+
+describe('Trust calculation correctness (G5-D04)', () => {
+
+  // --- applyLedgerDelta: delta application ---
+  it('deposit: positive delta creates credit, increases balance', () => {
+    const r = applyLedgerDelta('10000', '5000');
+    assert.equal(r.credit, '5000.00');
+    assert.equal(r.debit, '0.00');
+    assert.equal(r.nextBalance, '15000.00');
+    assert.equal(r.isOverdraw, false);
+  });
+
+  it('withdrawal: negative delta creates debit, decreases balance', () => {
+    const r = applyLedgerDelta('10000', '-3000');
+    assert.equal(r.debit, '3000.00');
+    assert.equal(r.credit, '0.00');
+    assert.equal(r.nextBalance, '7000.00');
+    assert.equal(r.isOverdraw, false);
+  });
+
+  it('exact withdrawal: balance reduces to zero (not overdraw)', () => {
+    const r = applyLedgerDelta('5000', '-5000');
+    assert.equal(r.nextBalance, '0.00');
+    assert.equal(r.isOverdraw, false);
+  });
+
+  it('overdraw: withdrawal exceeds balance is flagged', () => {
+    const r = applyLedgerDelta('5000', '-6000');
+    assert.equal(r.nextBalance, '-1000.00');
+    assert.equal(r.isOverdraw, true);
+  });
+
+  it('overdraw from zero: any withdrawal from zero balance is flagged', () => {
+    const r = applyLedgerDelta('0', '-1');
+    assert.equal(r.isOverdraw, true);
+  });
+
+  it('zero delta throws ZERO_TRUST_LEDGER_DELTA', () => {
+    assert.throws(
+      () => applyLedgerDelta('10000', '0'),
+      (err) => { assert.equal(err.code, 'ZERO_TRUST_LEDGER_DELTA'); return true; },
+    );
+  });
+
+  it('large deposit on zero balance', () => {
+    const r = applyLedgerDelta('0', '1000000');
+    assert.equal(r.nextBalance, '1000000.00');
+    assert.equal(r.isOverdraw, false);
+  });
+
+  // --- computeLedgerDebitCredit ---
+  it('positive delta: debit=0 credit=amount', () => {
+    const r = computeLedgerDebitCredit('7500');
+    assert.equal(r.debit, '0.00');
+    assert.equal(r.credit, '7500.00');
+  });
+
+  it('negative delta: debit=abs(amount) credit=0', () => {
+    const r = computeLedgerDebitCredit('-2500');
+    assert.equal(r.debit, '2500.00');
+    assert.equal(r.credit, '0.00');
+  });
+
+  // --- allocateInterestProRata: pro-rata distribution ---
+  it('equal balances: interest split equally', () => {
+    const allocations = allocateInterestProRata('1000', [
+      { clientId: 'c1', balance: '50000' },
+      { clientId: 'c2', balance: '50000' },
+    ]);
+    assert.equal(allocations.length, 2);
+    assert.equal(allocations[0].amount, '500.00');
+    assert.equal(allocations[1].amount, '500.00');
+  });
+
+  it('3:1 ratio: interest allocated proportionally', () => {
+    const allocations = allocateInterestProRata('1000', [
+      { clientId: 'c1', balance: '75000' },
+      { clientId: 'c2', balance: '25000' },
+    ]);
+    assert.equal(allocations[0].amount, '750.00');
+    assert.equal(allocations[1].amount, '250.00');
+  });
+
+  it('last allocation absorbs rounding drift: sum equals exact total', () => {
+    // 3 matters with odd split — sum must be exactly 1000.00
+    const allocations = allocateInterestProRata('1000', [
+      { clientId: 'c1', balance: '33333' },
+      { clientId: 'c2', balance: '33333' },
+      { clientId: 'c3', balance: '33334' },
+    ]);
+    assert.equal(allocations.length, 3);
+    const sum = allocations.reduce((s, a) => s + parseFloat(a.amount), 0);
+    assert.ok(Math.abs(sum - 1000) < 0.01, 'Sum must equal 1000 within rounding');
+    assert.equal(verifyAllocationSum(allocations, '1000'), true);
+  });
+
+  it('single matter gets full interest', () => {
+    const allocations = allocateInterestProRata('500', [
+      { clientId: 'c1', balance: '100000' },
+    ]);
+    assert.equal(allocations.length, 1);
+    assert.equal(allocations[0].amount, '500.00');
+  });
+
+  it('zero balance matters are excluded from allocation', () => {
+    const allocations = allocateInterestProRata('1000', [
+      { clientId: 'c1', balance: '0' },
+      { clientId: 'c2', balance: '50000' },
+      { clientId: 'c3', balance: '50000' },
+    ]);
+    assert.equal(allocations.length, 2, 'Zero-balance matter must be excluded');
+    assert.equal(allocations[0].clientId, 'c2');
+    assert.equal(allocations[1].clientId, 'c3');
+  });
+
+  it('negative balance matters are excluded from allocation', () => {
+    const allocations = allocateInterestProRata('1000', [
+      { clientId: 'c1', balance: '-1000' },
+      { clientId: 'c2', balance: '100000' },
+    ]);
+    assert.equal(allocations.length, 1);
+    assert.equal(allocations[0].clientId, 'c2');
+    assert.equal(allocations[0].amount, '1000.00');
+  });
+
+  it('no positive balances throws NO_ELIGIBLE_BALANCES', () => {
+    assert.throws(
+      () => allocateInterestProRata('1000', [
+        { clientId: 'c1', balance: '0' },
+        { clientId: 'c2', balance: '-500' },
+      ]),
+      (err) => { assert.equal(err.code, 'NO_ELIGIBLE_BALANCES'); return true; },
+    );
+  });
+
+  it('zero or negative interest throws INTEREST_AMOUNT_INVALID', () => {
+    assert.throws(
+      () => allocateInterestProRata('0', [{ clientId: 'c1', balance: '10000' }]),
+      (err) => { assert.equal(err.code, 'INTEREST_AMOUNT_INVALID'); return true; },
+    );
+  });
+
+  // --- verifyAllocationSum ---
+  it('verifyAllocationSum: correct sum returns true', () => {
+    const allocations = [{ amount: '250.00' }, { amount: '750.00' }];
+    assert.equal(verifyAllocationSum(allocations, '1000'), true);
+  });
+
+  it('verifyAllocationSum: incorrect sum returns false', () => {
+    const allocations = [{ amount: '250.00' }, { amount: '700.00' }];
+    assert.equal(verifyAllocationSum(allocations, '1000'), false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 14: Trust commingling prevention — G5-D05
+// ---------------------------------------------------------------------------
+
+describe('Trust commingling prevention (G5-D05)', () => {
+
+  // --- detectCommingling: violation detection ---
+  it('OFFICE -> TRUST is commingling (regulatory violation)', () => {
+    const r = detectCommingling('OFFICE', 'TRUST');
+    assert.equal(r.isCommingling, true);
+    assert.ok(r.reason !== null);
+    assert.ok(r.reason!.length > 0);
+  });
+
+  it('OFFICE_BANK -> TRUST_LIABILITY is commingling (substring match)', () => {
+    const r = detectCommingling('OFFICE_BANK', 'TRUST_LIABILITY');
+    assert.equal(r.isCommingling, true);
+  });
+
+  it('TRUST -> OFFICE is NOT commingling (settlement is allowed)', () => {
+    const r = detectCommingling('TRUST', 'OFFICE');
+    assert.equal(r.isCommingling, false);
+    assert.equal(r.reason, null);
+  });
+
+  it('TRUST -> TRUST is NOT commingling (internal trust operations)', () => {
+    const r = detectCommingling('TRUST_BANK', 'TRUST_LIABILITY');
+    assert.equal(r.isCommingling, false);
+  });
+
+  it('OFFICE -> OFFICE is NOT commingling (normal office operations)', () => {
+    const r = detectCommingling('OFFICE_BANK', 'ACCOUNTS_RECEIVABLE');
+    assert.equal(r.isCommingling, false);
+  });
+
+  it('null source is NOT commingling', () => {
+    const r = detectCommingling(null, 'TRUST');
+    assert.equal(r.isCommingling, false);
+  });
+
+  it('null target is NOT commingling', () => {
+    const r = detectCommingling('OFFICE', null);
+    assert.equal(r.isCommingling, false);
+  });
+
+  it('both null is NOT commingling', () => {
+    const r = detectCommingling(null, null);
+    assert.equal(r.isCommingling, false);
+  });
+
+  it('case insensitive: lowercase office->trust is still commingling', () => {
+    const r = detectCommingling('office_bank', 'trust_liability');
+    assert.equal(r.isCommingling, true);
+  });
+
+  // --- isTrustToOfficeSettlement ---
+  it('TRANSFER_TO_OFFICE is a legitimate trust settlement', () => {
+    assert.equal(isTrustToOfficeSettlement('TRANSFER_TO_OFFICE'), true);
+  });
+
+  it('DEPOSIT is NOT a trust-to-office settlement', () => {
+    assert.equal(isTrustToOfficeSettlement('DEPOSIT'), false);
+  });
+
+  it('WITHDRAWAL is NOT a trust-to-office settlement', () => {
+    assert.equal(isTrustToOfficeSettlement('WITHDRAWAL'), false);
+  });
+
+  // --- getTrustPostingContext: GL policy isolation ---
+  it('DEPOSIT uses trust-only posting context (no office allowed)', () => {
+    const ctx = getTrustPostingContext('DEPOSIT');
+    assert.equal(ctx.allowTrustPosting, true);
+    assert.equal(ctx.allowOfficePosting, false);
+  });
+
+  it('WITHDRAWAL uses trust-only posting context', () => {
+    const ctx = getTrustPostingContext('WITHDRAWAL');
+    assert.equal(ctx.allowTrustPosting, true);
+    assert.equal(ctx.allowOfficePosting, false);
+  });
+
+  it('TRANSFER_TO_OFFICE (office side) uses office-only context (no trust allowed)', () => {
+    const ctx = getTrustPostingContext('TRANSFER_TO_OFFICE');
+    assert.equal(ctx.allowTrustPosting, false);
+    assert.equal(ctx.allowOfficePosting, true);
+  });
+
+  it('GL contexts for DEPOSIT and TRANSFER_TO_OFFICE are mutually exclusive', () => {
+    const trustCtx = getTrustPostingContext('DEPOSIT');
+    const officeCtx = getTrustPostingContext('TRANSFER_TO_OFFICE');
+    // Trust side and office side can never both be allowed simultaneously
+    assert.equal(trustCtx.allowTrustPosting && officeCtx.allowTrustPosting, false);
+    assert.equal(trustCtx.allowOfficePosting && officeCtx.allowOfficePosting, false);
   });
 });
