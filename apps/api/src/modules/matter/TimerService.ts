@@ -2,8 +2,143 @@
 
 import { createHash, randomUUID } from 'crypto';
 import { TimeTrackingService } from './TimeTrackingService';
+import { type RateCardDatabase } from './RateCardService';
 
-type TimerDbClient = any;
+type TimerSessionRecord = {
+  id: string;
+  tenantId: string;
+  matterId: string;
+  userId: string;
+  startedAt: Date | string;
+  stoppedAt: Date | string | null;
+  durationMinutes?: number | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+};
+
+type MatterSelectResult = {
+  id: string;
+  title: string;
+  category: string;
+  clientId: string;
+  leadAdvocateId: string;
+  branchId: string;
+  status: string;
+  deletedAt: Date | null;
+};
+
+type UserSelectResult = {
+  id: string;
+  name: string;
+  email: string;
+  branchId: string | null;
+  defaultRate?: string | number | null;
+};
+
+type AuditLogDelegate = {
+  findFirst(args: unknown): Promise<{ hash: string } | null>;
+  create(args: unknown): Promise<unknown>;
+};
+
+// Minimal record shapes compatible with TimeTrackingService's internal delegate types.
+// These are structural minimums; the actual Prisma client returns richer objects at runtime.
+type TimeEntryCompatibleRecord = {
+  id: string;
+  tenantId: string;
+  matterId: string;
+  advocateId: string;
+  branchId?: string | null;
+  invoiceId?: string | null;
+  billingRunId?: string | null;
+  description?: string | null;
+  entryDate?: Date | string | null;
+  startTime?: Date | string | null;
+  endTime?: Date | string | null;
+  durationHours?: string | number | null;
+  durationMinutes?: number | string | null;
+  appliedRate?: string | number | null;
+  billableAmount?: string | number | null;
+  isBillable?: boolean | null;
+  isInvoiced?: boolean | null;
+  status?: string | null;
+  billingModel?: string | null;
+  createdAt?: Date | string | null;
+  updatedAt?: Date | string | null;
+  matter?: {
+    id: string;
+    title?: string | null;
+    category?: string | null;
+    clientId?: string | null;
+    leadAdvocateId?: string | null;
+    branchId?: string | null;
+    status?: string | null;
+    deletedAt?: Date | string | null;
+  } | null;
+  advocate?: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+    defaultRate?: string | number | null;
+    branchId?: string | null;
+  } | null;
+  branch?: {
+    id: string;
+    name?: string | null;
+  } | null;
+};
+
+type TimeEntryAggregateCompatible = {
+  _sum?: {
+    durationHours?: string | number | null;
+    durationMinutes?: string | number | null;
+    billableAmount?: string | number | null;
+  } | null;
+  _count?: { id?: number | null } | number | null;
+};
+
+type TimeEntryGroupRowCompatible = {
+  status?: string | null;
+  advocateId?: string | null;
+  _count?: { id?: number | null } | number | null;
+  _sum?: {
+    durationHours?: string | number | null;
+    billableAmount?: string | number | null;
+  } | null;
+};
+
+// TimerDbClient must satisfy both TimerService's own needs (timerSession)
+// and TimeTrackingService.createTimeEntry's requirements (rateCard, timeEntry, branch).
+// RateCardDatabase is imported so rateCard delegate has correct structural types.
+type TimerDbClient = RateCardDatabase & {
+  // Override user to be required with findMany (TimeTrackingDbClient requires both)
+  user: {
+    findFirst(args: unknown): Promise<UserSelectResult | null>;
+    findMany(args: unknown): Promise<UserSelectResult[]>;
+  };
+  timerSession: {
+    findFirst(args: unknown): Promise<TimerSessionRecord | null>;
+    findMany(args: unknown): Promise<TimerSessionRecord[]>;
+    count(args: unknown): Promise<number>;
+    create(args: unknown): Promise<TimerSessionRecord>;
+    update(args: unknown): Promise<TimerSessionRecord>;
+    delete(args: unknown): Promise<TimerSessionRecord>;
+  };
+  timeEntry: {
+    findFirst(args: unknown): Promise<TimeEntryCompatibleRecord | null>;
+    findMany(args: unknown): Promise<TimeEntryCompatibleRecord[]>;
+    create(args: unknown): Promise<TimeEntryCompatibleRecord>;
+    update(args: unknown): Promise<TimeEntryCompatibleRecord>;
+    delete(args: unknown): Promise<TimeEntryCompatibleRecord>;
+    count(args: unknown): Promise<number>;
+    aggregate(args: unknown): Promise<TimeEntryAggregateCompatible>;
+    groupBy(args: unknown): Promise<TimeEntryGroupRowCompatible[]>;
+  };
+  branch: {
+    findFirst(args: unknown): Promise<{ id: string; name?: string | null } | null>;
+  };
+  auditLog?: AuditLogDelegate;
+  $transaction?: <T>(callback: (tx: TimerDbClient) => Promise<T>) => Promise<T>;
+};
 
 type TimerStartParams = {
   tenantId: string;
@@ -199,7 +334,7 @@ function changedJsonFields(beforeData: unknown, afterData: unknown): string[] {
   );
 }
 
-function compactTimerSession(session: any) {
+function compactTimerSession(session: TimerSessionRecord) {
   const startedAt = session.startedAt ? new Date(session.startedAt) : null;
   const stoppedAt = session.stoppedAt ? new Date(session.stoppedAt) : null;
 
@@ -564,6 +699,7 @@ export class TimerService {
       const updated = await tx.timerSession.update({
         where: {
           id: session.id,
+          tenantId,
         },
         data: {
           stoppedAt,
@@ -635,6 +771,7 @@ export class TimerService {
       await tx.timerSession.delete({
         where: {
           id: session.id,
+          tenantId,
         },
       });
 
