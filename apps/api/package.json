@@ -14,9 +14,12 @@
     "provision:tenant": "node --require tsx/cjs src/scripts/provision-tenant.ts",
     "provision:all": "node --require tsx/cjs src/scripts/reprovision-all-tenants.ts",
     "seed:permissions": "node --require tsx/cjs src/scripts/seed-permissions.ts",
-    "worker:notifications": "node --require tsx/cjs src/modules/notifications/workers/notification.worker.ts"
+    "worker:notifications": "node --require tsx/cjs src/modules/notifications/workers/notification.worker.ts",
+    "worker:retention": "node --require tsx/cjs src/modules/document/DocumentRetentionRunner.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1059.0",
+    "@aws-sdk/s3-request-presigner": "^3.1059.0",
     "@global-wakili/database": "file:../../packages/database",
     "africastalking": "^0.7.9",
     "axios": "^1.16.0",
