@@ -14,12 +14,11 @@ export const rateLimiter = (): RequestHandler => {
   const refillIntervalMs = 60_000;
 
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-    const forwarded =
-      typeof req.headers['x-forwarded-for'] === 'string'
-        ? req.headers['x-forwarded-for'].split(',')[0].trim()
-        : null;
-
-    const key = forwarded || req.ip || 'unknown';
+    // Use req.ip — Express resolves this correctly from the proxy chain when
+    // trust proxy is set (app.set('trust proxy', 1) in app.ts).
+    // Reading x-forwarded-for[0] directly is spoofable: a client can prepend
+    // a fake IP to bypass rate limiting.
+    const key = req.ip || req.socket?.remoteAddress || 'unknown';
 
     const now = Date.now();
     const bucket = buckets.get(key) ?? { tokens: capacity, last: now };

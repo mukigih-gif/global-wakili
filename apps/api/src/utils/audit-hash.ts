@@ -1,7 +1,7 @@
 import crypto from 'crypto';
 import type { JsonObject, JsonValue } from '../types/audit';
 
-function stableSerialize(value: JsonValue): string {
+export function stableSerialize(value: JsonValue): string {
   if (value === null) {
     return 'null';
   }

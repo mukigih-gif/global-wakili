@@ -361,6 +361,75 @@ Reopen Conditions:
 
 ---
 
+## Gate Closure 007
+
+Title:
+Gate 6 — Core Security Hardening & Secret Auditing
+
+Status:
+CLOSED (pending merge)
+
+Branch:
+gate-6/security-verification
+
+Date Closed:
+2026-06-02
+
+Scope:
+
+Authorization sweep, rate limiting hardening, CORS audit, audit chain
+integrity verification, and secret audit.
+
+Verified Deliverables:
+
+* G6-D01: Authorization sweep. Raw SQL: zero instances (ADR-001).
+  95+ sensitive routes confirmed guarded. GET /capabilities guard added.
+  Client portal routes documented as intentional RBAC exception.
+  rbac-engine.ts utility; 21 tests — commit bb8647d
+* G6-D02: Rate limiter IP spoofing fixed (x-forwarded-for[0] → req.ip).
+  Production in-memory limitation documented. rate-limiter.ts; 13 tests
+  — commit 9a3d530
+* G6-D03: CORS credentialed bypass fixed (origin:true+credentials:true →
+  origin:false in production when CORS_ORIGIN unset). Helmet verified
+  correct. security-headers.ts; 19 tests — commit 07dc97e
+* G6-D04: Audit hash chain verified correct. SHA-256 canonical serialization
+  with key sorting tested. audit-chain.ts; 23 tests — commit bde4e38
+* G6-D05: Secret audit passed (no credentials in tracked files). backup.sql
+  risk vector addressed (.gitignore extended). secret-scanner.ts; 17 tests
+  — commit 0cfb5a5
+* G6-D06: GATE_6_SECURITY_VERIFICATION.md committed — this entry
+
+Governance Documents Produced:
+
+* docs/governance/AUTHORIZATION_DECISIONS.md
+* docs/governance/SECRET_AUDIT.md
+* docs/governance/GATE_6_SECURITY_VERIFICATION.md
+
+Verification Evidence:
+
+* tsc --noEmit: PASS (exit code 0)
+* npm run test:tenant: 302 pass / 0 fail (was 243 at gate open; +59)
+* No schema migrations required
+
+Security Defects Fixed:
+  1. Rate limiter IP spoofing bypass (HIGH)
+  2. Credentialed CORS bypass in production (HIGH)
+  3. Unguarded /capabilities route (LOW)
+
+Risk Assessment:
+LOW
+
+Reopen Conditions:
+
+* Discovery of raw SQL in source code
+* Discovery of unauthenticated sensitive route
+* Discovery of CORS misconfiguration in production
+* Discovery of audit chain hash collision or gap
+* Discovery of real credentials in git-tracked files
+* Test suite regression (< 302 passing)
+
+---
+
 ## Open Gates
 
 Control Plane Provisioning

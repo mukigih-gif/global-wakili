@@ -17,3 +17,11 @@ build/
 startup-error.log
 
 tmp/
+
+# Database dumps — never commit real backup files
+# backup.sql, schema_dump*.sql already in repo as assessment artifacts
+# but prevent future real dumps from being committed
+*.dump
+*.pgdump
+*_backup_*.sql
+*_dump_*.sql

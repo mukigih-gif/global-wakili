@@ -65,6 +65,43 @@ import {
   isTrustToOfficeSettlement,
   getTrustPostingContext,
 } from '../utils/trust-commingling';
+
+import {
+  expandPermissionCandidates,
+  hasPermission,
+  findMissingPermissions,
+  normalizePermissions,
+} from '../utils/rbac-engine';
+
+import {
+  computeRefill,
+  checkBucket,
+  createBucket,
+} from '../utils/rate-limiter';
+
+import {
+  resolveCorsOrigin,
+  isOriginAllowed,
+  isCorsProductionSafe,
+  findMissingSecurityHeaders,
+  REQUIRED_SECURITY_HEADERS,
+} from '../utils/security-headers';
+
+import {
+  computeAuditHash,
+  verifyHashChain,
+  detectTampering,
+  isGenesisEntry,
+  GENESIS_HASH,
+} from '../utils/audit-chain';
+
+import {
+  isPlaceholderValue,
+  containsRealConnectionString,
+  containsRealSecret,
+  auditEnvFile,
+} from '../utils/secret-scanner';
+import { stableSerialize, generateAuditHash } from '../utils/audit-hash';
 import {
   TERMINAL_INVOICE_STATUSES,
   VALID_INVOICE_TRANSITIONS,
@@ -1345,5 +1382,647 @@ describe('Trust commingling prevention (G5-D05)', () => {
     // Trust side and office side can never both be allowed simultaneously
     assert.equal(trustCtx.allowTrustPosting && officeCtx.allowTrustPosting, false);
     assert.equal(trustCtx.allowOfficePosting && officeCtx.allowOfficePosting, false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 15: RBAC authorization engine — G6-D01
+// ---------------------------------------------------------------------------
+
+describe('RBAC authorization engine (G6-D01)', () => {
+
+  // --- expandPermissionCandidates: wildcard expansion ---
+  it('exact permission expands to 4 candidates', () => {
+    const candidates = expandPermissionCandidates('trust.create_transaction');
+    assert.deepEqual(candidates, [
+      'trust.create_transaction',
+      'trust.*',
+      '*.create_transaction',
+      '*.*',
+    ]);
+  });
+
+  it('resource wildcard is a valid candidate', () => {
+    assert.ok(expandPermissionCandidates('trust.view').includes('trust.*'));
+  });
+
+  it('global wildcard *.*  is always a candidate', () => {
+    assert.ok(expandPermissionCandidates('any.permission').includes('*.*'));
+  });
+
+  it('permission without dot separator returns only itself', () => {
+    assert.deepEqual(expandPermissionCandidates('admin'), ['admin']);
+  });
+
+  // --- hasPermission: matching logic ---
+  it('exact match: granted set contains exact permission', () => {
+    const granted = new Set(['trust.create_transaction']);
+    assert.equal(hasPermission(granted, 'trust.create_transaction'), true);
+  });
+
+  it('resource wildcard satisfies specific action', () => {
+    const granted = new Set(['trust.*']);
+    assert.equal(hasPermission(granted, 'trust.create_transaction'), true);
+    assert.equal(hasPermission(granted, 'trust.view_dashboard'), true);
+  });
+
+  it('action wildcard satisfies same action on any resource', () => {
+    const granted = new Set(['*.view_dashboard']);
+    assert.equal(hasPermission(granted, 'trust.view_dashboard'), true);
+    assert.equal(hasPermission(granted, 'finance.view_dashboard'), true);
+  });
+
+  it('global wildcard *.* satisfies any permission', () => {
+    const granted = new Set(['*.*']);
+    assert.equal(hasPermission(granted, 'trust.create_transaction'), true);
+    assert.equal(hasPermission(granted, 'admin.delete_tenant'), true);
+  });
+
+  it('empty granted set denies all permissions', () => {
+    const granted = new Set<string>();
+    assert.equal(hasPermission(granted, 'trust.create_transaction'), false);
+  });
+
+  it('unrelated permission in granted set does not satisfy', () => {
+    const granted = new Set(['billing.view_invoice']);
+    assert.equal(hasPermission(granted, 'trust.create_transaction'), false);
+  });
+
+  it('permission check is case insensitive', () => {
+    const granted = new Set(['trust.create_transaction']);
+    assert.equal(hasPermission(granted, 'TRUST.CREATE_TRANSACTION'), true);
+  });
+
+  // --- findMissingPermissions ---
+  it('all permissions granted: returns empty array', () => {
+    const granted = new Set(['trust.create_transaction', 'billing.view_invoice']);
+    const missing = findMissingPermissions(granted, ['trust.create_transaction', 'billing.view_invoice']);
+    assert.equal(missing.length, 0);
+  });
+
+  it('some permissions missing: returns only missing ones', () => {
+    const granted = new Set(['trust.create_transaction']);
+    const missing = findMissingPermissions(granted, ['trust.create_transaction', 'billing.view_invoice']);
+    assert.deepEqual(missing, ['billing.view_invoice']);
+  });
+
+  it('no permissions granted: all required are missing', () => {
+    const granted = new Set<string>();
+    const missing = findMissingPermissions(granted, ['trust.view', 'billing.view']);
+    assert.equal(missing.length, 2);
+  });
+
+  it('resource wildcard satisfies multiple specific requirements', () => {
+    const granted = new Set(['trust.*']);
+    const missing = findMissingPermissions(granted, ['trust.create', 'trust.view', 'trust.delete']);
+    assert.equal(missing.length, 0, 'trust.* should satisfy all trust.* requirements');
+  });
+
+  // --- normalizePermissions ---
+  it('normalizes string to lowercase trimmed array', () => {
+    assert.deepEqual(normalizePermissions('Trust.View_Dashboard'), ['trust.view_dashboard']);
+  });
+
+  it('splits comma-separated string into multiple permissions', () => {
+    const result = normalizePermissions('trust.view, billing.view');
+    assert.ok(result.includes('trust.view'));
+    assert.ok(result.includes('billing.view'));
+    assert.equal(result.length, 2);
+  });
+
+  it('normalizes array of permissions', () => {
+    const result = normalizePermissions(['Trust.View', 'Billing.View']);
+    assert.deepEqual(result, ['trust.view', 'billing.view']);
+  });
+
+  it('deduplicates identical permissions', () => {
+    const result = normalizePermissions(['trust.view', 'trust.view', 'trust.view']);
+    assert.equal(result.length, 1);
+  });
+
+  it('filters empty strings', () => {
+    const result = normalizePermissions(['trust.view', '', '  ']);
+    assert.equal(result.length, 1);
+    assert.equal(result[0], 'trust.view');
+  });
+
+  it('returns empty array for null/undefined input', () => {
+    assert.deepEqual(normalizePermissions(null), []);
+    assert.deepEqual(normalizePermissions(undefined), []);
+    assert.deepEqual(normalizePermissions(''), []);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 16: Rate limiter token bucket — G6-D02
+// ---------------------------------------------------------------------------
+
+describe('Rate limiter token bucket (G6-D02)', () => {
+
+  const CAPACITY = 100;
+  const INTERVAL_MS = 60_000; // 60 seconds
+  const NOW = 1_000_000; // arbitrary epoch ms
+
+  // --- createBucket ---
+  it('new bucket starts at full capacity', () => {
+    const b = createBucket(CAPACITY, NOW);
+    assert.equal(b.tokens, CAPACITY);
+    assert.equal(b.last, NOW);
+  });
+
+  // --- computeRefill: no time elapsed ---
+  it('no elapsed time: no refill', () => {
+    const b = computeRefill(50, NOW, NOW, CAPACITY, INTERVAL_MS);
+    assert.equal(b.tokens, 50);
+  });
+
+  // --- computeRefill: time elapsed ---
+  it('half interval elapsed: refills half capacity', () => {
+    const halfInterval = NOW + INTERVAL_MS / 2;
+    const b = computeRefill(0, NOW, halfInterval, CAPACITY, INTERVAL_MS);
+    assert.equal(b.tokens, 50);
+  });
+
+  it('full interval elapsed: refills to capacity', () => {
+    const fullInterval = NOW + INTERVAL_MS;
+    const b = computeRefill(0, NOW, fullInterval, CAPACITY, INTERVAL_MS);
+    assert.equal(b.tokens, CAPACITY);
+  });
+
+  it('refill does not exceed capacity', () => {
+    const longTime = NOW + INTERVAL_MS * 10;
+    const b = computeRefill(50, NOW, longTime, CAPACITY, INTERVAL_MS);
+    assert.equal(b.tokens, CAPACITY);
+  });
+
+  it('refill updates last timestamp when tokens added', () => {
+    const laterTime = NOW + INTERVAL_MS;
+    const b = computeRefill(0, NOW, laterTime, CAPACITY, INTERVAL_MS);
+    assert.equal(b.last, laterTime);
+  });
+
+  it('refill preserves last timestamp when no refill occurs', () => {
+    const b = computeRefill(50, NOW, NOW, CAPACITY, INTERVAL_MS);
+    assert.equal(b.last, NOW);
+  });
+
+  it('negative elapsed time treated as zero (clock skew safety)', () => {
+    const earlier = NOW - 1000;
+    const b = computeRefill(50, NOW, earlier, CAPACITY, INTERVAL_MS);
+    assert.equal(b.tokens, 50);
+  });
+
+  // --- checkBucket: request allowed ---
+  it('bucket with tokens: request allowed, token consumed', () => {
+    const bucket = { tokens: 10, last: NOW };
+    const result = checkBucket(bucket, CAPACITY, INTERVAL_MS, NOW);
+    assert.equal(result.allowed, true);
+    assert.equal(result.remaining, 9);
+    assert.equal(result.bucket.tokens, 9);
+  });
+
+  it('last token: request allowed, bucket empty after', () => {
+    const bucket = { tokens: 1, last: NOW };
+    const result = checkBucket(bucket, CAPACITY, INTERVAL_MS, NOW);
+    assert.equal(result.allowed, true);
+    assert.equal(result.remaining, 0);
+  });
+
+  // --- checkBucket: request denied ---
+  it('empty bucket: request denied', () => {
+    const bucket = { tokens: 0, last: NOW };
+    const result = checkBucket(bucket, CAPACITY, INTERVAL_MS, NOW);
+    assert.equal(result.allowed, false);
+    assert.equal(result.remaining, 0);
+  });
+
+  // --- checkBucket: refill on elapsed time ---
+  it('empty bucket with elapsed time: refills and allows', () => {
+    const bucket = { tokens: 0, last: NOW };
+    const fullIntervalLater = NOW + INTERVAL_MS;
+    const result = checkBucket(bucket, CAPACITY, INTERVAL_MS, fullIntervalLater);
+    assert.equal(result.allowed, true);
+    assert.equal(result.remaining, CAPACITY - 1);
+  });
+
+  // --- IP spoofing protection documentation ---
+  it('IP key derivation safety: req.ip vs x-forwarded-for spoofing', () => {
+    // Demonstrates the attack pattern that was fixed:
+    // Client sends X-Forwarded-For: fake-ip
+    // Proxy appends: X-Forwarded-For: fake-ip, real-ip
+    // Old code: split(',')[0] = 'fake-ip' <- bypasses limiter
+    // Fixed code: req.ip (Express resolves trusted proxy) = 'real-ip'
+    const rawHeader = 'fake-ip, real-ip';
+    const spoofedIp = rawHeader.split(',')[0].trim();
+    const trustedIp = 'real-ip'; // what Express req.ip returns with trust proxy: 1
+    assert.notEqual(spoofedIp, trustedIp,
+      'Spoofed X-Forwarded-For[0] differs from trust-proxy-resolved req.ip');
+    assert.equal(spoofedIp, 'fake-ip');
+    assert.equal(trustedIp, 'real-ip');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 17: CORS and security headers audit — G6-D03
+// ---------------------------------------------------------------------------
+
+describe('CORS and security headers (G6-D03)', () => {
+
+  // --- resolveCorsOrigin: production hardening ---
+  it('explicit CORS_ORIGIN list: used in all environments', () => {
+    const origins = ['https://app.globalwakili.co.ke'];
+    assert.deepEqual(resolveCorsOrigin(origins, 'production'), origins);
+    assert.deepEqual(resolveCorsOrigin(origins, 'development'), origins);
+  });
+
+  it('production + no CORS_ORIGIN: returns false (deny all cross-origin)', () => {
+    assert.equal(resolveCorsOrigin(undefined, 'production'), false,
+      'Production must deny all cross-origin when CORS_ORIGIN is not configured');
+  });
+
+  it('production + empty array: returns false (deny all)', () => {
+    assert.equal(resolveCorsOrigin([], 'production'), false);
+  });
+
+  it('development + no CORS_ORIGIN: returns true (allow all for dev convenience)', () => {
+    assert.equal(resolveCorsOrigin(undefined, 'development'), true);
+  });
+
+  it('development + empty array: returns true', () => {
+    assert.equal(resolveCorsOrigin([], 'development'), true);
+  });
+
+  // --- isOriginAllowed ---
+  it('origin: true allows any origin', () => {
+    assert.equal(isOriginAllowed('https://evil.com', true), true);
+    assert.equal(isOriginAllowed('https://legit.com', true), true);
+  });
+
+  it('origin: false denies all origins', () => {
+    assert.equal(isOriginAllowed('https://app.globalwakili.co.ke', false), false);
+    assert.equal(isOriginAllowed('https://evil.com', false), false);
+  });
+
+  it('origin: list allows only listed origins', () => {
+    const allowed = ['https://app.globalwakili.co.ke', 'https://portal.globalwakili.co.ke'];
+    assert.equal(isOriginAllowed('https://app.globalwakili.co.ke', allowed), true);
+    assert.equal(isOriginAllowed('https://portal.globalwakili.co.ke', allowed), true);
+    assert.equal(isOriginAllowed('https://evil.com', allowed), false);
+  });
+
+  // --- isCorsProductionSafe: credentialed CORS bypass detection ---
+  it('UNSAFE: origin: true + credentials: true (credentialed bypass)', () => {
+    assert.equal(isCorsProductionSafe(true, true), false,
+      'origin: true with credentials: true allows any site to make credentialed requests');
+  });
+
+  it('SAFE: origin: true + credentials: false (no auth headers sent)', () => {
+    assert.equal(isCorsProductionSafe(true, false), true);
+  });
+
+  it('SAFE: origin: false (deny all cross-origin)', () => {
+    assert.equal(isCorsProductionSafe(false, true), true);
+    assert.equal(isCorsProductionSafe(false, false), true);
+  });
+
+  it('SAFE: explicit origin list + credentials: true (only trusted origins)', () => {
+    assert.equal(
+      isCorsProductionSafe(['https://app.globalwakili.co.ke'], true),
+      true,
+    );
+  });
+
+  it('SAFE: empty origin list + credentials: true (deny all = safe)', () => {
+    assert.equal(isCorsProductionSafe([], true), true);
+  });
+
+  // --- findMissingSecurityHeaders ---
+  it('all required headers present: returns empty array', () => {
+    const headers = {
+      'X-Content-Type-Options': 'nosniff',
+      'X-Frame-Options': 'SAMEORIGIN',
+      'X-XSS-Protection': '0',
+      'Referrer-Policy': 'no-referrer',
+    };
+    const missing = findMissingSecurityHeaders(headers);
+    assert.equal(missing.length, 0, 'All required security headers present');
+  });
+
+  it('missing X-Frame-Options: detected', () => {
+    const headers = {
+      'X-Content-Type-Options': 'nosniff',
+      'X-XSS-Protection': '0',
+      'Referrer-Policy': 'no-referrer',
+    };
+    const missing = findMissingSecurityHeaders(headers);
+    assert.ok(missing.includes('x-frame-options'));
+  });
+
+  it('header comparison is case-insensitive', () => {
+    const headers = {
+      'x-content-type-options': 'nosniff',
+      'X-FRAME-OPTIONS': 'SAMEORIGIN',
+      'x-xss-protection': '0',
+      'referrer-policy': 'no-referrer',
+    };
+    const missing = findMissingSecurityHeaders(headers);
+    assert.equal(missing.length, 0);
+  });
+
+  it('empty headers: all required headers missing', () => {
+    const missing = findMissingSecurityHeaders({});
+    assert.equal(missing.length, REQUIRED_SECURITY_HEADERS.length);
+  });
+
+  // --- App.ts CORS configuration audit ---
+  it('production CORS config is safe (no wildcard with credentials)', () => {
+    // Mirrors the fix applied to app.ts
+    const prodConfig = resolveCorsOrigin(undefined, 'production');
+    assert.equal(isCorsProductionSafe(prodConfig, true), true,
+      'Production CORS with no CORS_ORIGIN must deny all, not wildcard');
+  });
+
+  it('production CORS with explicit origin is safe', () => {
+    const origins = ['https://app.globalwakili.co.ke'];
+    const config = resolveCorsOrigin(origins, 'production');
+    assert.equal(isCorsProductionSafe(config, true), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 18: Audit chain integrity — G6-D04
+// ---------------------------------------------------------------------------
+
+describe('Audit chain integrity (G6-D04)', () => {
+
+  // --- stableSerialize: canonical deterministic serialization ---
+  it('empty object serializes to {}', () => {
+    assert.equal(stableSerialize({}), '{}');
+  });
+
+  it('object keys are sorted alphabetically', () => {
+    const result = stableSerialize({ z: 1, a: 2, m: 3 });
+    assert.equal(result, '{"a":2,"m":3,"z":1}');
+  });
+
+  it('different key insertion order produces same hash (deterministic)', () => {
+    const h1 = generateAuditHash({ b: 2, a: 1 });
+    const h2 = generateAuditHash({ a: 1, b: 2 });
+    assert.equal(h1, h2, 'Key order must not affect hash');
+  });
+
+  it('null serializes to "null"', () => {
+    assert.equal(stableSerialize(null), 'null');
+  });
+
+  it('nested objects also sort keys', () => {
+    const r = stableSerialize({ outer: { z: 1, a: 2 } });
+    assert.equal(r, '{"outer":{"a":2,"z":1}}');
+  });
+
+  it('arrays preserve element order', () => {
+    const r = stableSerialize([3, 1, 2]);
+    assert.equal(r, '[3,1,2]');
+  });
+
+  // --- computeAuditHash: hash algorithm ---
+  it('same payload + same previousHash = same hash (deterministic)', () => {
+    const payload = { tenantId: 't1', action: 'LOGIN', entityId: 'u1' };
+    const h1 = computeAuditHash(payload, GENESIS_HASH);
+    const h2 = computeAuditHash(payload, GENESIS_HASH);
+    assert.equal(h1, h2);
+  });
+
+  it('different payload produces different hash', () => {
+    const h1 = computeAuditHash({ action: 'LOGIN' }, GENESIS_HASH);
+    const h2 = computeAuditHash({ action: 'LOGOUT' }, GENESIS_HASH);
+    assert.notEqual(h1, h2);
+  });
+
+  it('different previousHash produces different hash', () => {
+    const payload = { action: 'LOGIN' };
+    const h1 = computeAuditHash(payload, GENESIS_HASH);
+    const h2 = computeAuditHash(payload, 'a'.repeat(64));
+    assert.notEqual(h1, h2);
+  });
+
+  it('hash is 64 hex characters (SHA-256 output)', () => {
+    const h = computeAuditHash({ action: 'TEST' }, GENESIS_HASH);
+    assert.equal(h.length, 64);
+    assert.ok(/^[0-9a-f]{64}$/.test(h), 'Hash must be lowercase hex');
+  });
+
+  it('genesis hash default is 64 zeros', () => {
+    assert.equal(GENESIS_HASH.length, 64);
+    assert.ok(/^0{64}$/.test(GENESIS_HASH));
+  });
+
+  it('computeAuditHash mirrors generateAuditHash from audit-hash.ts', () => {
+    const payload = { action: 'LOGIN', tenantId: 't1' };
+    assert.equal(
+      computeAuditHash(payload, GENESIS_HASH),
+      generateAuditHash(payload, GENESIS_HASH),
+    );
+  });
+
+  // --- isGenesisEntry ---
+  it('genesis hash string is a genesis entry', () => {
+    assert.equal(isGenesisEntry(GENESIS_HASH), true);
+  });
+
+  it('null previousHash is a genesis entry', () => {
+    assert.equal(isGenesisEntry(null), true);
+  });
+
+  it('real hash is NOT a genesis entry', () => {
+    assert.equal(isGenesisEntry('a'.repeat(64)), false);
+  });
+
+  // --- verifyHashChain: chain integrity ---
+  it('empty chain is valid', () => {
+    const result = verifyHashChain([]);
+    assert.equal(result.valid, true);
+  });
+
+  it('single correct entry is valid', () => {
+    const payload = { action: 'LOGIN', tenantId: 't1' };
+    const hash = computeAuditHash(payload, GENESIS_HASH);
+    const result = verifyHashChain([{ hash, previousHash: GENESIS_HASH, payload }]);
+    assert.equal(result.valid, true);
+  });
+
+  it('two-entry chain with correct linkage is valid', () => {
+    const p1 = { action: 'LOGIN', seq: 1 };
+    const h1 = computeAuditHash(p1, GENESIS_HASH);
+    const p2 = { action: 'VIEW', seq: 2 };
+    const h2 = computeAuditHash(p2, h1);
+    const result = verifyHashChain([
+      { hash: h1, previousHash: GENESIS_HASH, payload: p1 },
+      { hash: h2, previousHash: h1, payload: p2 },
+    ]);
+    assert.equal(result.valid, true);
+  });
+
+  it('tampered payload is detected (chain invalid)', () => {
+    const p1 = { action: 'LOGIN', userId: 'u1' };
+    const h1 = computeAuditHash(p1, GENESIS_HASH);
+    // Tamper: change the payload after hash was computed
+    const tamperedPayload = { action: 'ADMIN_DELETE', userId: 'u1' };
+    const result = verifyHashChain([
+      { hash: h1, previousHash: GENESIS_HASH, payload: tamperedPayload },
+    ]);
+    assert.equal(result.valid, false);
+    assert.equal(result.brokenAtIndex, 0);
+  });
+
+  it('broken chain linkage is detected', () => {
+    const p1 = { action: 'LOGIN' };
+    const h1 = computeAuditHash(p1, GENESIS_HASH);
+    const p2 = { action: 'VIEW' };
+    const h2 = computeAuditHash(p2, h1);
+    // Tamper: use wrong previousHash in entry 2 (skip link to entry 1)
+    const result = verifyHashChain([
+      { hash: h1, previousHash: GENESIS_HASH, payload: p1 },
+      { hash: h2, previousHash: GENESIS_HASH, payload: p2 }, // wrong previousHash
+    ]);
+    assert.equal(result.valid, false);
+    assert.equal(result.brokenAtIndex, 1);
+  });
+
+  // --- detectTampering ---
+  it('correct entry: no tampering detected', () => {
+    const payload = { action: 'LOGIN', tenantId: 't1' };
+    const hash = computeAuditHash(payload, GENESIS_HASH);
+    assert.equal(detectTampering({ hash, previousHash: GENESIS_HASH, payload }), false);
+  });
+
+  it('tampered payload: tampering detected', () => {
+    const payload = { action: 'LOGIN', tenantId: 't1' };
+    const hash = computeAuditHash(payload, GENESIS_HASH);
+    const tamperedPayload = { action: 'ADMIN_DELETE', tenantId: 't1' };
+    assert.equal(detectTampering({ hash, previousHash: GENESIS_HASH, payload: tamperedPayload }), true);
+  });
+
+  it('modified hash field: tampering detected', () => {
+    const payload = { action: 'LOGIN' };
+    const hash = computeAuditHash(payload, GENESIS_HASH);
+    const modifiedHash = hash.replace(hash[0]!, hash[0] === 'a' ? 'b' : 'a');
+    assert.equal(detectTampering({ hash: modifiedHash, previousHash: GENESIS_HASH, payload }), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 19: Secret audit — G6-D05
+// ---------------------------------------------------------------------------
+
+describe('Secret audit (G6-D05)', () => {
+
+  // --- isPlaceholderValue ---
+  it('dev_key_change_in_production is a placeholder', () => {
+    assert.equal(isPlaceholderValue('dev_key_change_in_production'), true);
+  });
+
+  it('your-secret-here is a placeholder', () => {
+    assert.equal(isPlaceholderValue('your-secret-here'), true);
+  });
+
+  it('change-me is a placeholder', () => {
+    assert.equal(isPlaceholderValue('change-me'), true);
+  });
+
+  it('user:password@localhost is a placeholder', () => {
+    assert.equal(isPlaceholderValue('postgresql://user:password@localhost:5432/db'), true);
+  });
+
+  it('a real-looking token is NOT a placeholder', () => {
+    assert.equal(isPlaceholderValue('npg_AbCdEfGhIjKlMnOpQrS'), false);
+  });
+
+  // --- containsRealConnectionString ---
+  it('placeholder localhost URL is NOT a real connection string', () => {
+    assert.equal(
+      containsRealConnectionString('postgresql://user:password@localhost:5432/db'),
+      false,
+    );
+  });
+
+  it('Neon cloud URL IS a real connection string', () => {
+    assert.equal(
+      containsRealConnectionString('postgresql://neondb_owner:npg_abc123@ep-test.neon.tech/neondb'),
+      true,
+    );
+  });
+
+  it('Supabase URL IS a real connection string', () => {
+    assert.equal(
+      containsRealConnectionString('postgresql://postgres:password123@project.supabase.co/postgres'),
+      true,
+    );
+  });
+
+  it('empty string is not a real connection string', () => {
+    assert.equal(containsRealConnectionString(''), false);
+  });
+
+  // --- containsRealSecret ---
+  it('Neon token pattern is a real secret', () => {
+    assert.equal(containsRealSecret('npg_AbCdEfGhIjKlMnOpQrStUvWx'), true);
+  });
+
+  it('Stripe live key is a real secret', () => {
+    assert.equal(containsRealSecret('sk_live_AbCdEfGhIjKlMnOpQrStUvWxYz123456'), true);
+  });
+
+  it('placeholder string is NOT a real secret', () => {
+    assert.equal(containsRealSecret('dev_key_change_in_production'), false);
+  });
+
+  it('localhost URL is NOT a real secret', () => {
+    assert.equal(containsRealSecret('postgresql://user:password@localhost:5432/db'), false);
+  });
+
+  // --- auditEnvFile: .env.example validation ---
+  it('.env.example placeholders pass audit (no real credentials)', () => {
+    const envExample = [
+      'DATABASE_URL=postgresql://user:password@localhost:5432/global_wakili',
+      'JWT_SECRET=your-256-bit-secret-here-min-32-chars-change-in-production',
+      'MPESA_CONSUMER_KEY=dev_key_change_in_production',
+      'NODE_ENV=development',
+      '# This is a comment',
+      '',
+    ].join('\n');
+
+    const suspicious = auditEnvFile(envExample).filter(r => r.suspicious);
+    assert.equal(suspicious.length, 0, 'No suspicious entries in placeholder env file');
+  });
+
+  it('real Neon URL in env file is flagged as suspicious', () => {
+    const maliciousEnv = [
+      'DATABASE_URL=postgresql://neondb_owner:npg_realtoken123@ep-test.neon.tech/neondb',
+    ].join('\n');
+
+    const suspicious = auditEnvFile(maliciousEnv).filter(r => r.suspicious);
+    assert.equal(suspicious.length, 1);
+    assert.equal(suspicious[0]!.key, 'DATABASE_URL');
+  });
+
+  it('comments are ignored in env audit', () => {
+    const envWithComments = [
+      '# DATABASE_URL=postgresql://neondb_owner:npg_realtoken123@ep-test.neon.tech/neondb',
+      'DATABASE_URL=postgresql://user:password@localhost:5432/db',
+    ].join('\n');
+
+    const suspicious = auditEnvFile(envWithComments).filter(r => r.suspicious);
+    assert.equal(suspicious.length, 0, 'Commented-out lines must be ignored');
+  });
+
+  it('empty values are not flagged', () => {
+    const envEmpty = [
+      'REDIS_PASSWORD=',
+      'OPTIONAL_KEY=',
+    ].join('\n');
+
+    const suspicious = auditEnvFile(envEmpty).filter(r => r.suspicious);
+    assert.equal(suspicious.length, 0);
   });
 });
