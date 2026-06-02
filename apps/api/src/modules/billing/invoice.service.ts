@@ -17,6 +17,7 @@ import {
 } from './billing.types';
 import { InvoiceNumberService, invoiceNumberService } from './invoice-number.service';
 import { BillingPostingService, billingPostingService } from './billing-posting.service';
+import { isInvoiceTerminal } from './invoice-state-machine';
 
 export class InvoiceService {
   constructor(
@@ -394,7 +395,8 @@ export class InvoiceService {
   ): Promise<InvoiceWithRelations> {
     const invoice = await this.getInvoiceById(tenantId, invoiceId);
 
-    if (invoice.status === InvoiceStatus.CANCELLED) {
+    // Terminal statuses must not have payment status overwritten
+    if (isInvoiceTerminal(invoice.status)) {
       return invoice;
     }
 

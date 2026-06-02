@@ -21,6 +21,12 @@ import {
 } from '../../../../packages/database/src/tenant-extension';
 
 import { assertLinesBalanced } from '../utils/double-entry';
+import {
+  TERMINAL_INVOICE_STATUSES,
+  VALID_INVOICE_TRANSITIONS,
+  assertInvoiceNotTerminal,
+  isInvoiceTerminal,
+} from '../modules/billing/invoice-state-machine';
 
 // ---------------------------------------------------------------------------
 // Suite 1: addTenantWhere — query filter injection
@@ -422,5 +428,74 @@ describe('assertLinesBalanced (G4-D03)', () => {
         return true;
       },
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 8: Invoice state machine — G4-D04
+// ---------------------------------------------------------------------------
+
+describe('Invoice state machine (G4-D04)', () => {
+  it('TERMINAL_INVOICE_STATUSES contains CANCELLED and ETIMS_REJECTED', () => {
+    assert.equal(TERMINAL_INVOICE_STATUSES.has('CANCELLED' as any), true);
+    assert.equal(TERMINAL_INVOICE_STATUSES.has('ETIMS_REJECTED' as any), true);
+    assert.equal(TERMINAL_INVOICE_STATUSES.size, 2);
+  });
+
+  it('isInvoiceTerminal true for CANCELLED and ETIMS_REJECTED', () => {
+    assert.equal(isInvoiceTerminal('CANCELLED' as any), true);
+    assert.equal(isInvoiceTerminal('ETIMS_REJECTED' as any), true);
+  });
+
+  it('isInvoiceTerminal false for INVOICED, PAID, PARTIALLY_PAID', () => {
+    assert.equal(isInvoiceTerminal('INVOICED' as any), false);
+    assert.equal(isInvoiceTerminal('PAID' as any), false);
+    assert.equal(isInvoiceTerminal('PARTIALLY_PAID' as any), false);
+  });
+
+  it('assertInvoiceNotTerminal passes for INVOICED', () => {
+    assert.doesNotThrow(() => assertInvoiceNotTerminal('INVOICED' as any, 'INV-001'));
+  });
+
+  it('assertInvoiceNotTerminal throws INVOICE_CANCELLED for CANCELLED', () => {
+    assert.throws(
+      () => assertInvoiceNotTerminal('CANCELLED' as any, 'INV-002'),
+      (err: Error & { code?: string; statusCode?: number }) => {
+        assert.equal(err.code, 'INVOICE_CANCELLED');
+        assert.equal(err.statusCode, 409);
+        return true;
+      },
+    );
+  });
+
+  it('assertInvoiceNotTerminal throws INVOICE_ETIMS_REJECTED for ETIMS_REJECTED', () => {
+    assert.throws(
+      () => assertInvoiceNotTerminal('ETIMS_REJECTED' as any, 'INV-003'),
+      (err: Error & { code?: string; statusCode?: number }) => {
+        assert.equal(err.code, 'INVOICE_ETIMS_REJECTED');
+        assert.equal(err.statusCode, 409);
+        assert.ok(err.message.includes('INV-003'));
+        return true;
+      },
+    );
+  });
+
+  it('INVOICED can transition to PAID, PARTIALLY_PAID, CANCELLED — not ETIMS_REJECTED', () => {
+    const from = VALID_INVOICE_TRANSITIONS.get('INVOICED' as any)!;
+    assert.equal(from.has('PAID' as any), true);
+    assert.equal(from.has('PARTIALLY_PAID' as any), true);
+    assert.equal(from.has('CANCELLED' as any), true);
+    assert.equal(from.has('ETIMS_REJECTED' as any), false);
+  });
+
+  it('ETIMS_REJECTED can only transition to CANCELLED', () => {
+    const from = VALID_INVOICE_TRANSITIONS.get('ETIMS_REJECTED' as any)!;
+    assert.equal(from.has('CANCELLED' as any), true);
+    assert.equal(from.size, 1);
+  });
+
+  it('CANCELLED is terminal — no valid transitions', () => {
+    const from = VALID_INVOICE_TRANSITIONS.get('CANCELLED' as any)!;
+    assert.equal(from.size, 0);
   });
 });
