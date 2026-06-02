@@ -563,6 +563,7 @@ model FieldAccessPolicy {
 
 model OwnershipRecord {
   id           String   @id @default(cuid())
+  tenantId     String?
   resourceType String
   resourceId   String
   ownerId      String
@@ -571,6 +572,7 @@ model OwnershipRecord {
 
   @@unique([resourceType, resourceId])
   @@index([ownerId])
+  @@index([tenantId])
 }
 
 model ApiKey {
@@ -1182,6 +1184,7 @@ model MatterOriginator {
 
 model MatterLien {
   id             String     @id @default(cuid())
+  tenantId       String?
   matterId       String
   lienholder     String
   amount         Decimal    @db.Decimal(18, 2)
@@ -1193,6 +1196,7 @@ model MatterLien {
   updatedAt      DateTime   @default(now()) @updatedAt
   matter         Matter     @relation(fields: [matterId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId])
   @@index([matterId])
   @@index([status])
 }
@@ -1363,6 +1367,7 @@ model MatterProfitabilitySnapshot {
 
 model StatuteOfLimitations {
   id               String      @id @default(cuid())
+  tenantId         String?
   matterId         String      @unique
   statueType       StatuteType
   limitationPeriod Int
@@ -1375,10 +1380,12 @@ model StatuteOfLimitations {
   matter           Matter      @relation(fields: [matterId], references: [id], onDelete: Cascade)
 
   @@unique([matterId, statueType])
+  @@index([tenantId])
 }
 
 model MatterParty {
   id              String    @id @default(cuid())
+  tenantId        String?
   matterId        String
   name            String
   email           String?
@@ -1392,6 +1399,7 @@ model MatterParty {
   updatedAt       DateTime  @default(now()) @updatedAt
   matter          Matter    @relation(fields: [matterId], references: [id], onDelete: Cascade)
 
+  @@index([tenantId])
   @@index([matterId])
   @@index([partyType])
 }

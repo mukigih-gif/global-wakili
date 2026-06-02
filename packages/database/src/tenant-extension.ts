@@ -52,7 +52,6 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   'TrustReconciliation',
   'ReconciliationRun',
   'ReconciliationMatch',
-  'BankAccount',
   'BankTransaction',
 
   'EmployeeProfile',
@@ -69,7 +68,6 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   'CommissionPayout',
 
   'Supplier',
-  'Vendor',
   'VendorBill',
   'RequestForQuotation',
   'RequestForQuotationItem',
@@ -81,7 +79,6 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   'PurchaseOrderReceipt',
   'PurchaseOrderReceiptLine',
   'ExpenseEntry',
-  'RecurringExpense',
 
   'AuditLog',
   'AuditAlert',
@@ -92,6 +89,9 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   'ComplianceReport',
   'Notification',
   'ExternalJobQueue',
+
+  'DataLineage',
+  'OwnershipRecord',
 
   'RateCard',
   'WriteOff',
