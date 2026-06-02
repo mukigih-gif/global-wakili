@@ -39,7 +39,7 @@ export class PlatformImpersonationService {
     }
 
     return db.platformImpersonationSession.update({
-      where: { id },
+      where: { id, tenantId: existing.tenantId },
       data: {
         approvedByPlatformUserId: actorUserId,
         status: input.status,
