@@ -52,6 +52,13 @@ import {
   isTrustInflow,
   computeTransactionDelta,
 } from '../utils/trust-balance';
+
+import {
+  applyLedgerDelta,
+  computeLedgerDebitCredit,
+  allocateInterestProRata,
+  verifyAllocationSum,
+} from '../utils/trust-calculator';
 import {
   TERMINAL_INVOICE_STATUSES,
   VALID_INVOICE_TRANSITIONS,
@@ -1079,5 +1086,162 @@ describe('Trust assertSufficientBalance audit (G5-D03)', () => {
   it('settlement scenario: exact balance withdrawal is allowed', () => {
     const r = checkTrustAccountBalance('50000', '50000');
     assert.equal(r.allowed, true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 13: Trust calculation correctness — G5-D04
+// ---------------------------------------------------------------------------
+
+describe('Trust calculation correctness (G5-D04)', () => {
+
+  // --- applyLedgerDelta: delta application ---
+  it('deposit: positive delta creates credit, increases balance', () => {
+    const r = applyLedgerDelta('10000', '5000');
+    assert.equal(r.credit, '5000.00');
+    assert.equal(r.debit, '0.00');
+    assert.equal(r.nextBalance, '15000.00');
+    assert.equal(r.isOverdraw, false);
+  });
+
+  it('withdrawal: negative delta creates debit, decreases balance', () => {
+    const r = applyLedgerDelta('10000', '-3000');
+    assert.equal(r.debit, '3000.00');
+    assert.equal(r.credit, '0.00');
+    assert.equal(r.nextBalance, '7000.00');
+    assert.equal(r.isOverdraw, false);
+  });
+
+  it('exact withdrawal: balance reduces to zero (not overdraw)', () => {
+    const r = applyLedgerDelta('5000', '-5000');
+    assert.equal(r.nextBalance, '0.00');
+    assert.equal(r.isOverdraw, false);
+  });
+
+  it('overdraw: withdrawal exceeds balance is flagged', () => {
+    const r = applyLedgerDelta('5000', '-6000');
+    assert.equal(r.nextBalance, '-1000.00');
+    assert.equal(r.isOverdraw, true);
+  });
+
+  it('overdraw from zero: any withdrawal from zero balance is flagged', () => {
+    const r = applyLedgerDelta('0', '-1');
+    assert.equal(r.isOverdraw, true);
+  });
+
+  it('zero delta throws ZERO_TRUST_LEDGER_DELTA', () => {
+    assert.throws(
+      () => applyLedgerDelta('10000', '0'),
+      (err) => { assert.equal(err.code, 'ZERO_TRUST_LEDGER_DELTA'); return true; },
+    );
+  });
+
+  it('large deposit on zero balance', () => {
+    const r = applyLedgerDelta('0', '1000000');
+    assert.equal(r.nextBalance, '1000000.00');
+    assert.equal(r.isOverdraw, false);
+  });
+
+  // --- computeLedgerDebitCredit ---
+  it('positive delta: debit=0 credit=amount', () => {
+    const r = computeLedgerDebitCredit('7500');
+    assert.equal(r.debit, '0.00');
+    assert.equal(r.credit, '7500.00');
+  });
+
+  it('negative delta: debit=abs(amount) credit=0', () => {
+    const r = computeLedgerDebitCredit('-2500');
+    assert.equal(r.debit, '2500.00');
+    assert.equal(r.credit, '0.00');
+  });
+
+  // --- allocateInterestProRata: pro-rata distribution ---
+  it('equal balances: interest split equally', () => {
+    const allocations = allocateInterestProRata('1000', [
+      { clientId: 'c1', balance: '50000' },
+      { clientId: 'c2', balance: '50000' },
+    ]);
+    assert.equal(allocations.length, 2);
+    assert.equal(allocations[0].amount, '500.00');
+    assert.equal(allocations[1].amount, '500.00');
+  });
+
+  it('3:1 ratio: interest allocated proportionally', () => {
+    const allocations = allocateInterestProRata('1000', [
+      { clientId: 'c1', balance: '75000' },
+      { clientId: 'c2', balance: '25000' },
+    ]);
+    assert.equal(allocations[0].amount, '750.00');
+    assert.equal(allocations[1].amount, '250.00');
+  });
+
+  it('last allocation absorbs rounding drift: sum equals exact total', () => {
+    // 3 matters with odd split — sum must be exactly 1000.00
+    const allocations = allocateInterestProRata('1000', [
+      { clientId: 'c1', balance: '33333' },
+      { clientId: 'c2', balance: '33333' },
+      { clientId: 'c3', balance: '33334' },
+    ]);
+    assert.equal(allocations.length, 3);
+    const sum = allocations.reduce((s, a) => s + parseFloat(a.amount), 0);
+    assert.ok(Math.abs(sum - 1000) < 0.01, 'Sum must equal 1000 within rounding');
+    assert.equal(verifyAllocationSum(allocations, '1000'), true);
+  });
+
+  it('single matter gets full interest', () => {
+    const allocations = allocateInterestProRata('500', [
+      { clientId: 'c1', balance: '100000' },
+    ]);
+    assert.equal(allocations.length, 1);
+    assert.equal(allocations[0].amount, '500.00');
+  });
+
+  it('zero balance matters are excluded from allocation', () => {
+    const allocations = allocateInterestProRata('1000', [
+      { clientId: 'c1', balance: '0' },
+      { clientId: 'c2', balance: '50000' },
+      { clientId: 'c3', balance: '50000' },
+    ]);
+    assert.equal(allocations.length, 2, 'Zero-balance matter must be excluded');
+    assert.equal(allocations[0].clientId, 'c2');
+    assert.equal(allocations[1].clientId, 'c3');
+  });
+
+  it('negative balance matters are excluded from allocation', () => {
+    const allocations = allocateInterestProRata('1000', [
+      { clientId: 'c1', balance: '-1000' },
+      { clientId: 'c2', balance: '100000' },
+    ]);
+    assert.equal(allocations.length, 1);
+    assert.equal(allocations[0].clientId, 'c2');
+    assert.equal(allocations[0].amount, '1000.00');
+  });
+
+  it('no positive balances throws NO_ELIGIBLE_BALANCES', () => {
+    assert.throws(
+      () => allocateInterestProRata('1000', [
+        { clientId: 'c1', balance: '0' },
+        { clientId: 'c2', balance: '-500' },
+      ]),
+      (err) => { assert.equal(err.code, 'NO_ELIGIBLE_BALANCES'); return true; },
+    );
+  });
+
+  it('zero or negative interest throws INTEREST_AMOUNT_INVALID', () => {
+    assert.throws(
+      () => allocateInterestProRata('0', [{ clientId: 'c1', balance: '10000' }]),
+      (err) => { assert.equal(err.code, 'INTEREST_AMOUNT_INVALID'); return true; },
+    );
+  });
+
+  // --- verifyAllocationSum ---
+  it('verifyAllocationSum: correct sum returns true', () => {
+    const allocations = [{ amount: '250.00' }, { amount: '750.00' }];
+    assert.equal(verifyAllocationSum(allocations, '1000'), true);
+  });
+
+  it('verifyAllocationSum: incorrect sum returns false', () => {
+    const allocations = [{ amount: '250.00' }, { amount: '700.00' }];
+    assert.equal(verifyAllocationSum(allocations, '1000'), false);
   });
 });
