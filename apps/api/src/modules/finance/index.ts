@@ -20,14 +20,14 @@ export * from './exchange-rate.service';
 export * from './journal.service';
 
 export * from './transaction-engine';
-export * from './GeneralLedgerService';
+export * from './general-ledger.service';
 export * from './trial-balance.service';
 export * from './balance-sheet.service';
 export * from './cashflow.service';
-export * from './ReportingService';
+export * from './reporting.service';
 export * from './statement.service';
 export * from './PeriodCloseService';
-export * from './ReportExporter';
+export * from './report.exporter';
 
 export * from './ReconciliationService';
 export * from './ETimsService';

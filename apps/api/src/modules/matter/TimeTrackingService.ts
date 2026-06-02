@@ -730,7 +730,7 @@ async function writeTimeAudit(
       tenantId: params.tenantId,
     },
     orderBy: {
-      createdAt: 'desc',
+      sequenceNumber: 'desc',
     },
     select: {
       hash: true,

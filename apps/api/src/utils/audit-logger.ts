@@ -304,7 +304,7 @@ export async function logSecurityEvent(
       tenantId,
     },
     orderBy: {
-      createdAt: 'desc',
+      sequenceNumber: 'desc',
     },
     select: {
       hash: true,

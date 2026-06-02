@@ -2,7 +2,7 @@
 
 import { Prisma, prisma } from '@global-wakili/database';
 
-import { GeneralLedgerService } from './GeneralLedgerService';
+import { GeneralLedgerService } from './general-ledger.service';
 
 type DbClient = typeof prisma | Prisma.TransactionClient | any;
 

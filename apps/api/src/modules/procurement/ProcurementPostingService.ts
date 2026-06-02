@@ -1,6 +1,6 @@
 ﻿import { Prisma } from '@global-wakili/database';
 import type { Request } from 'express';
-import { GeneralLedgerService } from '../finance/GeneralLedgerService';
+import { GeneralLedgerService } from '../finance/general-ledger.service';
 
 function toDecimal(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
   if (value === null || value === undefined) {
