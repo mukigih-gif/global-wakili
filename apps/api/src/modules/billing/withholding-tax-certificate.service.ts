@@ -1,6 +1,7 @@
 // apps/api/src/modules/billing/withholding-tax-certificate.service.ts
 
 import { Prisma, prisma } from '@global-wakili/database';
+import { assertPeriodOpen } from '../../utils/period-lock';
 
 export class WithholdingTaxCertificateService {
   async recordCertificate(input: {
@@ -200,6 +201,9 @@ export class WithholdingTaxCertificateService {
       },
       select: { id: true },
     });
+
+    const whtPostingDate = new Date();
+    await assertPeriodOpen(tx, input.tenantId, whtPostingDate);
 
     await tx.journalEntry.create({
       data: {

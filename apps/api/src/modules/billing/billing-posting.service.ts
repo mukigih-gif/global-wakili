@@ -6,6 +6,7 @@ import {
   BalanceSide,
   Prisma,
 } from '@global-wakili/database';
+import { assertPeriodOpen } from '../../utils/period-lock';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -94,6 +95,8 @@ export class BillingPostingService {
     });
 
     const reference = invoice.invoiceNumber;
+
+    await assertPeriodOpen(tx, input.tenantId, invoice.issuedDate);
 
     const journal = await tx.journalEntry.create({
       data: {
@@ -198,12 +201,15 @@ export class BillingPostingService {
 
     if (existingReversal) return;
 
+    const reversalDate = input.reversalDate ?? new Date();
+    await assertPeriodOpen(tx, input.tenantId, reversalDate);
+
     const reversal = await tx.journalEntry.create({
       data: {
         tenantId: input.tenantId,
         reference: `BILLING-INVOICE-REVERSAL-${input.invoiceId}`,
         description: `Invoice reversal: ${input.reason}`,
-        date: input.reversalDate ?? new Date(),
+        date: reversalDate,
         amount: original.amount,
         postedById: input.postedById ?? null,
         currency: original.currency,

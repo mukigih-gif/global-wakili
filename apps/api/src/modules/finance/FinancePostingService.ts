@@ -3,6 +3,7 @@
 import { Prisma, prisma } from '@global-wakili/database';
 
 import { GeneralLedgerService } from './general-ledger.service';
+import { assertPeriodOpen } from '../../utils/period-lock';
 
 type DbClient = typeof prisma | Prisma.TransactionClient | any;
 
@@ -798,6 +799,8 @@ export class FinancePostingService {
         warning: 'GeneralLedgerService.postJournal and journalEntry delegate are unavailable.',
       };
     }
+
+    await assertPeriodOpen(prisma, input.tenantId, journal.date);
 
     return journalEntry.create({
       data: {

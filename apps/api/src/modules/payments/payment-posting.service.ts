@@ -6,6 +6,7 @@ import {
   BalanceSide,
   Prisma,
 } from '@global-wakili/database';
+import { assertPeriodOpen } from '../../utils/period-lock';
 
 import {
   type PaymentPostingInput,
@@ -597,6 +598,7 @@ export class PaymentPostingService {
     const journalAmount = money(input.amount);
     assertPositive(journalAmount, 'Payment journal amount must be greater than zero.');
     assertBalanced(input.lines, input.reference);
+    await assertPeriodOpen(tx, input.tenantId, input.date);
 
     const journal = await tx.journalEntry.create({
       data: {

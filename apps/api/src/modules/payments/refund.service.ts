@@ -8,6 +8,7 @@ import {
   Prisma,
   prisma,
 } from '@global-wakili/database';
+import { assertPeriodOpen } from '../../utils/period-lock';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -315,12 +316,15 @@ export class RefundService {
       normalBalance: BalanceSide.DEBIT,
     });
 
+    const refundPostingDate = new Date();
+    await assertPeriodOpen(tx, input.tenantId, refundPostingDate);
+
     await tx.journalEntry.create({
       data: {
         tenantId: input.tenantId,
         reference: `PAYMENT-REFUND-${input.refundId}`,
         description: `Refund of unallocated receipt ${input.paymentReceiptId}`,
-        date: new Date(),
+        date: refundPostingDate,
         amount: input.amount,
         postedById: input.paidById,
         currency: input.currency,
