@@ -313,7 +313,7 @@ async function writeAudit(
       tenantId: params.tenantId,
     },
     orderBy: {
-      createdAt: 'desc',
+      sequenceNumber: 'desc',
     },
     select: {
       hash: true,

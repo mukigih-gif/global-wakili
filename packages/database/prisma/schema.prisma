@@ -703,6 +703,7 @@ model GlobalAuditLog {
   beforeState    Json?
   afterState     Json?
   hash           String   @unique // tamper-evidence fingerprint — each entry must be globally unique
+  sequenceNumber BigInt   @default(autoincrement()) // total-order guarantee for race-condition-free chain fetch
   requestId      String?
   ipAddress      String?
   userAgent      String?
@@ -711,6 +712,7 @@ model GlobalAuditLog {
   @@index([actorId])
   @@index([targetTenantId])
   @@index([createdAt])
+  @@index([sequenceNumber])
 }
 
 model AuditLog {
@@ -728,22 +730,25 @@ model AuditLog {
   ipAddress     String?
   userAgent     String?
   location      String?
-  hash          String        @unique
-  previousHash  String?
-  success       Boolean       @default(true)
-  failureReason String?
-  correlationId String?
-  reason        String?
-  createdAt     DateTime      @default(now())
-  device        Device?       @relation(fields: [deviceId], references: [id])
-  tenant        Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  user          User?         @relation("AuditUser", fields: [userId], references: [id])
+  hash           String        @unique
+  previousHash   String?
+  sequenceNumber BigInt        @default(autoincrement()) // total-order guarantee for race-condition-free chain fetch
+  success        Boolean       @default(true)
+  failureReason  String?
+  correlationId  String?
+  reason         String?
+  createdAt      DateTime      @default(now())
+  device         Device?       @relation(fields: [deviceId], references: [id])
+  tenant         Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user           User?         @relation("AuditUser", fields: [userId], references: [id])
 
   @@index([tenantId, createdAt])
+  @@index([tenantId, sequenceNumber])
   @@index([userId, createdAt])
   @@index([entityType, entityId])
   @@index([action, severity])
   @@index([createdAt])
+  @@index([sequenceNumber])
 }
 
 model AuditAlert {
