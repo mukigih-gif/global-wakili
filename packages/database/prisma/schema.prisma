@@ -537,17 +537,6 @@ model Permission {
   @@index([resource])
 }
 
-model PermissionCondition {
-  id             String   @id @default(cuid())
-  permissionId   String
-  conditionType  String
-  conditionValue String?
-  operator       String
-  createdAt      DateTime @default(now())
-
-  @@index([permissionId])
-}
-
 model FieldAccessPolicy {
   id          String   @id @default(cuid())
   tenantId    String
@@ -644,19 +633,6 @@ model FieldEncryption {
 
   @@unique([tenantId, modelName, fieldName])
   @@index([tenantId])
-}
-
-model SensitiveField {
-  id                 String             @id @default(cuid())
-  tenantId           String
-  entityType         String
-  fieldName          String
-  classification     DataClassification
-  requiresEncryption Boolean            @default(true)
-  requiresMasking    Boolean            @default(false)
-  maskingPattern     String?
-
-  @@unique([tenantId, entityType, fieldName])
 }
 
 model ConsentRecord {
