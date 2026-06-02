@@ -10,7 +10,10 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc",
     "test": "node --require tsx/cjs --test src/**/__tests__/*.test.ts",
-    "test:tenant": "node --require tsx/cjs --test src/__tests__/tenant-isolation.test.ts"
+    "test:tenant": "node --require tsx/cjs --test src/__tests__/tenant-isolation.test.ts",
+    "provision:tenant": "node --require tsx/cjs src/scripts/provision-tenant.ts",
+    "provision:all": "node --require tsx/cjs src/scripts/reprovision-all-tenants.ts",
+    "seed:permissions": "node --require tsx/cjs src/scripts/seed-permissions.ts"
   },
   "dependencies": {
     "@global-wakili/database": "file:../../packages/database",
