@@ -93,6 +93,14 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   'DataLineage',
   'OwnershipRecord',
 
+  'BankStatement',
+  'TimerSession',
+  'Disbursement',
+  'DisbursementRequestNote',
+  'RecurringExpenseTemplate',
+  'WithholdingTaxCertificate',
+  'PaymentRefund',
+
   'RateCard',
   'WriteOff',
   'CourtHearing',

@@ -79,6 +79,7 @@ export class RefundService {
     return prisma.paymentRefund.update({
       where: {
         id: refund.id,
+        tenantId: input.tenantId,
       },
       data: {
         status: 'APPROVED',
@@ -185,6 +186,7 @@ export class RefundService {
     return prisma.paymentRefund.update({
       where: {
         id: refund.id,
+        tenantId: input.tenantId,
       },
       data: {
         status: 'REJECTED',
