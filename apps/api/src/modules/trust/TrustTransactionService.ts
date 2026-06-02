@@ -12,7 +12,7 @@ import type {
   TrustValidationResult,
 } from './trust.types';
 import { ClientTrustLedgerService } from './ClientTrustLedgerService';
-import { GeneralLedgerService } from '../finance/GeneralLedgerService';
+import { GeneralLedgerService } from '../finance/general-ledger.service';
 
 type TrustRequestUser = {
   sub?: string | null;

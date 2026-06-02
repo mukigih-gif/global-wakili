@@ -1,5 +1,5 @@
 import type { Request } from 'express';
-import { GeneralLedgerService } from './GeneralLedgerService';
+import { GeneralLedgerService } from './general-ledger.service';
 
 export class TrialBalanceService {
   static async getCurrent(req: Request) {

@@ -7,8 +7,8 @@ import { asyncHandler } from '../../utils/async-handler';
 
 import AccountService from './account.service';
 import JournalService from './journal.service';
-import { GeneralLedgerService } from './GeneralLedgerService';
-import { ReportingService } from './ReportingService';
+import { GeneralLedgerService } from './general-ledger.service';
+import { ReportingService } from './reporting.service';
 import { PeriodCloseService } from './PeriodCloseService';
 import { ReportExporter } from './report.exporter';
 import ReconciliationService from './ReconciliationService';

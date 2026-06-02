@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { subscribeFinance } from '../../services/socket';
+import { subscribeFinance } from '../../service/socket';
 
-export function FinanceDashboard({ tenantId }) {
+export function FinanceDashboard({ tenantId }: { tenantId: string }) {
   const [data, setData] = useState<any>(null);
 
   useEffect(() => {

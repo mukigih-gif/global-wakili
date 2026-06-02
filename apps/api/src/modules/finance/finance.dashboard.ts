@@ -2,7 +2,7 @@
 
 import { Prisma } from '@global-wakili/database';
 import type { Request } from 'express';
-import { ReportingService } from './ReportingService';
+import { ReportingService } from './reporting.service';
 
 function toDecimal(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
   if (value === null || value === undefined) {

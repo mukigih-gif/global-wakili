@@ -11,7 +11,7 @@ on:
 
 jobs:
   prisma-check:
-    name: Prisma push and generate
+    name: Prisma migrate and generate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -29,10 +29,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Prisma push and generate
+      - name: Prisma migrate and generate
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
           cd packages/database
-          pnpm exec prisma db push --schema=./prisma/schema.prisma --url="$DATABASE_URL"
+          pnpm exec prisma migrate deploy --schema=./prisma/schema.prisma
           pnpm exec prisma generate --schema=./prisma/schema.prisma
+
+      - name: TypeScript type check
+        run: |
+          cd apps/api
+          pnpm exec tsc --noEmit
