@@ -440,7 +440,10 @@ Title:
 Gate 7 — Platform Control Plane & Admin Workspace Closure
 
 Status:
-CLOSED (pending merge)
+CLOSED
+
+Merge Commit:
+11be81d
 
 Branch:
 gate-7/control-plane-closure
