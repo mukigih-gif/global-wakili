@@ -86,6 +86,15 @@ import {
   findMissingSecurityHeaders,
   REQUIRED_SECURITY_HEADERS,
 } from '../utils/security-headers';
+
+import {
+  computeAuditHash,
+  verifyHashChain,
+  detectTampering,
+  isGenesisEntry,
+  GENESIS_HASH,
+} from '../utils/audit-chain';
+import { stableSerialize, generateAuditHash } from '../utils/audit-hash';
 import {
   TERMINAL_INVOICE_STATUSES,
   VALID_INVOICE_TRANSITIONS,
@@ -1730,5 +1739,167 @@ describe('CORS and security headers (G6-D03)', () => {
     const origins = ['https://app.globalwakili.co.ke'];
     const config = resolveCorsOrigin(origins, 'production');
     assert.equal(isCorsProductionSafe(config, true), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 18: Audit chain integrity — G6-D04
+// ---------------------------------------------------------------------------
+
+describe('Audit chain integrity (G6-D04)', () => {
+
+  // --- stableSerialize: canonical deterministic serialization ---
+  it('empty object serializes to {}', () => {
+    assert.equal(stableSerialize({}), '{}');
+  });
+
+  it('object keys are sorted alphabetically', () => {
+    const result = stableSerialize({ z: 1, a: 2, m: 3 });
+    assert.equal(result, '{"a":2,"m":3,"z":1}');
+  });
+
+  it('different key insertion order produces same hash (deterministic)', () => {
+    const h1 = generateAuditHash({ b: 2, a: 1 });
+    const h2 = generateAuditHash({ a: 1, b: 2 });
+    assert.equal(h1, h2, 'Key order must not affect hash');
+  });
+
+  it('null serializes to "null"', () => {
+    assert.equal(stableSerialize(null), 'null');
+  });
+
+  it('nested objects also sort keys', () => {
+    const r = stableSerialize({ outer: { z: 1, a: 2 } });
+    assert.equal(r, '{"outer":{"a":2,"z":1}}');
+  });
+
+  it('arrays preserve element order', () => {
+    const r = stableSerialize([3, 1, 2]);
+    assert.equal(r, '[3,1,2]');
+  });
+
+  // --- computeAuditHash: hash algorithm ---
+  it('same payload + same previousHash = same hash (deterministic)', () => {
+    const payload = { tenantId: 't1', action: 'LOGIN', entityId: 'u1' };
+    const h1 = computeAuditHash(payload, GENESIS_HASH);
+    const h2 = computeAuditHash(payload, GENESIS_HASH);
+    assert.equal(h1, h2);
+  });
+
+  it('different payload produces different hash', () => {
+    const h1 = computeAuditHash({ action: 'LOGIN' }, GENESIS_HASH);
+    const h2 = computeAuditHash({ action: 'LOGOUT' }, GENESIS_HASH);
+    assert.notEqual(h1, h2);
+  });
+
+  it('different previousHash produces different hash', () => {
+    const payload = { action: 'LOGIN' };
+    const h1 = computeAuditHash(payload, GENESIS_HASH);
+    const h2 = computeAuditHash(payload, 'a'.repeat(64));
+    assert.notEqual(h1, h2);
+  });
+
+  it('hash is 64 hex characters (SHA-256 output)', () => {
+    const h = computeAuditHash({ action: 'TEST' }, GENESIS_HASH);
+    assert.equal(h.length, 64);
+    assert.ok(/^[0-9a-f]{64}$/.test(h), 'Hash must be lowercase hex');
+  });
+
+  it('genesis hash default is 64 zeros', () => {
+    assert.equal(GENESIS_HASH.length, 64);
+    assert.ok(/^0{64}$/.test(GENESIS_HASH));
+  });
+
+  it('computeAuditHash mirrors generateAuditHash from audit-hash.ts', () => {
+    const payload = { action: 'LOGIN', tenantId: 't1' };
+    assert.equal(
+      computeAuditHash(payload, GENESIS_HASH),
+      generateAuditHash(payload, GENESIS_HASH),
+    );
+  });
+
+  // --- isGenesisEntry ---
+  it('genesis hash string is a genesis entry', () => {
+    assert.equal(isGenesisEntry(GENESIS_HASH), true);
+  });
+
+  it('null previousHash is a genesis entry', () => {
+    assert.equal(isGenesisEntry(null), true);
+  });
+
+  it('real hash is NOT a genesis entry', () => {
+    assert.equal(isGenesisEntry('a'.repeat(64)), false);
+  });
+
+  // --- verifyHashChain: chain integrity ---
+  it('empty chain is valid', () => {
+    const result = verifyHashChain([]);
+    assert.equal(result.valid, true);
+  });
+
+  it('single correct entry is valid', () => {
+    const payload = { action: 'LOGIN', tenantId: 't1' };
+    const hash = computeAuditHash(payload, GENESIS_HASH);
+    const result = verifyHashChain([{ hash, previousHash: GENESIS_HASH, payload }]);
+    assert.equal(result.valid, true);
+  });
+
+  it('two-entry chain with correct linkage is valid', () => {
+    const p1 = { action: 'LOGIN', seq: 1 };
+    const h1 = computeAuditHash(p1, GENESIS_HASH);
+    const p2 = { action: 'VIEW', seq: 2 };
+    const h2 = computeAuditHash(p2, h1);
+    const result = verifyHashChain([
+      { hash: h1, previousHash: GENESIS_HASH, payload: p1 },
+      { hash: h2, previousHash: h1, payload: p2 },
+    ]);
+    assert.equal(result.valid, true);
+  });
+
+  it('tampered payload is detected (chain invalid)', () => {
+    const p1 = { action: 'LOGIN', userId: 'u1' };
+    const h1 = computeAuditHash(p1, GENESIS_HASH);
+    // Tamper: change the payload after hash was computed
+    const tamperedPayload = { action: 'ADMIN_DELETE', userId: 'u1' };
+    const result = verifyHashChain([
+      { hash: h1, previousHash: GENESIS_HASH, payload: tamperedPayload },
+    ]);
+    assert.equal(result.valid, false);
+    assert.equal(result.brokenAtIndex, 0);
+  });
+
+  it('broken chain linkage is detected', () => {
+    const p1 = { action: 'LOGIN' };
+    const h1 = computeAuditHash(p1, GENESIS_HASH);
+    const p2 = { action: 'VIEW' };
+    const h2 = computeAuditHash(p2, h1);
+    // Tamper: use wrong previousHash in entry 2 (skip link to entry 1)
+    const result = verifyHashChain([
+      { hash: h1, previousHash: GENESIS_HASH, payload: p1 },
+      { hash: h2, previousHash: GENESIS_HASH, payload: p2 }, // wrong previousHash
+    ]);
+    assert.equal(result.valid, false);
+    assert.equal(result.brokenAtIndex, 1);
+  });
+
+  // --- detectTampering ---
+  it('correct entry: no tampering detected', () => {
+    const payload = { action: 'LOGIN', tenantId: 't1' };
+    const hash = computeAuditHash(payload, GENESIS_HASH);
+    assert.equal(detectTampering({ hash, previousHash: GENESIS_HASH, payload }), false);
+  });
+
+  it('tampered payload: tampering detected', () => {
+    const payload = { action: 'LOGIN', tenantId: 't1' };
+    const hash = computeAuditHash(payload, GENESIS_HASH);
+    const tamperedPayload = { action: 'ADMIN_DELETE', tenantId: 't1' };
+    assert.equal(detectTampering({ hash, previousHash: GENESIS_HASH, payload: tamperedPayload }), true);
+  });
+
+  it('modified hash field: tampering detected', () => {
+    const payload = { action: 'LOGIN' };
+    const hash = computeAuditHash(payload, GENESIS_HASH);
+    const modifiedHash = hash.replace(hash[0]!, hash[0] === 'a' ? 'b' : 'a');
+    assert.equal(detectTampering({ hash: modifiedHash, previousHash: GENESIS_HASH, payload }), true);
   });
 });
