@@ -65,6 +65,13 @@ import {
   isTrustToOfficeSettlement,
   getTrustPostingContext,
 } from '../utils/trust-commingling';
+
+import {
+  expandPermissionCandidates,
+  hasPermission,
+  findMissingPermissions,
+  normalizePermissions,
+} from '../utils/rbac-engine';
 import {
   TERMINAL_INVOICE_STATUSES,
   VALID_INVOICE_TRANSITIONS,
@@ -1345,5 +1352,133 @@ describe('Trust commingling prevention (G5-D05)', () => {
     // Trust side and office side can never both be allowed simultaneously
     assert.equal(trustCtx.allowTrustPosting && officeCtx.allowTrustPosting, false);
     assert.equal(trustCtx.allowOfficePosting && officeCtx.allowOfficePosting, false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 15: RBAC authorization engine — G6-D01
+// ---------------------------------------------------------------------------
+
+describe('RBAC authorization engine (G6-D01)', () => {
+
+  // --- expandPermissionCandidates: wildcard expansion ---
+  it('exact permission expands to 4 candidates', () => {
+    const candidates = expandPermissionCandidates('trust.create_transaction');
+    assert.deepEqual(candidates, [
+      'trust.create_transaction',
+      'trust.*',
+      '*.create_transaction',
+      '*.*',
+    ]);
+  });
+
+  it('resource wildcard is a valid candidate', () => {
+    assert.ok(expandPermissionCandidates('trust.view').includes('trust.*'));
+  });
+
+  it('global wildcard *.*  is always a candidate', () => {
+    assert.ok(expandPermissionCandidates('any.permission').includes('*.*'));
+  });
+
+  it('permission without dot separator returns only itself', () => {
+    assert.deepEqual(expandPermissionCandidates('admin'), ['admin']);
+  });
+
+  // --- hasPermission: matching logic ---
+  it('exact match: granted set contains exact permission', () => {
+    const granted = new Set(['trust.create_transaction']);
+    assert.equal(hasPermission(granted, 'trust.create_transaction'), true);
+  });
+
+  it('resource wildcard satisfies specific action', () => {
+    const granted = new Set(['trust.*']);
+    assert.equal(hasPermission(granted, 'trust.create_transaction'), true);
+    assert.equal(hasPermission(granted, 'trust.view_dashboard'), true);
+  });
+
+  it('action wildcard satisfies same action on any resource', () => {
+    const granted = new Set(['*.view_dashboard']);
+    assert.equal(hasPermission(granted, 'trust.view_dashboard'), true);
+    assert.equal(hasPermission(granted, 'finance.view_dashboard'), true);
+  });
+
+  it('global wildcard *.* satisfies any permission', () => {
+    const granted = new Set(['*.*']);
+    assert.equal(hasPermission(granted, 'trust.create_transaction'), true);
+    assert.equal(hasPermission(granted, 'admin.delete_tenant'), true);
+  });
+
+  it('empty granted set denies all permissions', () => {
+    const granted = new Set<string>();
+    assert.equal(hasPermission(granted, 'trust.create_transaction'), false);
+  });
+
+  it('unrelated permission in granted set does not satisfy', () => {
+    const granted = new Set(['billing.view_invoice']);
+    assert.equal(hasPermission(granted, 'trust.create_transaction'), false);
+  });
+
+  it('permission check is case insensitive', () => {
+    const granted = new Set(['trust.create_transaction']);
+    assert.equal(hasPermission(granted, 'TRUST.CREATE_TRANSACTION'), true);
+  });
+
+  // --- findMissingPermissions ---
+  it('all permissions granted: returns empty array', () => {
+    const granted = new Set(['trust.create_transaction', 'billing.view_invoice']);
+    const missing = findMissingPermissions(granted, ['trust.create_transaction', 'billing.view_invoice']);
+    assert.equal(missing.length, 0);
+  });
+
+  it('some permissions missing: returns only missing ones', () => {
+    const granted = new Set(['trust.create_transaction']);
+    const missing = findMissingPermissions(granted, ['trust.create_transaction', 'billing.view_invoice']);
+    assert.deepEqual(missing, ['billing.view_invoice']);
+  });
+
+  it('no permissions granted: all required are missing', () => {
+    const granted = new Set<string>();
+    const missing = findMissingPermissions(granted, ['trust.view', 'billing.view']);
+    assert.equal(missing.length, 2);
+  });
+
+  it('resource wildcard satisfies multiple specific requirements', () => {
+    const granted = new Set(['trust.*']);
+    const missing = findMissingPermissions(granted, ['trust.create', 'trust.view', 'trust.delete']);
+    assert.equal(missing.length, 0, 'trust.* should satisfy all trust.* requirements');
+  });
+
+  // --- normalizePermissions ---
+  it('normalizes string to lowercase trimmed array', () => {
+    assert.deepEqual(normalizePermissions('Trust.View_Dashboard'), ['trust.view_dashboard']);
+  });
+
+  it('splits comma-separated string into multiple permissions', () => {
+    const result = normalizePermissions('trust.view, billing.view');
+    assert.ok(result.includes('trust.view'));
+    assert.ok(result.includes('billing.view'));
+    assert.equal(result.length, 2);
+  });
+
+  it('normalizes array of permissions', () => {
+    const result = normalizePermissions(['Trust.View', 'Billing.View']);
+    assert.deepEqual(result, ['trust.view', 'billing.view']);
+  });
+
+  it('deduplicates identical permissions', () => {
+    const result = normalizePermissions(['trust.view', 'trust.view', 'trust.view']);
+    assert.equal(result.length, 1);
+  });
+
+  it('filters empty strings', () => {
+    const result = normalizePermissions(['trust.view', '', '  ']);
+    assert.equal(result.length, 1);
+    assert.equal(result[0], 'trust.view');
+  });
+
+  it('returns empty array for null/undefined input', () => {
+    assert.deepEqual(normalizePermissions(null), []);
+    assert.deepEqual(normalizePermissions(undefined), []);
+    assert.deepEqual(normalizePermissions(''), []);
   });
 });

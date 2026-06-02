@@ -8,6 +8,7 @@ import { INTEGRATIONS_MODULE_STATUS } from './index';
 import { bindPlatformModuleEnforcement } from '../../middleware/platform-access.middleware';
 import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
 import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
+import { requirePermissions } from '../../middleware/rbac';
 const router = Router();
 
 bindPlatformModuleEnforcement(router, {
@@ -41,7 +42,7 @@ router.get('/', (req: Request, res: Response) => {
   });
 });
 
-router.get('/capabilities', (req: Request, res: Response) => {
+router.get('/capabilities', requirePermissions(['integrations.view_capabilities']), (req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     module: 'integrations',
