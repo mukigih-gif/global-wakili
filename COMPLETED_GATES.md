@@ -367,7 +367,10 @@ Title:
 Gate 6 — Core Security Hardening & Secret Auditing
 
 Status:
-CLOSED (pending merge)
+CLOSED
+
+Merge Commit:
+fd0ad9b
 
 Branch:
 gate-6/security-verification
