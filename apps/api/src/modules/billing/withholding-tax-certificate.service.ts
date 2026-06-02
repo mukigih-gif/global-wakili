@@ -140,7 +140,7 @@ export class WithholdingTaxCertificateService {
     }
 
     return prisma.withholdingTaxCertificate.update({
-      where: { id: certificate.id },
+      where: { id: certificate.id, tenantId: input.tenantId },
       data: {
         status: 'CANCELLED',
         cancelledAt: new Date(),
