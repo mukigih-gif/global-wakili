@@ -124,7 +124,7 @@ export class PeriodCloseService {
     }
 
     const updated = await db.accountingPeriod.update({
-      where: { id: period.id },
+      where: { id: period.id, tenantId },
       data: {
         status: 'CLOSED',
         isClosed: true,

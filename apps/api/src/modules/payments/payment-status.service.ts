@@ -5,6 +5,7 @@ import {
   PaymentReceiptStatus,
   Prisma,
 } from '@global-wakili/database';
+import { isInvoiceTerminal } from '../billing/invoice-state-machine';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -99,6 +100,7 @@ export class PaymentStatusService {
     return tx.paymentReceipt.update({
       where: {
         id: receipt.id,
+        tenantId: input.tenantId,
       },
       data: {
         status,
@@ -138,7 +140,9 @@ export class PaymentStatusService {
       });
     }
 
-    if (invoice.status === InvoiceStatus.CANCELLED) {
+    // Terminal statuses (CANCELLED, ETIMS_REJECTED) must not have their
+    // financial status overwritten by payment recalculation
+    if (isInvoiceTerminal(invoice.status)) {
       return {
         invoiceId: invoice.id,
         total: money(invoice.total),
@@ -151,7 +155,7 @@ export class PaymentStatusService {
         commercialBalanceDue: money(invoice.balanceDue),
         isCashSettled: false,
         isCommerciallySettled: false,
-        invoiceStatus: InvoiceStatus.CANCELLED,
+        invoiceStatus: invoice.status,
       };
     }
 
@@ -211,6 +215,7 @@ export class PaymentStatusService {
     await tx.invoice.update({
       where: {
         id: invoice.id,
+        tenantId,
       },
       data: {
         paidAmount: cashAllocatedAmount,

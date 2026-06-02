@@ -6,6 +6,7 @@ import {
   BalanceSide,
   Prisma,
 } from '@global-wakili/database';
+import { assertPeriodOpen } from '../../utils/period-lock';
 
 import {
   type PaymentPostingInput,
@@ -313,7 +314,7 @@ export class PaymentPostingService {
 
     if (!money(receipt.unallocatedAmount).equals(unallocatedAmount)) {
       await tx.paymentReceipt.update({
-        where: { id: receipt.id },
+        where: { id: receipt.id, tenantId: input.tenantId },
         data: { unallocatedAmount },
       });
     }
@@ -438,7 +439,7 @@ export class PaymentPostingService {
     });
 
     await tx.paymentReceipt.update({
-      where: { id: receipt.id },
+      where: { id: receipt.id, tenantId: input.tenantId },
       data: {
         unallocatedAmount: {
           decrement: amount,
@@ -512,7 +513,7 @@ export class PaymentPostingService {
     });
 
     await tx.paymentReceipt.update({
-      where: { id: input.paymentReceiptId },
+      where: { id: input.paymentReceiptId, tenantId: input.tenantId },
       data: {
         unallocatedAmount: {
           increment: amount,
@@ -597,6 +598,7 @@ export class PaymentPostingService {
     const journalAmount = money(input.amount);
     assertPositive(journalAmount, 'Payment journal amount must be greater than zero.');
     assertBalanced(input.lines, input.reference);
+    await assertPeriodOpen(tx, input.tenantId, input.date);
 
     const journal = await tx.journalEntry.create({
       data: {
@@ -784,7 +786,7 @@ export class PaymentPostingService {
       }
 
       return tx.chartOfAccount.update({
-        where: { id: existing.id },
+        where: { id: existing.id, tenantId: input.tenantId },
         data: {
           type: input.type,
           subtype: input.subtype,

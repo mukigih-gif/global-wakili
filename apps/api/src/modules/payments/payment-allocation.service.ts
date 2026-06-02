@@ -17,6 +17,7 @@ import {
   PaymentPostingService,
   paymentPostingService,
 } from './payment-posting.service';
+import { assertInvoiceNotTerminal } from '../billing/invoice-state-machine';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -163,6 +164,7 @@ export class PaymentAllocationService {
     await tx.paymentReceipt.update({
       where: {
         id: receipt.id,
+        tenantId: input.tenantId,
       },
       data: {
         status: nextStatus,
@@ -265,6 +267,7 @@ export class PaymentAllocationService {
     await tx.invoice.update({
       where: {
         id: invoice.id,
+        tenantId: invoice.tenantId,
       },
       data: {
         paidAmount,
@@ -279,9 +282,8 @@ export class PaymentAllocationService {
     invoiceNumber: string;
     balanceDue: Prisma.Decimal;
   }): void {
-    if (invoice.status === InvoiceStatus.CANCELLED) {
-      throw new Error(`Invoice ${invoice.invoiceNumber} is cancelled.`);
-    }
+    // Blocks CANCELLED and ETIMS_REJECTED — both are terminal for payment allocation
+    assertInvoiceNotTerminal(invoice.status, invoice.invoiceNumber);
 
     if (invoice.status === InvoiceStatus.PAID) {
       throw new Error(`Invoice ${invoice.invoiceNumber} is already paid.`);

@@ -6,6 +6,8 @@ import {
   BalanceSide,
   Prisma,
 } from '@global-wakili/database';
+import { assertPeriodOpen } from '../../utils/period-lock';
+import { assertLinesBalanced } from '../../utils/double-entry';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -94,6 +96,19 @@ export class BillingPostingService {
     });
 
     const reference = invoice.invoiceNumber;
+
+    await assertPeriodOpen(tx, input.tenantId, invoice.issuedDate);
+
+    assertLinesBalanced([
+      { debit: invoice.balanceDue, credit: new Prisma.Decimal(0) },
+      { debit: new Prisma.Decimal(0), credit: invoice.subTotal },
+      ...(invoice.whtAmount.gt(0)
+        ? [{ debit: invoice.whtAmount, credit: new Prisma.Decimal(0) }]
+        : []),
+      ...(invoice.vatAmount.gt(0)
+        ? [{ debit: new Prisma.Decimal(0), credit: invoice.vatAmount }]
+        : []),
+    ], `BILLING-INVOICE-${invoice.id}`);
 
     const journal = await tx.journalEntry.create({
       data: {
@@ -198,12 +213,20 @@ export class BillingPostingService {
 
     if (existingReversal) return;
 
+    const reversalDate = input.reversalDate ?? new Date();
+    await assertPeriodOpen(tx, input.tenantId, reversalDate);
+
+    assertLinesBalanced(
+      original.lines.map((l) => ({ debit: l.credit, credit: l.debit })),
+      `BILLING-INVOICE-REVERSAL-${input.invoiceId}`,
+    );
+
     const reversal = await tx.journalEntry.create({
       data: {
         tenantId: input.tenantId,
         reference: `BILLING-INVOICE-REVERSAL-${input.invoiceId}`,
         description: `Invoice reversal: ${input.reason}`,
-        date: input.reversalDate ?? new Date(),
+        date: reversalDate,
         amount: original.amount,
         postedById: input.postedById ?? null,
         currency: original.currency,
@@ -263,7 +286,7 @@ export class BillingPostingService {
       }
 
       return tx.chartOfAccount.update({
-        where: { id: existing.id },
+        where: { id: existing.id, tenantId: input.tenantId },
         data: {
           type: input.type,
           subtype: input.subtype,

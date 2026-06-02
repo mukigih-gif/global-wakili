@@ -94,6 +94,7 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   'OwnershipRecord',
 
   'BankStatement',
+  'BillingRun',
   'TimerSession',
   'Disbursement',
   'DisbursementRequestNote',

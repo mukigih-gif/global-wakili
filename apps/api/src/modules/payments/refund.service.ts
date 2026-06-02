@@ -8,6 +8,8 @@ import {
   Prisma,
   prisma,
 } from '@global-wakili/database';
+import { assertPeriodOpen } from '../../utils/period-lock';
+import { assertLinesBalanced } from '../../utils/double-entry';
 
 type TransactionClient = Prisma.TransactionClient;
 
@@ -140,6 +142,7 @@ export class RefundService {
       await tx.paymentReceipt.update({
         where: {
           id: refund.paymentReceiptId,
+          tenantId: input.tenantId,
         },
         data: {
           unallocatedAmount: {
@@ -151,6 +154,7 @@ export class RefundService {
       return tx.paymentRefund.update({
         where: {
           id: refund.id,
+          tenantId: input.tenantId,
         },
         data: {
           status: 'PAID',
@@ -313,12 +317,20 @@ export class RefundService {
       normalBalance: BalanceSide.DEBIT,
     });
 
+    const refundPostingDate = new Date();
+    await assertPeriodOpen(tx, input.tenantId, refundPostingDate);
+
+    assertLinesBalanced([
+      { debit: input.amount, credit: new Prisma.Decimal(0) },
+      { debit: new Prisma.Decimal(0), credit: input.amount },
+    ], `PAYMENT-REFUND-${input.refundId}`);
+
     await tx.journalEntry.create({
       data: {
         tenantId: input.tenantId,
         reference: `PAYMENT-REFUND-${input.refundId}`,
         description: `Refund of unallocated receipt ${input.paymentReceiptId}`,
-        date: new Date(),
+        date: refundPostingDate,
         amount: input.amount,
         postedById: input.paidById,
         currency: input.currency,
@@ -383,7 +395,7 @@ export class RefundService {
       if (!existing.isSystem) return existing;
 
       return tx.chartOfAccount.update({
-        where: { id: existing.id },
+        where: { id: existing.id, tenantId: input.tenantId },
         data: {
           type: input.type,
           subtype: input.subtype,

@@ -7,6 +7,7 @@ import {
   Prisma,
   prisma,
 } from '@global-wakili/database';
+import { assertPeriodOpen } from '../../utils/period-lock';
 
 type DbClient = typeof prisma | Prisma.TransactionClient | any;
 
@@ -268,6 +269,9 @@ export class PayrollPostingService {
           credit: line.credit,
         });
       }
+
+      const payrollPostingDate = input.postingDate ?? new Date();
+      await assertPeriodOpen(tx, input.tenantId, payrollPostingDate);
 
       const journal = await journalEntry.create({
         data: {

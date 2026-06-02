@@ -17,6 +17,7 @@ import {
 } from './billing.types';
 import { InvoiceNumberService, invoiceNumberService } from './invoice-number.service';
 import { BillingPostingService, billingPostingService } from './billing-posting.service';
+import { isInvoiceTerminal } from './invoice-state-machine';
 
 export class InvoiceService {
   constructor(
@@ -375,7 +376,7 @@ export class InvoiceService {
       });
 
       return tx.invoice.update({
-        where: { id: invoice.id },
+        where: { id: invoice.id, tenantId: input.tenantId },
         data: {
           status: InvoiceStatus.CANCELLED,
           cancelledAt,
@@ -394,7 +395,8 @@ export class InvoiceService {
   ): Promise<InvoiceWithRelations> {
     const invoice = await this.getInvoiceById(tenantId, invoiceId);
 
-    if (invoice.status === InvoiceStatus.CANCELLED) {
+    // Terminal statuses must not have payment status overwritten
+    if (isInvoiceTerminal(invoice.status)) {
       return invoice;
     }
 
@@ -413,7 +415,7 @@ export class InvoiceService {
           : InvoiceStatus.INVOICED;
 
     return prisma.invoice.update({
-      where: { id: invoice.id },
+      where: { id: invoice.id, tenantId },
       data: {
         paidAmount,
         status: nextStatus,

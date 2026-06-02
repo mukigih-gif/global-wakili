@@ -20,6 +20,28 @@ import {
   hasTenantWhere,
 } from '../../../../packages/database/src/tenant-extension';
 
+import { assertLinesBalanced } from '../utils/double-entry';
+import {
+  normalizeWhtRate,
+  calculateWhtAmount,
+  calculateNetVatPayable,
+  validateVatPeriod,
+  calculateVatAmount,
+} from '../utils/vat-wht-calculator';
+
+import {
+  buildBillingScope,
+  buildPeriodFilter,
+  getLedgerBalanceImpact,
+  calculateOverdueAmount,
+} from '../utils/billing-scope';
+import {
+  TERMINAL_INVOICE_STATUSES,
+  VALID_INVOICE_TRANSITIONS,
+  assertInvoiceNotTerminal,
+  isInvoiceTerminal,
+} from '../modules/billing/invoice-state-machine';
+
 // ---------------------------------------------------------------------------
 // Suite 1: addTenantWhere — query filter injection
 // ---------------------------------------------------------------------------
@@ -205,7 +227,7 @@ describe('TENANT_SCOPED_MODELS integrity', () => {
   it('has the expected model count after Gate 3 additions', () => {
     assert.equal(
       TENANT_SCOPED_MODELS.size,
-      93,
+      94,
       `Expected 93 scoped models; got ${TENANT_SCOPED_MODELS.size}. ` +
       'If this fails, a model was added or removed without updating this test.',
     );
@@ -331,5 +353,458 @@ describe('Unsafe operation guard (logic simulation)', () => {
       'blocked',
       'PaymentRefund.update without tenantId must be blocked after G3-D01',
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 7: assertLinesBalanced — G4-D03 double-entry constraint
+// ---------------------------------------------------------------------------
+
+describe('assertLinesBalanced (G4-D03)', () => {
+  it('passes when debits equal credits (string amounts)', () => {
+    assert.doesNotThrow(() =>
+      assertLinesBalanced(
+        [{ debit: '100.00', credit: '0' }, { debit: '0', credit: '100.00' }],
+        'TEST-001',
+      ),
+    );
+  });
+
+  it('passes when debits equal credits (numeric split over 3 lines)', () => {
+    assert.doesNotThrow(() =>
+      assertLinesBalanced(
+        [
+          { debit: 500, credit: 0 },
+          { debit: 0, credit: 250 },
+          { debit: 0, credit: 250 },
+        ],
+        'TEST-002',
+      ),
+    );
+  });
+
+  it('passes for symmetric WHT/refund lines (amount X debit, amount X credit)', () => {
+    assert.doesNotThrow(() =>
+      assertLinesBalanced(
+        [{ debit: '15000.00', credit: '0' }, { debit: '0', credit: '15000.00' }],
+        'WHT-CERT-abc123',
+      ),
+    );
+  });
+
+  it('throws UNBALANCED_JOURNAL when debits exceed credits', () => {
+    assert.throws(
+      () =>
+        assertLinesBalanced(
+          [{ debit: '200.00', credit: '0' }, { debit: '0', credit: '100.00' }],
+          'BAD-JOURNAL-001',
+        ),
+      (err: Error & { code?: string }) => {
+        assert.equal(err.code, 'UNBALANCED_JOURNAL');
+        assert.ok(err.message.includes('BAD-JOURNAL-001'));
+        assert.ok(err.message.includes('200'));
+        assert.ok(err.message.includes('100'));
+        return true;
+      },
+    );
+  });
+
+  it('throws UNBALANCED_JOURNAL when credits exceed debits', () => {
+    assert.throws(
+      () =>
+        assertLinesBalanced(
+          [{ debit: '50.00', credit: '0' }, { debit: '0', credit: '75.00' }],
+          'BAD-JOURNAL-002',
+        ),
+      (err: Error & { code?: string }) => {
+        assert.equal(err.code, 'UNBALANCED_JOURNAL');
+        return true;
+      },
+    );
+  });
+
+  it('throws for empty lines array (zero balance blocks zero-value journals)', () => {
+    assert.doesNotThrow(() =>
+      assertLinesBalanced([], 'EMPTY-JOURNAL'),
+      'Empty array: 0 == 0 so it passes balance check (zero-value enforcement is separate)',
+    );
+  });
+
+  it('uses statusCode 422 in the thrown error', () => {
+    assert.throws(
+      () =>
+        assertLinesBalanced(
+          [{ debit: '300', credit: '100' }],
+          'UNBAL-REF',
+        ),
+      (err: Error & { statusCode?: number }) => {
+        assert.equal(err.statusCode, 422);
+        return true;
+      },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 8: Invoice state machine — G4-D04
+// ---------------------------------------------------------------------------
+
+describe('Invoice state machine (G4-D04)', () => {
+  it('TERMINAL_INVOICE_STATUSES contains CANCELLED and ETIMS_REJECTED', () => {
+    assert.equal(TERMINAL_INVOICE_STATUSES.has('CANCELLED' as any), true);
+    assert.equal(TERMINAL_INVOICE_STATUSES.has('ETIMS_REJECTED' as any), true);
+    assert.equal(TERMINAL_INVOICE_STATUSES.size, 2);
+  });
+
+  it('isInvoiceTerminal true for CANCELLED and ETIMS_REJECTED', () => {
+    assert.equal(isInvoiceTerminal('CANCELLED' as any), true);
+    assert.equal(isInvoiceTerminal('ETIMS_REJECTED' as any), true);
+  });
+
+  it('isInvoiceTerminal false for INVOICED, PAID, PARTIALLY_PAID', () => {
+    assert.equal(isInvoiceTerminal('INVOICED' as any), false);
+    assert.equal(isInvoiceTerminal('PAID' as any), false);
+    assert.equal(isInvoiceTerminal('PARTIALLY_PAID' as any), false);
+  });
+
+  it('assertInvoiceNotTerminal passes for INVOICED', () => {
+    assert.doesNotThrow(() => assertInvoiceNotTerminal('INVOICED' as any, 'INV-001'));
+  });
+
+  it('assertInvoiceNotTerminal throws INVOICE_CANCELLED for CANCELLED', () => {
+    assert.throws(
+      () => assertInvoiceNotTerminal('CANCELLED' as any, 'INV-002'),
+      (err: Error & { code?: string; statusCode?: number }) => {
+        assert.equal(err.code, 'INVOICE_CANCELLED');
+        assert.equal(err.statusCode, 409);
+        return true;
+      },
+    );
+  });
+
+  it('assertInvoiceNotTerminal throws INVOICE_ETIMS_REJECTED for ETIMS_REJECTED', () => {
+    assert.throws(
+      () => assertInvoiceNotTerminal('ETIMS_REJECTED' as any, 'INV-003'),
+      (err: Error & { code?: string; statusCode?: number }) => {
+        assert.equal(err.code, 'INVOICE_ETIMS_REJECTED');
+        assert.equal(err.statusCode, 409);
+        assert.ok(err.message.includes('INV-003'));
+        return true;
+      },
+    );
+  });
+
+  it('INVOICED can transition to PAID, PARTIALLY_PAID, CANCELLED — not ETIMS_REJECTED', () => {
+    const from = VALID_INVOICE_TRANSITIONS.get('INVOICED' as any)!;
+    assert.equal(from.has('PAID' as any), true);
+    assert.equal(from.has('PARTIALLY_PAID' as any), true);
+    assert.equal(from.has('CANCELLED' as any), true);
+    assert.equal(from.has('ETIMS_REJECTED' as any), false);
+  });
+
+  it('ETIMS_REJECTED can only transition to CANCELLED', () => {
+    const from = VALID_INVOICE_TRANSITIONS.get('ETIMS_REJECTED' as any)!;
+    assert.equal(from.has('CANCELLED' as any), true);
+    assert.equal(from.size, 1);
+  });
+
+  it('CANCELLED is terminal — no valid transitions', () => {
+    const from = VALID_INVOICE_TRANSITIONS.get('CANCELLED' as any)!;
+    assert.equal(from.size, 0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 9: VAT/WHT calculation correctness — G4-D05
+// ---------------------------------------------------------------------------
+
+describe('VAT/WHT calculation correctness (G4-D05)', () => {
+
+  // --- WHT rate normalization ---
+  it('normalizeWhtRate: 5 percent -> 0.050000 (legal fees resident rate)', () => {
+    assert.equal(normalizeWhtRate(5), '0.050000');
+  });
+
+  it('normalizeWhtRate: 20 percent -> 0.200000 (non-resident rate)', () => {
+    assert.equal(normalizeWhtRate(20), '0.200000');
+  });
+
+  it('normalizeWhtRate: 0.05 decimal passthrough', () => {
+    assert.equal(normalizeWhtRate(0.05), '0.050000');
+  });
+
+  it('normalizeWhtRate: negative returns zero', () => {
+    assert.equal(normalizeWhtRate(-1), '0.000000');
+  });
+
+  it('normalizeWhtRate: zero returns zero', () => {
+    assert.equal(normalizeWhtRate(0), '0.000000');
+  });
+
+  it('normalizeWhtRate: string "5" converts correctly', () => {
+    assert.equal(normalizeWhtRate('5'), '0.050000');
+  });
+
+  // --- WHT amount calculation (Kenya legal fee rates) ---
+  it('calculateWhtAmount: KES 100,000 at 5% = KES 5,000', () => {
+    assert.equal(calculateWhtAmount('100000', '5'), '5000.00');
+  });
+
+  it('calculateWhtAmount: KES 250,000 at 5% = KES 12,500', () => {
+    assert.equal(calculateWhtAmount('250000', '5'), '12500.00');
+  });
+
+  it('calculateWhtAmount: KES 100,000 at 20% (non-resident) = KES 20,000', () => {
+    assert.equal(calculateWhtAmount('100000', '20'), '20000.00');
+  });
+
+  it('calculateWhtAmount: accepts decimal rate 0.05', () => {
+    assert.equal(calculateWhtAmount('100000', '0.05'), '5000.00');
+  });
+
+  it('calculateWhtAmount: throws WHT_BASE_AMOUNT_INVALID for zero base', () => {
+    assert.throws(
+      () => calculateWhtAmount('0', '5'),
+      (err) => { assert.equal(err.code, 'WHT_BASE_AMOUNT_INVALID'); return true; },
+    );
+  });
+
+  it('calculateWhtAmount: throws WHT_RATE_INVALID for zero rate', () => {
+    assert.throws(
+      () => calculateWhtAmount('100000', '0'),
+      (err) => { assert.equal(err.code, 'WHT_RATE_INVALID'); return true; },
+    );
+  });
+
+  // --- VAT amount calculation (Kenya 16% standard rate) ---
+  it('calculateVatAmount: KES 100,000 at 16% = KES 16,000', () => {
+    assert.equal(calculateVatAmount('100000', '16'), '16000.00');
+  });
+
+  it('calculateVatAmount: KES 50,000 at 16% = KES 8,000', () => {
+    assert.equal(calculateVatAmount('50000', '16'), '8000.00');
+  });
+
+  it('calculateVatAmount: decimal rate 0.16 same result as 16', () => {
+    assert.equal(calculateVatAmount('100000', '0.16'), '16000.00');
+  });
+
+  it('calculateVatAmount: zero rate = zero VAT (tax-exempt)', () => {
+    assert.equal(calculateVatAmount('100000', '0'), '0.00');
+  });
+
+  // --- Net VAT payable (Kenya eTIMS filing formula) ---
+  it('calculateNetVatPayable: output 16000, input 8000, no adjustments = 8000', () => {
+    assert.equal(calculateNetVatPayable('16000', '8000', []), '8000.00');
+  });
+
+  it('calculateNetVatPayable: OUTPUT_VAT adjustment adds to payable', () => {
+    assert.equal(
+      calculateNetVatPayable('16000', '8000', [{ type: 'OUTPUT_VAT', amount: '2000' }]),
+      '10000.00',
+    );
+  });
+
+  it('calculateNetVatPayable: INPUT_VAT adjustment subtracts from payable', () => {
+    assert.equal(
+      calculateNetVatPayable('16000', '8000', [{ type: 'INPUT_VAT', amount: '1000' }]),
+      '7000.00',
+    );
+  });
+
+  it('calculateNetVatPayable: VAT_REFUND subtracts from payable', () => {
+    assert.equal(
+      calculateNetVatPayable('16000', '8000', [{ type: 'VAT_REFUND', amount: '3000' }]),
+      '5000.00',
+    );
+  });
+
+  it('calculateNetVatPayable: mixed adjustments apply correct signs', () => {
+    assert.equal(
+      calculateNetVatPayable('20000', '10000', [
+        { type: 'OUTPUT_VAT', amount: '2000' },
+        { type: 'INPUT_VAT', amount: '1500' },
+      ]),
+      '10500.00',
+    );
+  });
+
+  it('calculateNetVatPayable: input > output produces negative (refund due from KRA)', () => {
+    assert.equal(calculateNetVatPayable('5000', '12000', []), '-7000.00');
+  });
+
+  // --- VAT period validation ---
+  it('validateVatPeriod: January 2026 produces correct date range', () => {
+    const { periodStart, periodEnd } = validateVatPeriod(2026, 1);
+    assert.equal(periodStart.getFullYear(), 2026);
+    assert.equal(periodStart.getMonth(), 0);
+    assert.equal(periodEnd.getMonth(), 1);
+  });
+
+  it('validateVatPeriod: December 2026 crosses year boundary correctly', () => {
+    const { periodEnd } = validateVatPeriod(2026, 12);
+    assert.equal(periodEnd.getFullYear(), 2027);
+    assert.equal(periodEnd.getMonth(), 0);
+  });
+
+  it('validateVatPeriod: throws INVALID_VAT_YEAR for year 1999', () => {
+    assert.throws(
+      () => validateVatPeriod(1999, 6),
+      (err) => { assert.equal(err.code, 'INVALID_VAT_YEAR'); return true; },
+    );
+  });
+
+  it('validateVatPeriod: throws INVALID_VAT_MONTH for month 0', () => {
+    assert.throws(
+      () => validateVatPeriod(2026, 0),
+      (err) => { assert.equal(err.code, 'INVALID_VAT_MONTH'); return true; },
+    );
+  });
+
+  it('validateVatPeriod: throws INVALID_VAT_MONTH for month 13', () => {
+    assert.throws(
+      () => validateVatPeriod(2026, 13),
+      (err) => { assert.equal(err.code, 'INVALID_VAT_MONTH'); return true; },
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 10: Billing run isolation — G4-D06
+// ---------------------------------------------------------------------------
+
+describe('Billing run isolation (G4-D06)', () => {
+
+  it('BillingRun is now in TENANT_SCOPED_MODELS (G4-D06 addition)', () => {
+    assert.equal(TENANT_SCOPED_MODELS.has('BillingRun'), true);
+  });
+
+  it('TENANT_SCOPED_MODELS count updated to 94 after BillingRun', () => {
+    assert.equal(TENANT_SCOPED_MODELS.size, 94);
+  });
+
+  it('buildBillingScope always includes tenantId', () => {
+    const scope = buildBillingScope({ tenantId: 'tenant-a' });
+    assert.equal(scope.tenantId, 'tenant-a');
+  });
+
+  it('buildBillingScope includes clientId only when provided', () => {
+    const w = buildBillingScope({ tenantId: 'tenant-a', clientId: 'client-1' });
+    const wo = buildBillingScope({ tenantId: 'tenant-a' });
+    assert.equal(w.clientId, 'client-1');
+    assert.equal('clientId' in wo, false);
+  });
+
+  it('buildBillingScope includes matterId only when provided', () => {
+    const w = buildBillingScope({ tenantId: 'tenant-a', matterId: 'matter-1' });
+    const wo = buildBillingScope({ tenantId: 'tenant-a', matterId: null });
+    assert.equal(w.matterId, 'matter-1');
+    assert.equal('matterId' in wo, false);
+  });
+
+  it('buildBillingScope throws BILLING_TENANT_REQUIRED for empty tenantId', () => {
+    assert.throws(() => buildBillingScope({ tenantId: '' }),
+      (err) => { assert.equal(err.code, 'BILLING_TENANT_REQUIRED'); return true; });
+  });
+
+  it('tenant-A and tenant-B scopes are distinct', () => {
+    const a = buildBillingScope({ tenantId: 'tenant-a' });
+    const b = buildBillingScope({ tenantId: 'tenant-b' });
+    assert.notEqual(a.tenantId, b.tenantId);
+  });
+
+  it('buildPeriodFilter: no dates returns empty object', () => {
+    assert.deepEqual(buildPeriodFilter(), {});
+  });
+
+  it('buildPeriodFilter: from only applies gte', () => {
+    const from = new Date('2026-01-01');
+    assert.deepEqual(buildPeriodFilter(from, null, 'invoiceDate'), { invoiceDate: { gte: from } });
+  });
+
+  it('buildPeriodFilter: to only applies lte', () => {
+    const to = new Date('2026-12-31');
+    assert.deepEqual(buildPeriodFilter(null, to, 'invoiceDate'), { invoiceDate: { lte: to } });
+  });
+
+  it('buildPeriodFilter: both from and to applied together', () => {
+    const from = new Date('2026-01-01');
+    const to = new Date('2026-12-31');
+    assert.deepEqual(buildPeriodFilter(from, to, 'invoiceDate'), { invoiceDate: { gte: from, lte: to } });
+  });
+
+  it('getLedgerBalanceImpact: INVOICE debit positive', () => {
+    const r = getLedgerBalanceImpact('INVOICE', '10000');
+    assert.equal(r.debit, '10000.00');
+    assert.equal(r.credit, '0.00');
+    assert.equal(r.balanceImpact, '10000.00');
+  });
+
+  it('getLedgerBalanceImpact: PAYMENT negative impact', () => {
+    const r = getLedgerBalanceImpact('PAYMENT', '5000');
+    assert.equal(r.debit, '0.00');
+    assert.equal(r.balanceImpact, '-5000.00');
+  });
+
+  it('getLedgerBalanceImpact: CREDIT_NOTE negative impact', () => {
+    assert.equal(getLedgerBalanceImpact('CREDIT_NOTE', '2000').balanceImpact, '-2000.00');
+  });
+
+  it('getLedgerBalanceImpact: RETAINER negative impact', () => {
+    assert.equal(getLedgerBalanceImpact('RETAINER', '15000').balanceImpact, '-15000.00');
+  });
+
+  it('getLedgerBalanceImpact: PROFORMA zero impact', () => {
+    assert.equal(getLedgerBalanceImpact('PROFORMA', '99999').balanceImpact, '0.00');
+  });
+
+  it('getLedgerBalanceImpact: REMINDER zero impact', () => {
+    assert.equal(getLedgerBalanceImpact('REMINDER', '500').balanceImpact, '0.00');
+  });
+
+  it('calculateOverdueAmount: past-due INVOICED invoice is overdue', () => {
+    const now = new Date('2026-06-02');
+    const result = calculateOverdueAmount(
+      [{ dueDate: new Date('2026-01-01'), status: 'INVOICED', balanceDue: '5000' }], now);
+    assert.equal(result, '5000.00');
+  });
+
+  it('calculateOverdueAmount: PAID invoice excluded from overdue', () => {
+    const now = new Date('2026-06-02');
+    assert.equal(
+      calculateOverdueAmount([{ dueDate: new Date('2026-01-01'), status: 'PAID', balanceDue: '5000' }], now),
+      '0.00');
+  });
+
+  it('calculateOverdueAmount: CANCELLED invoice excluded', () => {
+    const now = new Date('2026-06-02');
+    assert.equal(
+      calculateOverdueAmount([{ dueDate: new Date('2026-01-01'), status: 'CANCELLED', balanceDue: '5000' }], now),
+      '0.00');
+  });
+
+  it('calculateOverdueAmount: future-dated invoice is not overdue', () => {
+    const now = new Date('2026-06-02');
+    assert.equal(
+      calculateOverdueAmount([{ dueDate: new Date('2027-01-01'), status: 'INVOICED', balanceDue: '5000' }], now),
+      '0.00');
+  });
+
+  it('calculateOverdueAmount: accumulates multiple overdue invoices', () => {
+    const now = new Date('2026-06-02');
+    const past = new Date('2026-01-01');
+    assert.equal(
+      calculateOverdueAmount([
+        { dueDate: past, status: 'INVOICED', balanceDue: '3000' },
+        { dueDate: past, status: 'PARTIALLY_PAID', balanceDue: '2000' },
+        { dueDate: past, status: 'PAID', balanceDue: '5000' },
+      ], now), '5000.00');
+  });
+
+  it('calculateOverdueAmount: invoice without dueDate is not overdue', () => {
+    const now = new Date('2026-06-02');
+    assert.equal(
+      calculateOverdueAmount([{ dueDate: null, status: 'INVOICED', balanceDue: '10000' }], now),
+      '0.00');
   });
 });

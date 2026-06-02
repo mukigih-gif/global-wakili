@@ -226,6 +226,72 @@ Reopen Conditions:
 
 ---
 
+## Gate Closure 005
+
+Title:
+Gate 4 — Financial Ledger Integrity Verification
+
+Status:
+CLOSED (pending merge)
+
+Branch:
+gate-4/finance-verification
+
+Date Closed:
+2026-06-02
+
+Scope:
+
+Finance/billing/payments service-layer hardening: unsafe where clauses,
+period close enforcement, double-entry balance constraints, invoice state
+machine, VAT/WHT calculation verification, billing run isolation.
+
+Verified Deliverables:
+
+* G4-D01: 17 unsafe update/delete where clauses hardened across 8 files
+  (finance, billing, payments modules) — commit 8174403
+* G4-D02: assertPeriodOpen() called on all 6 direct journalEntry.create paths;
+  period close was fully implemented but had zero callers — commit 21e4877
+* G4-D03: assertLinesBalanced() utility created; added to 4 direct create
+  paths that had no double-entry validation — commit b18af0a
+* G4-D04: ETIMS_REJECTED invoice guards added to payment allocation,
+  status refresh, and recomputation services; centralized state machine
+  + transition map created — commit 085fbd3
+* G4-D05: VAT/WHT pure calculation utilities created; 27 Kenya-specific
+  tests covering 16% VAT, 5%/20% WHT, net payable formula, adjustment
+  sign rules, period validation — commit aa4e002
+* G4-D06: BillingRun registered in TENANT_SCOPED_MODELS (was missing);
+  billing isolation utilities created; 23 tests — commit 52ed015
+* G4-D07: GATE_4_FINANCE_VERIFICATION.md committed
+
+Governance Documents Produced:
+
+* docs/governance/GATE_4_FINANCE_VERIFICATION.md
+* apps/api/src/utils/double-entry.ts
+* apps/api/src/utils/vat-wht-calculator.ts
+* apps/api/src/utils/billing-scope.ts
+* apps/api/src/modules/billing/invoice-state-machine.ts
+
+Verification Evidence:
+
+* tsc --noEmit: PASS (exit code 0)
+* npm run test:tenant: 128 pass / 0 fail (was 105 at gate open)
+* No schema migrations required (all service-layer hardening)
+* TENANT_SCOPED_MODELS.size = 94
+
+Risk Assessment:
+LOW
+
+Reopen Conditions:
+
+* Discovery of finance journal posting to a closed accounting period
+* Discovery of unbalanced journal committed to ledger
+* Discovery of ETIMS_REJECTED invoice receiving payment allocation
+* Discovery of BillingRun cross-tenant data leak
+* Test suite regression (< 128 passing)
+
+---
+
 ## Open Gates
 
 Control Plane Provisioning
