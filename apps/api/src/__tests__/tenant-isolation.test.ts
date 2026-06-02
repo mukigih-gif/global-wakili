@@ -35,6 +35,15 @@ import {
   getLedgerBalanceImpact,
   calculateOverdueAmount,
 } from '../utils/billing-scope';
+
+import {
+  computeTrustNetBalance,
+  computeThreeWayVariances,
+  assessVarianceStatus,
+  assessThreeWayStatus,
+  isOverdrawn,
+  computeLedgerVariance,
+} from '../utils/trust-reconciliation';
 import {
   TERMINAL_INVOICE_STATUSES,
   VALID_INVOICE_TRANSITIONS,
@@ -806,5 +815,140 @@ describe('Billing run isolation (G4-D06)', () => {
     assert.equal(
       calculateOverdueAmount([{ dueDate: null, status: 'INVOICED', balanceDue: '10000' }], now),
       '0.00');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 11: Trust three-way reconciliation integrity — G5-D02
+// ---------------------------------------------------------------------------
+
+describe('Trust reconciliation integrity (G5-D02)', () => {
+
+  // --- computeTrustNetBalance ---
+  it('computeTrustNetBalance: 10000 credit, 3000 debit = 7000 net', () => {
+    assert.equal(computeTrustNetBalance('10000', '3000'), '7000.00');
+  });
+
+  it('computeTrustNetBalance: equal credits and debits = zero', () => {
+    assert.equal(computeTrustNetBalance('5000', '5000'), '0.00');
+  });
+
+  it('computeTrustNetBalance: debits exceed credits = negative (overdraw)', () => {
+    assert.equal(computeTrustNetBalance('3000', '5000'), '-2000.00');
+  });
+
+  it('computeTrustNetBalance: zero inputs = zero', () => {
+    assert.equal(computeTrustNetBalance('0', '0'), '0.00');
+  });
+
+  // --- computeThreeWayVariances ---
+  it('computeThreeWayVariances: all equal = all variances zero (perfect reconciliation)', () => {
+    const v = computeThreeWayVariances('100000', '100000', '100000');
+    assert.equal(v.bankVsTrust, '0.00');
+    assert.equal(v.trustVsClient, '0.00');
+    assert.equal(v.bankVsClient, '0.00');
+  });
+
+  it('computeThreeWayVariances: bank > trust detects bankVsTrust variance', () => {
+    const v = computeThreeWayVariances('105000', '100000', '100000');
+    assert.equal(v.bankVsTrust, '5000.00');
+    assert.equal(v.trustVsClient, '0.00');
+    assert.equal(v.bankVsClient, '5000.00');
+  });
+
+  it('computeThreeWayVariances: trust > client detects trustVsClient variance', () => {
+    const v = computeThreeWayVariances('100000', '100000', '95000');
+    assert.equal(v.bankVsTrust, '0.00');
+    assert.equal(v.trustVsClient, '5000.00');
+    assert.equal(v.bankVsClient, '5000.00');
+  });
+
+  it('computeThreeWayVariances: all differ = all variances non-zero', () => {
+    const v = computeThreeWayVariances('110000', '100000', '90000');
+    assert.equal(v.bankVsTrust, '10000.00');
+    assert.equal(v.trustVsClient, '10000.00');
+    assert.equal(v.bankVsClient, '20000.00');
+  });
+
+  // --- assessVarianceStatus ---
+  it('assessVarianceStatus: zero variance with zero tolerance = MATCHED', () => {
+    assert.equal(assessVarianceStatus('0', '0'), 'MATCHED');
+  });
+
+  it('assessVarianceStatus: variance within tolerance = MATCHED', () => {
+    assert.equal(assessVarianceStatus('3', '5'), 'MATCHED');
+  });
+
+  it('assessVarianceStatus: variance equals tolerance = MATCHED', () => {
+    assert.equal(assessVarianceStatus('5', '5'), 'MATCHED');
+  });
+
+  it('assessVarianceStatus: variance exceeds tolerance = FLAGGED', () => {
+    assert.equal(assessVarianceStatus('10', '5'), 'FLAGGED');
+  });
+
+  it('assessVarianceStatus: negative variance uses absolute value', () => {
+    assert.equal(assessVarianceStatus('-3', '5'), 'MATCHED');
+    assert.equal(assessVarianceStatus('-10', '5'), 'FLAGGED');
+  });
+
+  // --- assessThreeWayStatus ---
+  it('assessThreeWayStatus: all zero variances = MATCHED overall', () => {
+    const v = computeThreeWayVariances('100000', '100000', '100000');
+    const s = assessThreeWayStatus(v, '0');
+    assert.equal(s.finalStatus, 'MATCHED');
+    assert.equal(s.bankVsTrustStatus, 'MATCHED');
+    assert.equal(s.trustVsClientStatus, 'MATCHED');
+    assert.equal(s.bankVsClientStatus, 'MATCHED');
+  });
+
+  it('assessThreeWayStatus: ONE leg FLAGGED makes overall FLAGGED', () => {
+    const v = computeThreeWayVariances('105000', '100000', '100000');
+    const s = assessThreeWayStatus(v, '0');
+    assert.equal(s.finalStatus, 'FLAGGED');
+    assert.equal(s.bankVsTrustStatus, 'FLAGGED');
+    assert.equal(s.trustVsClientStatus, 'MATCHED');
+  });
+
+  it('assessThreeWayStatus: tolerance absorbs small variance = MATCHED', () => {
+    const v = computeThreeWayVariances('100001', '100000', '100000');
+    const s = assessThreeWayStatus(v, '5');
+    assert.equal(s.finalStatus, 'MATCHED');
+  });
+
+  it('assessThreeWayStatus: tolerance exceeded = FLAGGED', () => {
+    const v = computeThreeWayVariances('100010', '100000', '100000');
+    const s = assessThreeWayStatus(v, '5');
+    assert.equal(s.finalStatus, 'FLAGGED');
+  });
+
+  // --- isOverdrawn ---
+  it('isOverdrawn: positive balance is not overdrawn', () => {
+    assert.equal(isOverdrawn('10000'), false);
+  });
+
+  it('isOverdrawn: zero balance is not overdrawn', () => {
+    assert.equal(isOverdrawn('0'), false);
+  });
+
+  it('isOverdrawn: negative balance IS overdrawn (regulatory violation)', () => {
+    assert.equal(isOverdrawn('-1'), true);
+  });
+
+  it('isOverdrawn: large negative = overdrawn', () => {
+    assert.equal(isOverdrawn('-50000'), true);
+  });
+
+  // --- computeLedgerVariance ---
+  it('computeLedgerVariance: equal balances = zero variance', () => {
+    assert.equal(computeLedgerVariance('100000', '100000'), '0.00');
+  });
+
+  it('computeLedgerVariance: trust > client ledger = positive variance (mismatch)', () => {
+    assert.equal(computeLedgerVariance('100000', '95000'), '5000.00');
+  });
+
+  it('computeLedgerVariance: client ledger > trust balance = negative variance (mismatch)', () => {
+    assert.equal(computeLedgerVariance('95000', '100000'), '-5000.00');
   });
 });
