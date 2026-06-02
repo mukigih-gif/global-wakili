@@ -118,6 +118,9 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   'AIArtifact',
   'AIReviewTask',
   'AIRecommendation',
+
+  'ExchangeRate',
+  'InvoiceSequence',
 ]);
 
 const READ_OPERATIONS = new Set([
