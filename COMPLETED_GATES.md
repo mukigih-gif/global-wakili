@@ -301,7 +301,10 @@ Title:
 Gate 5 — Core Security Hardening & Trust Accounting Verification
 
 Status:
-CLOSED (pending merge)
+CLOSED
+
+Merge Commit:
+0679ac8
 
 Branch:
 gate-5/trust-verification
