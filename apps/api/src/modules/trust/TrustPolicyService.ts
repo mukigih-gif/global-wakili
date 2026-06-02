@@ -2,6 +2,7 @@
 
 import { Prisma } from '@global-wakili/database';
 import type { Request } from 'express';
+import { detectCommingling } from '../../utils/trust-commingling';
 
 type TrustDbClient = Request['db'];
 
@@ -196,11 +197,10 @@ export class TrustPolicyService {
     accountPurpose?: string | null;
     targetPurpose?: string | null;
   }) {
-    const from = String(input.accountPurpose ?? '').toUpperCase();
-    const to = String(input.targetPurpose ?? '').toUpperCase();
+    const result = detectCommingling(input.accountPurpose, input.targetPurpose);
 
-    if (from.includes('OFFICE') && to.includes('TRUST')) {
-      throw Object.assign(new Error('Office funds cannot be posted as client trust funds without a trust receipt workflow'), {
+    if (result.isCommingling) {
+      throw Object.assign(new Error(result.reason ?? 'Trust/office commingling policy violation'), {
         statusCode: 409,
         code: 'OFFICE_TO_TRUST_POLICY_VIOLATION',
       });

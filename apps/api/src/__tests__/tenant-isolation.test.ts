@@ -59,6 +59,12 @@ import {
   allocateInterestProRata,
   verifyAllocationSum,
 } from '../utils/trust-calculator';
+
+import {
+  detectCommingling,
+  isTrustToOfficeSettlement,
+  getTrustPostingContext,
+} from '../utils/trust-commingling';
 import {
   TERMINAL_INVOICE_STATUSES,
   VALID_INVOICE_TRANSITIONS,
@@ -1243,5 +1249,101 @@ describe('Trust calculation correctness (G5-D04)', () => {
   it('verifyAllocationSum: incorrect sum returns false', () => {
     const allocations = [{ amount: '250.00' }, { amount: '700.00' }];
     assert.equal(verifyAllocationSum(allocations, '1000'), false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 14: Trust commingling prevention — G5-D05
+// ---------------------------------------------------------------------------
+
+describe('Trust commingling prevention (G5-D05)', () => {
+
+  // --- detectCommingling: violation detection ---
+  it('OFFICE -> TRUST is commingling (regulatory violation)', () => {
+    const r = detectCommingling('OFFICE', 'TRUST');
+    assert.equal(r.isCommingling, true);
+    assert.ok(r.reason !== null);
+    assert.ok(r.reason!.length > 0);
+  });
+
+  it('OFFICE_BANK -> TRUST_LIABILITY is commingling (substring match)', () => {
+    const r = detectCommingling('OFFICE_BANK', 'TRUST_LIABILITY');
+    assert.equal(r.isCommingling, true);
+  });
+
+  it('TRUST -> OFFICE is NOT commingling (settlement is allowed)', () => {
+    const r = detectCommingling('TRUST', 'OFFICE');
+    assert.equal(r.isCommingling, false);
+    assert.equal(r.reason, null);
+  });
+
+  it('TRUST -> TRUST is NOT commingling (internal trust operations)', () => {
+    const r = detectCommingling('TRUST_BANK', 'TRUST_LIABILITY');
+    assert.equal(r.isCommingling, false);
+  });
+
+  it('OFFICE -> OFFICE is NOT commingling (normal office operations)', () => {
+    const r = detectCommingling('OFFICE_BANK', 'ACCOUNTS_RECEIVABLE');
+    assert.equal(r.isCommingling, false);
+  });
+
+  it('null source is NOT commingling', () => {
+    const r = detectCommingling(null, 'TRUST');
+    assert.equal(r.isCommingling, false);
+  });
+
+  it('null target is NOT commingling', () => {
+    const r = detectCommingling('OFFICE', null);
+    assert.equal(r.isCommingling, false);
+  });
+
+  it('both null is NOT commingling', () => {
+    const r = detectCommingling(null, null);
+    assert.equal(r.isCommingling, false);
+  });
+
+  it('case insensitive: lowercase office->trust is still commingling', () => {
+    const r = detectCommingling('office_bank', 'trust_liability');
+    assert.equal(r.isCommingling, true);
+  });
+
+  // --- isTrustToOfficeSettlement ---
+  it('TRANSFER_TO_OFFICE is a legitimate trust settlement', () => {
+    assert.equal(isTrustToOfficeSettlement('TRANSFER_TO_OFFICE'), true);
+  });
+
+  it('DEPOSIT is NOT a trust-to-office settlement', () => {
+    assert.equal(isTrustToOfficeSettlement('DEPOSIT'), false);
+  });
+
+  it('WITHDRAWAL is NOT a trust-to-office settlement', () => {
+    assert.equal(isTrustToOfficeSettlement('WITHDRAWAL'), false);
+  });
+
+  // --- getTrustPostingContext: GL policy isolation ---
+  it('DEPOSIT uses trust-only posting context (no office allowed)', () => {
+    const ctx = getTrustPostingContext('DEPOSIT');
+    assert.equal(ctx.allowTrustPosting, true);
+    assert.equal(ctx.allowOfficePosting, false);
+  });
+
+  it('WITHDRAWAL uses trust-only posting context', () => {
+    const ctx = getTrustPostingContext('WITHDRAWAL');
+    assert.equal(ctx.allowTrustPosting, true);
+    assert.equal(ctx.allowOfficePosting, false);
+  });
+
+  it('TRANSFER_TO_OFFICE (office side) uses office-only context (no trust allowed)', () => {
+    const ctx = getTrustPostingContext('TRANSFER_TO_OFFICE');
+    assert.equal(ctx.allowTrustPosting, false);
+    assert.equal(ctx.allowOfficePosting, true);
+  });
+
+  it('GL contexts for DEPOSIT and TRANSFER_TO_OFFICE are mutually exclusive', () => {
+    const trustCtx = getTrustPostingContext('DEPOSIT');
+    const officeCtx = getTrustPostingContext('TRANSFER_TO_OFFICE');
+    // Trust side and office side can never both be allowed simultaneously
+    assert.equal(trustCtx.allowTrustPosting && officeCtx.allowTrustPosting, false);
+    assert.equal(trustCtx.allowOfficePosting && officeCtx.allowOfficePosting, false);
   });
 });
