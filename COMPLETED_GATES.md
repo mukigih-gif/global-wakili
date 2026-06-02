@@ -295,6 +295,69 @@ Reopen Conditions:
 
 ---
 
+## Gate Closure 006
+
+Title:
+Gate 5 — Core Security Hardening & Trust Accounting Verification
+
+Status:
+CLOSED (pending merge)
+
+Branch:
+gate-5/trust-verification
+
+Date Closed:
+2026-06-02
+
+Scope:
+
+Trust module service-layer hardening: unsafe where clauses, three-way
+reconciliation integrity, assertSufficientBalance call-site audit,
+trust calculation test matrix, commingling prevention architecture audit.
+
+Verified Deliverables:
+
+* G5-D01: 10 unsafe update/delete where clauses hardened across 5 trust
+  module files — commit 7ce70b9
+* G5-D02: Three-way reconciliation audit (correct). trust-reconciliation.ts
+  utility; 24 tests — commit fd503f2
+* G5-D03: assertSufficientBalance fail-fast guard added to both settlement
+  entry points (settleInvoiceFromTrust, settleDrnFromTrust).
+  trust-balance.ts utility; 22 tests — commit c57db4a
+* G5-D04: Trust calculation test matrix (ledger delta, overdraw prevention,
+  pro-rata interest allocation). trust-calculator.ts; 19 tests — commit cbdd833
+* G5-D05: Commingling prevention audit (correctly prevented at GL level).
+  detectCommingling pure utility; TrustPolicyService refactored;
+  trust-commingling.ts; 16 tests — commit e2e18a1
+* G5-D06: GATE_5_TRUST_VERIFICATION.md committed — this entry
+
+Governance Documents Produced:
+
+* docs/governance/GATE_5_TRUST_VERIFICATION.md
+* apps/api/src/utils/trust-reconciliation.ts
+* apps/api/src/utils/trust-balance.ts
+* apps/api/src/utils/trust-calculator.ts
+* apps/api/src/utils/trust-commingling.ts
+
+Verification Evidence:
+
+* tsc --noEmit: PASS (exit code 0)
+* npm run test:tenant: 209 pass / 0 fail (was 128 at gate open; +81)
+* No schema migrations required (all service-layer hardening)
+
+Risk Assessment:
+LOW
+
+Reopen Conditions:
+
+* Discovery of trust account overdraw (negative balance)
+* Discovery of commingling of trust and office funds
+* Discovery of three-way reconciliation formula error
+* Discovery of assertSufficientBalance bypass in settlement paths
+* Test suite regression (< 209 passing)
+
+---
+
 ## Open Gates
 
 Control Plane Provisioning
