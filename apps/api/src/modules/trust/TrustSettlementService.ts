@@ -4,6 +4,7 @@ import { Prisma } from '@global-wakili/database';
 import type { Request } from 'express';
 import { TrustTransferService } from './TrustTransferService';
 import { TrustPolicyService } from './TrustPolicyService';
+import { TrustAccountService } from './TrustAccountService';
 
 const ZERO = new Prisma.Decimal(0);
 
@@ -31,6 +32,13 @@ export class TrustSettlementService {
       db: req.db,
       tenantId: req.tenantId!,
       trustAccountId: input.trustAccountId,
+    });
+
+    // Account-level balance guard: fail fast before transaction, defense-in-depth
+    // (TrustTransactionService.validate() also checks this inside the transaction)
+    await TrustAccountService.assertSufficientBalance(req, {
+      trustAccountId: input.trustAccountId,
+      amount,
     });
 
     await TrustPolicyService.assertNoNegativeMatterBalance({
@@ -79,6 +87,12 @@ export class TrustSettlementService {
       db: req.db,
       tenantId: req.tenantId!,
       trustAccountId: input.trustAccountId,
+    });
+
+    // Account-level balance guard: fail fast before transaction
+    await TrustAccountService.assertSufficientBalance(req, {
+      trustAccountId: input.trustAccountId,
+      amount,
     });
 
     await TrustPolicyService.assertNoNegativeMatterBalance({

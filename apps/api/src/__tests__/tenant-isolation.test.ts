@@ -44,6 +44,14 @@ import {
   isOverdrawn,
   computeLedgerVariance,
 } from '../utils/trust-reconciliation';
+
+import {
+  checkTrustAccountBalance,
+  checkMatterTrustBalance,
+  isTrustOutflow,
+  isTrustInflow,
+  computeTransactionDelta,
+} from '../utils/trust-balance';
 import {
   TERMINAL_INVOICE_STATUSES,
   VALID_INVOICE_TRANSITIONS,
@@ -950,5 +958,126 @@ describe('Trust reconciliation integrity (G5-D02)', () => {
 
   it('computeLedgerVariance: client ledger > trust balance = negative variance (mismatch)', () => {
     assert.equal(computeLedgerVariance('95000', '100000'), '-5000.00');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 12: Trust assertSufficientBalance audit — G5-D03
+// ---------------------------------------------------------------------------
+
+describe('Trust assertSufficientBalance audit (G5-D03)', () => {
+
+  // --- checkTrustAccountBalance: overdraw prevention ---
+  it('allows withdrawal when balance exactly equals amount', () => {
+    const r = checkTrustAccountBalance('10000', '10000');
+    assert.equal(r.allowed, true);
+    assert.equal(r.shortfall, '0.00');
+  });
+
+  it('allows withdrawal when balance exceeds amount', () => {
+    const r = checkTrustAccountBalance('50000', '10000');
+    assert.equal(r.allowed, true);
+    assert.equal(r.available, '50000.00');
+    assert.equal(r.requested, '10000.00');
+    assert.equal(r.shortfall, '0.00');
+  });
+
+  it('blocks withdrawal when balance is insufficient', () => {
+    const r = checkTrustAccountBalance('5000', '10000');
+    assert.equal(r.allowed, false);
+    assert.equal(r.shortfall, '5000.00');
+  });
+
+  it('blocks withdrawal when balance is zero', () => {
+    const r = checkTrustAccountBalance('0', '1000');
+    assert.equal(r.allowed, false);
+    assert.equal(r.shortfall, '1000.00');
+  });
+
+  it('blocks withdrawal when balance is negative (already overdrawn)', () => {
+    const r = checkTrustAccountBalance('-100', '500');
+    assert.equal(r.allowed, false);
+    assert.equal(r.shortfall, '600.00');
+  });
+
+  // --- checkMatterTrustBalance: matter sub-ledger ---
+  it('matter balance check: sufficient matter funds allowed', () => {
+    const r = checkMatterTrustBalance('20000', '15000');
+    assert.equal(r.allowed, true);
+  });
+
+  it('matter balance check: insufficient matter funds blocked', () => {
+    const r = checkMatterTrustBalance('5000', '10000');
+    assert.equal(r.allowed, false);
+    assert.equal(r.shortfall, '5000.00');
+  });
+
+  it('matter balance check: exact match allowed', () => {
+    const r = checkMatterTrustBalance('7500', '7500');
+    assert.equal(r.allowed, true);
+    assert.equal(r.shortfall, '0.00');
+  });
+
+  // --- isTrustOutflow / isTrustInflow ---
+  it('WITHDRAWAL is a trust outflow', () => {
+    assert.equal(isTrustOutflow('WITHDRAWAL'), true);
+  });
+
+  it('TRANSFER_TO_OFFICE is a trust outflow', () => {
+    assert.equal(isTrustOutflow('TRANSFER_TO_OFFICE'), true);
+  });
+
+  it('DEPOSIT is NOT an outflow', () => {
+    assert.equal(isTrustOutflow('DEPOSIT'), false);
+  });
+
+  it('INTEREST is NOT an outflow', () => {
+    assert.equal(isTrustOutflow('INTEREST'), false);
+  });
+
+  it('DEPOSIT is a trust inflow', () => {
+    assert.equal(isTrustInflow('DEPOSIT'), true);
+  });
+
+  it('INTEREST is a trust inflow', () => {
+    assert.equal(isTrustInflow('INTEREST'), true);
+  });
+
+  it('WITHDRAWAL is NOT an inflow', () => {
+    assert.equal(isTrustInflow('WITHDRAWAL'), false);
+  });
+
+  // --- computeTransactionDelta ---
+  it('WITHDRAWAL produces negative delta (reduces balance)', () => {
+    assert.equal(computeTransactionDelta('WITHDRAWAL', '10000'), '-10000.00');
+  });
+
+  it('TRANSFER_TO_OFFICE produces negative delta', () => {
+    assert.equal(computeTransactionDelta('TRANSFER_TO_OFFICE', '5000'), '-5000.00');
+  });
+
+  it('DEPOSIT produces positive delta (increases balance)', () => {
+    assert.equal(computeTransactionDelta('DEPOSIT', '10000'), '10000.00');
+  });
+
+  it('INTEREST produces positive delta', () => {
+    assert.equal(computeTransactionDelta('INTEREST', '250'), '250.00');
+  });
+
+  it('REVERSAL produces zero delta (explicit case-by-case handling required)', () => {
+    assert.equal(computeTransactionDelta('REVERSAL', '5000'), '0.00');
+  });
+
+  // --- Settlement service guard coverage ---
+  it('settlement overdraw scenario: KES 15,000 withdrawal against KES 10,000 balance is blocked', () => {
+    const r = checkTrustAccountBalance('10000', '15000');
+    assert.equal(r.allowed, false,
+      'settleInvoiceFromTrust must call assertSufficientBalance BEFORE creating the transaction');
+    assert.equal(r.shortfall, '5000.00');
+  });
+
+  it('settlement scenario: exact balance withdrawal is allowed', () => {
+    const r = checkTrustAccountBalance('50000', '50000');
+    assert.equal(r.allowed, true);
   });
 });
