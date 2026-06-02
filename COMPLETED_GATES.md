@@ -470,6 +470,24 @@ Risk Assessment: LOW
 
 ---
 
+## Gate Closure 009
+
+Title: Gate 8 — Notification Platform Closure
+Status: CLOSED (pending merge)
+Branch: gate-8/notification-closure
+Date Closed: 2026-06-02
+
+Verified Deliverables:
+* G8-D01: 5 notification models added to TENANT_SCOPED_MODELS (94→99)
+* G8-D02: Template prototype leak fixed (hasOwnProperty guard)
+* G8-D03: assertNotificationTenant verified
+* G8-D04: GATE_8_NOTIFICATION_CLOSURE.md committed
+
+Verification Evidence: tsc PASS | 344/344 tests (+20)
+Risk Assessment: LOW
+
+---
+
 ## Open Gates
 
 Control Plane Provisioning
