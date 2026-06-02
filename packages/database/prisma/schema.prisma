@@ -136,6 +136,7 @@ model Tenant {
   payrollBatches               PayrollBatch[]
   payslips                     Payslip[]
   timerSessions                TimerSession[]
+  passiveCaptureEvents         PassiveCaptureEvent[]
   departments                  Department[]
   jobTitles                    JobTitle[]
   employeeProfiles             EmployeeProfile[]
@@ -459,6 +460,7 @@ model User {
   reviewedEmployeePerformances        EmployeePerformance[]         @relation("EmployeePerformanceReviewedBy")
   payslips                            Payslip[]
   timerSessions                       TimerSession[]
+  passiveCaptureEvents                PassiveCaptureEvent[]
   clientKycVerified                   ClientKycProfile[]
   createdContracts                    Contract[]
   contractVersionsCreated             ContractVersion[]
@@ -1146,6 +1148,7 @@ model Matter {
   rfqs                       RequestForQuotation[]
   vendorBills                VendorBill[]
   timerSessions              TimerSession[]
+  passiveCaptureEvents       PassiveCaptureEvent[]
   withholdingTaxCertificates WithholdingTaxCertificate[]
 
   @@index([tenantId])
@@ -3920,16 +3923,17 @@ model ReconciliationMatch {
 }
 
 model TimerSession {
-  id            String    @id @default(cuid())
-  tenantId      String
-  matterId      String
-  userId        String
-  startedAt     DateTime  @default(now())
-  stoppedAt     DateTime?
-  isRunning     Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  durationMs    BigInt?
-  durationHours Decimal?  @db.Decimal(12, 6)
+  id              String    @id @default(cuid())
+  tenantId        String
+  matterId        String
+  userId          String
+  startedAt       DateTime  @default(now())
+  stoppedAt       DateTime?
+  isRunning       Boolean   @default(true)
+  createdAt       DateTime  @default(now())
+  durationMs      BigInt?
+  durationHours   Decimal?  @db.Decimal(12, 6)
+  durationMinutes Int?
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   matter Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
@@ -3938,6 +3942,35 @@ model TimerSession {
   @@index([tenantId])
   @@index([matterId])
   @@index([userId])
+}
+
+model PassiveCaptureEvent {
+  id                  String   @id @default(cuid())
+  tenantId            String
+  userId              String
+  matterId            String?
+  activityType        String   // EMAIL | CALENDAR | DOCUMENT | MATTER_API
+  activitySource      String   // e.g. "email:thread-id", "calendar:event-id"
+  activityAt          DateTime
+  durationMinutes     Int
+  suggestedDescription String?
+  status              String   @default("PENDING_REVIEW")
+  // PENDING_REVIEW | APPROVED | DISCARDED | CONVERTED
+  convertedTimeEntryId String?
+  metadata            Json?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @default(now()) @updatedAt
+
+  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  matter Matter? @relation(fields: [matterId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, userId, activitySource, activityAt], name: "unique_passive_capture")
+  @@index([tenantId])
+  @@index([userId])
+  @@index([matterId])
+  @@index([status])
+  @@index([activityAt])
 }
 
 enum PlanType {

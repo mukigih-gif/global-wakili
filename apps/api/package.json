@@ -15,7 +15,8 @@
     "provision:all": "node --require tsx/cjs src/scripts/reprovision-all-tenants.ts",
     "seed:permissions": "node --require tsx/cjs src/scripts/seed-permissions.ts",
     "worker:notifications": "node --require tsx/cjs src/modules/notifications/workers/notification.worker.ts",
-    "worker:retention": "node --require tsx/cjs src/modules/document/DocumentRetentionRunner.ts"
+    "worker:retention": "node --require tsx/cjs src/modules/document/DocumentRetentionRunner.ts",
+    "worker:passive-capture": "node --require tsx/cjs src/modules/matter/workers/passive-capture.worker.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1059.0",
