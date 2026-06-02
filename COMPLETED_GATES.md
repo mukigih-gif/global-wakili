@@ -433,6 +433,40 @@ Reopen Conditions:
 
 ---
 
+
+## Gate Closure 008
+
+Title:
+Gate 7 — Platform Control Plane & Admin Workspace Closure
+
+Status:
+CLOSED (pending merge)
+
+Branch:
+gate-7/control-plane-closure
+
+Date Closed:
+2026-06-02
+
+Verified Deliverables:
+
+* G7-D01: 2 platform unsafe where clauses hardened
+  (PlatformImpersonationService, PlatformQueueOpsService) — commit 3461c88
+* G7-D02: Provisioning audit CORRECT — all 4 required records created;
+  plan module escalation verified — commit 6912641
+* G7-D03: ADR-004 enforced — requireSuperAdmin global middleware confirmed;
+  isSuperAdminUser exported and tested — commit 6912641
+* G7-D04: Impersonation guards verified (4 checks); 2 additional where
+  clauses hardened — commit 6912641
+* G7-D05: GATE_7_CONTROL_PLANE.md committed
+
+Verification Evidence:
+* tsc --noEmit: PASS | npm run test:tenant: 324/324 (+22)
+
+Risk Assessment: LOW
+
+---
+
 ## Open Gates
 
 Control Plane Provisioning

@@ -35,7 +35,7 @@ export class PlatformQueueOpsService {
     }
 
     return db.externalJobQueue.update({
-      where: { id },
+      where: { id, ...(existing.tenantId ? { tenantId: existing.tenantId } : {}) },
       data: {
         status: 'PENDING',
         nextRetryAt: new Date(),
