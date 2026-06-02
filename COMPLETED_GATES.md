@@ -505,7 +505,7 @@ Branch: gate-10/ai-platform-closure | Date: 2026-06-02
 Evidence: tsc PASS | 365/365 tests | Commit: 94ff0b3
 ---
 ## Gate Closure 012
-Title: Gate 11 — External Integrations | Status: CLOSED (pending merge)
+Title: Gate 11 — External Integrations | Status: CLOSED | Merge: 1e0ab06
 Branch: gate-11/external-integrations | Date: 2026-06-02
 Evidence: tsc PASS | 365/365 | Commit: e102f06
 ---
