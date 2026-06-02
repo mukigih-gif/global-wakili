@@ -518,6 +518,11 @@ Title: Gate 13 — Complete Autonomous Testing Matrix | Status: CLOSED (pending 
 Branch: gate-13/testing-matrix | Date: 2026-06-02
 Evidence: 365/365 tests (22 suites) | 0 failures
 ---
+## Gate Closure 015
+Title: Gate 14 — Documentation | Status: CLOSED (pending merge)
+Branch: gate-14/documentation | Date: 2026-06-02
+Evidence: 19 governance docs + 16 utility files documented
+---
 ## Open Gates
 
 Control Plane Provisioning
