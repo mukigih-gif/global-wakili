@@ -270,6 +270,7 @@ export class TrustInterestService {
       await tx.trustAccount.update({
         where: {
           id: input.trustAccountId,
+          tenantId: input.tenantId,
         },
         data: {
           currentBalance: {
