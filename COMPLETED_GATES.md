@@ -473,7 +473,8 @@ Risk Assessment: LOW
 ## Gate Closure 009
 
 Title: Gate 8 — Notification Platform Closure
-Status: CLOSED (pending merge)
+Status: CLOSED
+Merge Commit: e95faae
 Branch: gate-8/notification-closure
 Date Closed: 2026-06-02
 
