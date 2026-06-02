@@ -171,7 +171,7 @@ Status:
 CLOSED
 
 Merge Commit:
-(pending principal architect review and merge)
+0fe4a46
 
 Branch:
 gate-3/tenant-verification
