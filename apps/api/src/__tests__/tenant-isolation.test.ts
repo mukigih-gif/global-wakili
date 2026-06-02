@@ -94,6 +94,13 @@ import {
   isGenesisEntry,
   GENESIS_HASH,
 } from '../utils/audit-chain';
+
+import {
+  isPlaceholderValue,
+  containsRealConnectionString,
+  containsRealSecret,
+  auditEnvFile,
+} from '../utils/secret-scanner';
 import { stableSerialize, generateAuditHash } from '../utils/audit-hash';
 import {
   TERMINAL_INVOICE_STATUSES,
@@ -1901,5 +1908,121 @@ describe('Audit chain integrity (G6-D04)', () => {
     const hash = computeAuditHash(payload, GENESIS_HASH);
     const modifiedHash = hash.replace(hash[0]!, hash[0] === 'a' ? 'b' : 'a');
     assert.equal(detectTampering({ hash: modifiedHash, previousHash: GENESIS_HASH, payload }), true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite 19: Secret audit — G6-D05
+// ---------------------------------------------------------------------------
+
+describe('Secret audit (G6-D05)', () => {
+
+  // --- isPlaceholderValue ---
+  it('dev_key_change_in_production is a placeholder', () => {
+    assert.equal(isPlaceholderValue('dev_key_change_in_production'), true);
+  });
+
+  it('your-secret-here is a placeholder', () => {
+    assert.equal(isPlaceholderValue('your-secret-here'), true);
+  });
+
+  it('change-me is a placeholder', () => {
+    assert.equal(isPlaceholderValue('change-me'), true);
+  });
+
+  it('user:password@localhost is a placeholder', () => {
+    assert.equal(isPlaceholderValue('postgresql://user:password@localhost:5432/db'), true);
+  });
+
+  it('a real-looking token is NOT a placeholder', () => {
+    assert.equal(isPlaceholderValue('npg_AbCdEfGhIjKlMnOpQrS'), false);
+  });
+
+  // --- containsRealConnectionString ---
+  it('placeholder localhost URL is NOT a real connection string', () => {
+    assert.equal(
+      containsRealConnectionString('postgresql://user:password@localhost:5432/db'),
+      false,
+    );
+  });
+
+  it('Neon cloud URL IS a real connection string', () => {
+    assert.equal(
+      containsRealConnectionString('postgresql://neondb_owner:npg_abc123@ep-test.neon.tech/neondb'),
+      true,
+    );
+  });
+
+  it('Supabase URL IS a real connection string', () => {
+    assert.equal(
+      containsRealConnectionString('postgresql://postgres:password123@project.supabase.co/postgres'),
+      true,
+    );
+  });
+
+  it('empty string is not a real connection string', () => {
+    assert.equal(containsRealConnectionString(''), false);
+  });
+
+  // --- containsRealSecret ---
+  it('Neon token pattern is a real secret', () => {
+    assert.equal(containsRealSecret('npg_AbCdEfGhIjKlMnOpQrStUvWx'), true);
+  });
+
+  it('Stripe live key is a real secret', () => {
+    assert.equal(containsRealSecret('sk_live_AbCdEfGhIjKlMnOpQrStUvWxYz123456'), true);
+  });
+
+  it('placeholder string is NOT a real secret', () => {
+    assert.equal(containsRealSecret('dev_key_change_in_production'), false);
+  });
+
+  it('localhost URL is NOT a real secret', () => {
+    assert.equal(containsRealSecret('postgresql://user:password@localhost:5432/db'), false);
+  });
+
+  // --- auditEnvFile: .env.example validation ---
+  it('.env.example placeholders pass audit (no real credentials)', () => {
+    const envExample = [
+      'DATABASE_URL=postgresql://user:password@localhost:5432/global_wakili',
+      'JWT_SECRET=your-256-bit-secret-here-min-32-chars-change-in-production',
+      'MPESA_CONSUMER_KEY=dev_key_change_in_production',
+      'NODE_ENV=development',
+      '# This is a comment',
+      '',
+    ].join('\n');
+
+    const suspicious = auditEnvFile(envExample).filter(r => r.suspicious);
+    assert.equal(suspicious.length, 0, 'No suspicious entries in placeholder env file');
+  });
+
+  it('real Neon URL in env file is flagged as suspicious', () => {
+    const maliciousEnv = [
+      'DATABASE_URL=postgresql://neondb_owner:npg_realtoken123@ep-test.neon.tech/neondb',
+    ].join('\n');
+
+    const suspicious = auditEnvFile(maliciousEnv).filter(r => r.suspicious);
+    assert.equal(suspicious.length, 1);
+    assert.equal(suspicious[0]!.key, 'DATABASE_URL');
+  });
+
+  it('comments are ignored in env audit', () => {
+    const envWithComments = [
+      '# DATABASE_URL=postgresql://neondb_owner:npg_realtoken123@ep-test.neon.tech/neondb',
+      'DATABASE_URL=postgresql://user:password@localhost:5432/db',
+    ].join('\n');
+
+    const suspicious = auditEnvFile(envWithComments).filter(r => r.suspicious);
+    assert.equal(suspicious.length, 0, 'Commented-out lines must be ignored');
+  });
+
+  it('empty values are not flagged', () => {
+    const envEmpty = [
+      'REDIS_PASSWORD=',
+      'OPTIONAL_KEY=',
+    ].join('\n');
+
+    const suspicious = auditEnvFile(envEmpty).filter(r => r.suspicious);
+    assert.equal(suspicious.length, 0);
   });
 });
