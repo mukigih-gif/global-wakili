@@ -28,9 +28,8 @@ services:
     runtime: node
     region: oregon
     plan: starter            # $7/mo — upgrade to standard for production
-    rootDir: apps/api
-    buildCommand: npm install
-    startCommand: npm run start
+    buildCommand: npm install && npm run db:gen && cd apps/api && npm install
+    startCommand: cd apps/api && npm run start
     healthCheckPath: /ping
     autoDeploy: true         # auto-deploy on push to main
     envVars:
@@ -144,9 +143,8 @@ services:
     runtime: node
     region: oregon
     plan: starter
-    rootDir: apps/api
-    buildCommand: npm install
-    startCommand: npm run worker:notifications
+    buildCommand: npm install && npm run db:gen && cd apps/api && npm install
+    startCommand: cd apps/api && npm run worker:notifications
     autoDeploy: true
     envVars:
       - key: NODE_ENV
