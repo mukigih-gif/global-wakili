@@ -1,0 +1,57 @@
+services:
+  # ── API Server ─────────────────────────────────────────────────────────────
+  - type: web
+    name: global-wakili-api
+    runtime: node
+    region: oregon         # change to fra (Frankfurt) for Kenya-nearest latency
+    plan: starter          # $7/mo — upgrade to standard for production
+    rootDir: apps/api
+    buildCommand: npm install && npm run db:gen
+    startCommand: npm run start
+    healthCheckPath: /ping
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false          # set manually in Render dashboard
+      - key: JWT_SECRET
+        generateValue: true  # Render auto-generates a secure value
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: CORS_ORIGIN
+        sync: false          # set to your Vercel frontend URL
+      - key: PORT
+        value: 10000         # Render assigns this port automatically
+      - key: LOG_LEVEL
+        value: info
+      - key: REDIS_URL
+        sync: false          # optional — set for multi-instance rate limiting
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: DOCUMENT_STORAGE_PROVIDER
+        value: local         # change to s3 when S3 is configured
+      - key: DOCUMENT_MALWARE_SCAN_REQUIRED
+        value: false         # set to true when VirusTotal key is configured
+      - key: NOTIFICATION_FROM_EMAIL
+        value: noreply@globalwakili.co.ke
+      - key: SMS_SENDER_ID
+        value: GlobalWakili
+      - key: OTEL_ENABLED
+        value: false
+
+  # ── Notification Worker ────────────────────────────────────────────────────
+  - type: worker
+    name: global-wakili-notifications
+    runtime: node
+    region: oregon
+    plan: starter
+    rootDir: apps/api
+    buildCommand: npm install && npm run db:gen
+    startCommand: npm run worker:notifications
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: REDIS_URL
+        sync: false
