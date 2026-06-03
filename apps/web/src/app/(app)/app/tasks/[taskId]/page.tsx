@@ -1,5 +1,6 @@
 'use client';
 export const dynamic = 'force-dynamic';
+export async function generateStaticParams() { return []; }
 
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'next/navigation';
