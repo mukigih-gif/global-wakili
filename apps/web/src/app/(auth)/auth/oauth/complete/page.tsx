@@ -2,18 +2,11 @@
 
 export const dynamic = 'force-dynamic';
 
-import { useEffect } from 'react';
+import { useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { setSession } from '@/lib/api';
 
-/**
- * OAuth completion page.
- * The backend redirects here after Google/Microsoft login with:
- *   ?token=<jwt>&tenantId=<id>&role=<role>&redirect=<path>
- *
- * This page stores the session and routes to the correct portal.
- */
-export default function OAuthCompletePage() {
+function OAuthCompleteContent() {
   const router = useRouter();
   const params = useSearchParams();
 
@@ -40,4 +33,8 @@ export default function OAuthCompletePage() {
       </div>
     </div>
   );
+}
+
+export default function OAuthCompletePage() {
+  return <Suspense fallback={null}><OAuthCompleteContent /></Suspense>;
 }
