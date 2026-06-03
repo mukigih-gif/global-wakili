@@ -25,6 +25,9 @@
     "@aws-sdk/client-s3": "^3.1059.0",
     "@aws-sdk/s3-request-presigner": "^3.1059.0",
     "@global-wakili/database": "file:../../packages/database",
+    "@opentelemetry/auto-instrumentations-node": "^0.76.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.218.0",
+    "@opentelemetry/sdk-node": "^0.218.0",
     "africastalking": "^0.7.9",
     "axios": "^1.16.0",
     "bcryptjs": "^2.4.3",
@@ -45,6 +48,7 @@
     "pdfkit": "^0.18.0",
     "pino": "^10.3.1",
     "pino-http": "^11.0.0",
+    "pino-loki": "^3.0.0",
     "rate-limit-redis": "^5.0.0",
     "uuid": "^13.0.0",
     "zod": "^3.22.0"
