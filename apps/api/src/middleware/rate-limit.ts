@@ -77,7 +77,7 @@ function redisRateLimiter(capacity = 100, windowMs = 60_000): RequestHandler {
     legacyHeaders: false,
     keyGenerator: (req) => req.ip || req.socket?.remoteAddress || 'unknown',
     store: new RedisStore({
-      sendCommand: (...args: string[]) => getRedisClient().call(...args) as any,
+      sendCommand: (...args: string[]) => (getRedisClient() as any).call(...args) as any,
     }),
     handler: async (req: Request, res: Response) => {
       await auditRateLimit(req).catch(() => {});
