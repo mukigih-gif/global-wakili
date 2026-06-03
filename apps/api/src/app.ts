@@ -51,6 +51,12 @@ app.use(requestLogger());
 app.use(rateLimiter());
 app.use(metricsMiddleware());
 
+// /ping — lightweight uptime probe (no DB, no auth, minimal latency)
+// Used by external uptime monitors (Better Uptime, Pingdom, UptimeRobot)
+app.get('/ping', (_req: Request, res: Response) => {
+  res.status(200).send('pong');
+});
+
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({
     status: 'OK',

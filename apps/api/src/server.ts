@@ -1,3 +1,7 @@
+// OpenTelemetry must be initialised before any other imports
+import { initTracing } from './lib/tracing';
+initTracing();
+
 import http from 'http';
 
 import app from './app';
