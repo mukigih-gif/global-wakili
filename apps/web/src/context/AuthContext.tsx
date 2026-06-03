@@ -53,7 +53,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api'}/auth/login`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({
+        email,
+        password,
+        // Include tenantSlug in body so the login WHERE filter can find the user.
+        // buildLoginWhereFilter returns tenantId:null when neither is in body,
+        // which only matches platform users — not firm users.
+        ...(tenantId ? { tenantSlug: tenantId } : {}),
+      }),
     });
 
     if (!res.ok) {
