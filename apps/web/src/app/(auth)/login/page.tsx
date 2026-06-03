@@ -9,7 +9,7 @@ import { Logo } from '@/components/ui/Logo';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
 const APP_URL  = process.env.NEXT_PUBLIC_APP_URL || '';
 
 function resolvePortal(isSuperAdmin: boolean, role: string): string {

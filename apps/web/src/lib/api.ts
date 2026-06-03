@@ -5,7 +5,7 @@
  * resolved from the session. tenantId is never hardcoded.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
 
 export type ApiError = { message: string; code?: string; statusCode?: number };
 

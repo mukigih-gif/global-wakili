@@ -50,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
     if (tenantId) headers['x-tenant-id'] = tenantId;
 
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api'}/auth/login`, {
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1'}/auth/login`, {
       method: 'POST',
       headers,
       body: JSON.stringify({
