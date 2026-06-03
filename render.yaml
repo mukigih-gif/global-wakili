@@ -61,15 +61,10 @@ services:
         # Auto-populated from the Redis service above — do not set manually
 
       - key: APP_URL
-        sync: false
-        # SET MANUALLY — your Render API URL (after first deploy)
-        # Example: https://global-wakili-api.onrender.com
+        value: https://global-wakili-api.onrender.com
 
       - key: CORS_ORIGIN
-        sync: false
-        # SET MANUALLY — your Vercel frontend URL (after Vercel deploy)
-        # Example: https://global-wakili.vercel.app
-        # Update and restart after Vercel deployment is complete
+        value: https://global-wakili-api.onrender.com
 
       # ── Runtime settings ───────────────────────────────────────────────────
       - key: PORT
