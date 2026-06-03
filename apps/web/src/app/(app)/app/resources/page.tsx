@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 'use client';
 
 import { ExternalLink, BookOpen, Award, Scale, Globe, FileText, Users } from 'lucide-react';

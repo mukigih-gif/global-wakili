@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 'use client';
 
 import { useAuth } from '@/context/AuthContext';
