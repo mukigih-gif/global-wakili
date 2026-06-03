@@ -9,6 +9,7 @@ import {
   Shield, UserCheck, BarChart2, Brain, Bell, Settings,
   Building, LogOut, CheckSquare, Gavel, Award, ExternalLink, Scale,
   CalendarDays, PhoneCall, ShoppingCart, Receipt, MessageSquare, Globe,
+  GitBranch, Clock,
 } from 'lucide-react';
 import { Logo } from '@/components/ui/Logo';
 
@@ -27,6 +28,8 @@ const TENANT_NAV: NavItem[] = [
   { href: '/app/matters',        label: 'Matters',          icon: <Briefcase className="h-4 w-4" /> },
   { href: '/app/documents',      label: 'Documents',        icon: <FileText className="h-4 w-4" /> },
   { href: '/app/tasks',          label: 'Tasks',            icon: <CheckSquare className="h-4 w-4" /> },
+  { href: '/app/workflows',      label: 'Workflows',        icon: <GitBranch className="h-4 w-4" /> },
+  { href: '/app/time-capture',   label: 'Time Capture',     icon: <Clock className="h-4 w-4" /> },
   { href: '/app/billing',        label: 'Billing',          icon: <Receipt className="h-4 w-4" />, module: 'billing' },
   { href: '/app/finance',        label: 'Finance',          icon: <DollarSign className="h-4 w-4" />, module: 'finance' },
   { href: '/app/trust',          label: 'Trust Accounting', icon: <Scale className="h-4 w-4" />, module: 'trust' },
