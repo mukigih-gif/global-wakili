@@ -90,11 +90,11 @@ export default function AdminDashboardPage() {
       {/* Admin quick links */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {[
+          { label: 'Platform Health', href: '/admin/health' },
           { label: 'Tenants', href: '/admin/tenants' },
           { label: 'Subscriptions', href: '/admin/subscriptions' },
           { label: 'Monitoring', href: '/admin/monitoring' },
           { label: 'Incidents', href: '/admin/incidents' },
-          { label: 'Impersonation', href: '/admin/impersonation' },
           { label: 'Audit Logs', href: '/admin/audit' },
         ].map((link) => (
           <a key={link.label} href={link.href} className="card p-3 text-center text-sm font-medium text-primary-700 hover:bg-primary-50 hover:border-primary-200 transition-colors">

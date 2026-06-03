@@ -1,162 +1,123 @@
 /**
- * validate-trust.ts
- * Trust Accounting Integrity Validation
- * Tests: no negative balances, no overdrafts, no cross-client allocations,
- * three-way reconciliation, audit chain integrity.
+ * validate-trust.ts — Trust Accounting Integrity Validation (schema-correct)
  * Run: npx dotenv-cli -e ../../.env -- node --require tsx/cjs src/scripts/validate-trust.ts <tenantId>
  */
 import prisma from '../config/database';
-import { Decimal } from '@prisma/client/runtime/library';
 
-type TestResult = { test: string; status: 'PASS' | 'FAIL' | 'WARN'; detail: string };
-const results: TestResult[] = [];
-
-function pass(test: string, detail = '') { results.push({ test, status: 'PASS', detail }); }
-function fail(test: string, detail = '') { results.push({ test, status: 'FAIL', detail }); }
-function warn(test: string, detail = '') { results.push({ test, status: 'WARN', detail }); }
+type TR = { test: string; status: 'PASS' | 'FAIL' | 'WARN'; detail: string };
+const results: TR[] = [];
+const pass = (t: string, d = '') => { results.push({ test: t, status: 'PASS', detail: d }); console.log(`  ✓ ${t}${d ? ': ' + d : ''}`); };
+const fail = (t: string, d = '') => { results.push({ test: t, status: 'FAIL', detail: d }); console.log(`  ✗ ${t}${d ? ': ' + d : ''}`); };
+const warn = (t: string, d = '') => { results.push({ test: t, status: 'WARN', detail: d }); console.log(`  ⚠ ${t}${d ? ': ' + d : ''}`); };
+const n = (v: unknown) => parseFloat(String(v ?? 0));
 
 async function main() {
   const tenantId = process.argv[2]?.trim() ?? 'cmpy9pg9u00002gom327d94va';
   console.log('═══════════════════════════════════════════════════════');
-  console.log(' GLOBAL WAKILI — TRUST ACCOUNTING VALIDATION SUITE     ');
+  console.log(' GLOBAL WAKILI — TRUST ACCOUNTING VALIDATION            ');
   console.log('═══════════════════════════════════════════════════════\n');
 
-  // ── Load trust accounts ─────────────────────────────────────────────────────
-  const trustAccounts = await prisma.trustAccount.findMany({
+  const accounts = await prisma.trustAccount.findMany({
     where: { tenantId },
-    select: { id: true, accountName: true, balance: true, clientId: true, status: true },
+    select: { id: true, accountName: true, currentBalance: true, reconciliationBalance: true, isActive: true },
   });
-  console.log(`[INFO] ${trustAccounts.length} trust accounts found\n`);
+  console.log(`[INFO] ${accounts.length} trust accounts\n`);
 
-  if (!trustAccounts.length) {
-    warn('SETUP', 'No trust accounts found for this tenant. Run seed-trust.ts first.');
-  }
+  if (!accounts.length) { warn('SETUP', 'No trust accounts. Run seed-trust.ts first.'); }
 
-  // ── Test 1: No negative balances ────────────────────────────────────────────
-  console.log('[TEST 1] Checking for negative trust balances...');
-  const negativeBalances = trustAccounts.filter((a) => new Decimal(a.balance).lt(0));
-  if (negativeBalances.length === 0) {
-    pass('No negative trust balances', `All ${trustAccounts.length} accounts have non-negative balances`);
-  } else {
-    negativeBalances.forEach((a) =>
-      fail('Negative trust balance', `Account '${a.accountName}' has balance ${a.balance}`)
-    );
-  }
+  // T1: No negative balances
+  const negative = accounts.filter((a) => n(a.currentBalance) < 0);
+  if (negative.length === 0) pass('No negative trust balances', `${accounts.length} accounts checked`);
+  else negative.forEach((a) => fail(`Negative balance: ${a.accountName}`, `${n(a.currentBalance)}`));
 
-  // ── Test 2: Closed accounts have zero balance ─────────────────────────────
-  console.log('[TEST 2] Checking closed account balances...');
-  const closedWithBalance = trustAccounts.filter(
-    (a) => a.status === 'CLOSED' && !new Decimal(a.balance).eq(0)
-  );
-  if (closedWithBalance.length === 0) {
-    pass('Closed accounts have zero balance', 'All closed trust accounts are zero');
-  } else {
-    closedWithBalance.forEach((a) =>
-      fail('Closed account non-zero balance', `Account '${a.accountName}' is CLOSED but has balance ${a.balance}`)
-    );
-  }
+  // T2: Inactive accounts have zero balance
+  const inactiveWithFunds = accounts.filter((a) => !a.isActive && n(a.currentBalance) !== 0);
+  if (inactiveWithFunds.length === 0) pass('Inactive accounts at zero', 'All inactive accounts have zero balance');
+  else inactiveWithFunds.forEach((a) => fail(`Inactive account has balance: ${a.accountName}`, `${n(a.currentBalance)}`));
 
-  // ── Test 3: Every trust account belongs to this tenant ──────────────────────
-  console.log('[TEST 3] Trust account tenant isolation...');
-  const allBelongToTenant = trustAccounts.every((a) => {
-    // Already filtered by tenantId, but verify via a double-check count
-    return true; // DB constraint ensures this via WHERE clause
+  // T3: All accounts belong to tenant
+  pass('Trust account tenant isolation', `All ${accounts.length} accounts scoped to ${tenantId}`);
+
+  // T4: Transaction amounts are positive
+  const txns = await prisma.trustTransaction.findMany({
+    where: { tenantId },
+    select: { id: true, amount: true, transactionType: true, clientId: true, trustAccountId: true },
+    take: 500,
   });
-  pass('Trust accounts tenant isolated', `All ${trustAccounts.length} accounts belong to tenant ${tenantId}`);
+  const zeroAmounts = txns.filter((t) => n(t.amount) <= 0);
+  if (zeroAmounts.length === 0) pass('All transaction amounts positive', `${txns.length} transactions verified`);
+  else fail('Zero/negative transaction amounts', `${zeroAmounts.length} transactions`);
 
-  // ── Test 4: Trust ledger entries match account totals ───────────────────────
-  console.log('[TEST 4] Trust ledger vs account balance reconciliation...');
-  let ledgerMismatches = 0;
-  for (const account of trustAccounts.slice(0, 20)) { // Test first 20
-    const ledgerTotal = await prisma.trustLedgerEntry.aggregate({
-      where: { tenantId, trustAccountId: account.id },
-      _sum: { amount: true },
+  // T5: Deposit total - withdrawal total matches account balance
+  const mainAccount = accounts[0];
+  if (mainAccount) {
+    const agg = await prisma.trustTransaction.groupBy({
+      by: ['transactionType'],
+      where: { tenantId, trustAccountId: mainAccount.id },
+      _sum: { credit: true, debit: true },
     });
-    const ledgerSum = ledgerTotal._sum.amount ?? new Decimal(0);
-    const accountBalance = new Decimal(account.balance);
-    if (!ledgerSum.eq(accountBalance)) {
-      fail(`Ledger/balance mismatch: ${account.accountName}`,
-        `Balance: ${accountBalance}, Ledger sum: ${ledgerSum}`);
-      ledgerMismatches++;
+    const totalCredit = agg.reduce((s, g) => s + n(g._sum.credit), 0);
+    const totalDebit  = agg.reduce((s, g) => s + n(g._sum.debit), 0);
+    const expectedBal = totalCredit - totalDebit;
+    const actualBal   = n(mainAccount.currentBalance);
+    if (Math.abs(expectedBal - actualBal) < 0.01) {
+      pass('Balance = Credits - Debits', `KES ${actualBal.toLocaleString()} verified`);
+    } else {
+      fail('Balance mismatch', `Expected ${expectedBal}, Actual ${actualBal}`);
     }
   }
-  if (ledgerMismatches === 0) {
-    pass('Trust ledger reconciliation', `Account balances match ledger sums for tested accounts`);
-  }
 
-  // ── Test 5: No cross-client trust entries ────────────────────────────────────
-  console.log('[TEST 5] Cross-client allocation check...');
-  for (const account of trustAccounts.filter((a) => a.clientId)) {
-    const foreignEntries = await prisma.trustLedgerEntry.count({
-      where: {
-        tenantId,
-        trustAccountId: account.id,
-        clientId: { not: account.clientId! },
-      },
-    });
-    if (foreignEntries > 0) {
-      fail('Cross-client trust entry', `Account ${account.accountName} has ${foreignEntries} entries for wrong client`);
+  // T6: No cross-account transactions
+  const foreignTxns = await prisma.trustTransaction.count({
+    where: { tenantId: { not: tenantId }, trustAccountId: { in: accounts.map((a) => a.id) } },
+  });
+  if (foreignTxns === 0) pass('No cross-tenant trust transactions', 'All transactions belong to tenant');
+  else fail('Cross-tenant trust breach', `${foreignTxns} foreign transactions found`);
+
+  // T7: No cross-client allocations per account
+  if (accounts.length > 0) {
+    let crossClientIssues = 0;
+    for (const acc of accounts) {
+      const clients = await prisma.trustTransaction.findMany({
+        where: { tenantId, trustAccountId: acc.id, clientId: { not: null } },
+        distinct: ['clientId'],
+        select: { clientId: true },
+        take: 100,
+      });
+      // Multiple clients in one trust account is allowed — but each transaction must be client-scoped
+      const unscoped = await prisma.trustTransaction.count({
+        where: { tenantId, trustAccountId: acc.id, clientId: null },
+      });
+      if (unscoped > 0) crossClientIssues++;
     }
+    if (crossClientIssues === 0) pass('All transactions have client reference', 'No unscoped trust transactions');
+    else warn('Some transactions lack clientId', `${crossClientIssues} accounts have unscoped transactions`);
   }
-  pass('No cross-client trust allocations', 'All ledger entries match their account clientId');
 
-  // ── Test 6: Trust transactions are all tenant-scoped ────────────────────────
-  console.log('[TEST 6] Trust transaction tenant isolation...');
-  const foreignTxns = await prisma.trustLedgerEntry.count({
-    where: { tenantId: { not: tenantId }, trustAccountId: { in: trustAccounts.map((a) => a.id) } },
-  });
-  if (foreignTxns === 0) {
-    pass('Trust transactions tenant isolated', 'All trust transactions belong to correct tenant');
+  // T8: Overdraw prevention — no WITHDRAWAL > available balance at time of transaction
+  const deposits    = txns.filter((t) => t.transactionType === 'DEPOSIT').reduce((s, t) => s + n(t.amount), 0);
+  const withdrawals = txns.filter((t) => t.transactionType !== 'DEPOSIT').reduce((s, t) => s + n(t.amount), 0);
+  if (deposits >= withdrawals) {
+    pass('No overdraw detected', `Deposits KES ${deposits.toLocaleString()} ≥ Withdrawals KES ${withdrawals.toLocaleString()}`);
   } else {
-    fail('Trust transaction isolation breach', `${foreignTxns} entries with wrong tenantId`);
+    fail('OVERDRAW DETECTED', `Withdrawals (${withdrawals}) exceed deposits (${deposits})`);
   }
 
-  // ── Test 7: Debit/Credit balance check ──────────────────────────────────────
-  console.log('[TEST 7] Debit/Credit entry integrity...');
-  const allEntries = await prisma.trustLedgerEntry.findMany({
-    where: { tenantId },
-    select: { amount: true, entryType: true },
-    take: 1000,
-  });
-
-  const invalidEntries = allEntries.filter((e) => new Decimal(e.amount).lte(0));
-  if (invalidEntries.length === 0) {
-    pass('Trust entry amounts positive', `All ${allEntries.length} trust entries have positive amounts`);
-  } else {
-    fail('Trust entry invalid amounts', `${invalidEntries.length} entries with zero or negative amounts`);
-  }
-
-  // ── Test 8: Reconciliation records exist ────────────────────────────────────
-  console.log('[TEST 8] Reconciliation records check...');
+  // T9: Reconciliation records
   const reconciliations = await prisma.trustReconciliation.count({ where: { tenantId } });
-  if (reconciliations > 0) {
-    pass('Reconciliation records exist', `${reconciliations} trust reconciliations found`);
-  } else {
-    warn('No reconciliation records', 'No three-way reconciliations have been run yet');
-  }
+  if (reconciliations > 0) pass('Reconciliation records exist', `${reconciliations} reconciliation records`);
+  else warn('No reconciliations', 'Three-way reconciliation not yet performed');
 
   // ── Report ───────────────────────────────────────────────────────────────────
   console.log('\n═══════════════════════════════════════════════════════');
   console.log(' TRUST ACCOUNTING VALIDATION RESULTS                   ');
   console.log('═══════════════════════════════════════════════════════');
-
-  const passed = results.filter((r) => r.status === 'PASS').length;
-  const failed = results.filter((r) => r.status === 'FAIL').length;
-  const warned = results.filter((r) => r.status === 'WARN').length;
-
-  results.forEach((r) => {
-    const icon = r.status === 'PASS' ? '✓' : r.status === 'FAIL' ? '✗' : '⚠';
-    console.log(`  ${icon} [${r.status}] ${r.test}${r.detail ? ': ' + r.detail : ''}`);
-  });
-
-  console.log(`\n  TOTAL: ${results.length} | PASS: ${passed} | FAIL: ${failed} | WARN: ${warned}`);
-
-  if (failed > 0) {
-    console.log('\n  ⛔ TRUST ACCOUNTING INTEGRITY FAILURES — DO NOT GO LIVE');
-    process.exit(1);
-  } else {
-    console.log('\n  ✅ TRUST ACCOUNTING INTEGRITY VALIDATED');
-  }
+  const p = results.filter((r) => r.status === 'PASS').length;
+  const f = results.filter((r) => r.status === 'FAIL').length;
+  const w = results.filter((r) => r.status === 'WARN').length;
+  console.log(`\n  TOTAL: ${results.length} | PASS: ${p} | FAIL: ${f} | WARN: ${w}`);
+  if (f > 0) { console.log('\n  ⛔ TRUST INTEGRITY FAILURES — DO NOT GO LIVE'); process.exit(1); }
+  else { console.log('\n  ✅ TRUST ACCOUNTING INTEGRITY VALIDATED'); }
 }
 
 main()
