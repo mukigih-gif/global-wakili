@@ -9,7 +9,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
-import { ArrowLeft, Users, Briefcase, FileText, CheckSquare, DollarSign, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Users, Briefcase, FileText, CheckSquare, DollarSign, AlertCircle, Globe, UserCheck } from 'lucide-react';
 
 type Client = {
   id: string; name: string; clientCode: string; clientType: string;
@@ -25,6 +25,8 @@ type Task    = { id: string; title: string; status: string; priority: string; du
 export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [client, setClient]   = useState<Client | null>(null);
+  const [portalActivating, setPortalActivating] = useState(false);
+  const [portalMsg, setPortalMsg] = useState('');
   const [matters, setMatters] = useState<Matter[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [tasks, setTasks]     = useState<Task[]>([]);
@@ -64,14 +66,38 @@ export default function ClientDetailPage() {
               <h1 className="text-2xl font-bold text-gray-900">{client.name}</h1>
               <p className="text-sm text-gray-500 mt-0.5">{client.clientCode} · {client.clientType?.replace(/_/g, ' ')}</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <StatusBadge status={client.status} />
               {client.kycStatus && <StatusBadge status={client.kycStatus} />}
               <Button size="sm" variant="secondary">Edit</Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                loading={portalActivating}
+                onClick={async () => {
+                  setPortalActivating(true);
+                  try {
+                    await api.post(`/clients/${id}/portal/activate`, {});
+                    setPortalMsg('Portal activated — invitation sent to client email.');
+                  } catch {
+                    setPortalMsg('Portal activation failed. Ensure client has a valid email.');
+                  } finally {
+                    setPortalActivating(false);
+                  }
+                }}
+              >
+                <Globe className="h-3.5 w-3.5" /> Activate Portal
+              </Button>
             </div>
           </div>
         </div>
       </div>
+
+      {portalMsg && (
+        <div className="rounded-lg bg-blue-50 border border-blue-200 px-4 py-2 text-sm text-blue-700 flex items-center gap-2">
+          <UserCheck className="h-4 w-4 flex-shrink-0" />{portalMsg}
+        </div>
+      )}
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

@@ -1,12 +1,12 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { ArrowLeft, Briefcase } from 'lucide-react';
+import { ArrowLeft, Briefcase, AlertTriangle, CheckCircle, Shield } from 'lucide-react';
 import Link from 'next/link';
 
 type Client = { id: string; name: string; clientCode: string };
@@ -30,6 +30,24 @@ export default function NewMatterPage() {
     api.get<{ data: Client[] }>('/clients?limit=100').then((r) => setClients(r.data ?? [])).catch(() => {});
     api.get<{ data: User[] }>('/users?limit=100').then((r) => setLawyers(r.data ?? [])).catch(() => {});
   }, []);
+
+  const [conflictResult, setConflictResult] = useState<{ hasConflict: boolean; conflicts?: Array<{ name: string; matter: string }> } | null>(null);
+  const [checkingConflict, setCheckingConflict] = useState(false);
+
+  const runConflictCheck = async () => {
+    if (!form.clientId) { setError('Select a client first to run a conflict check'); return; }
+    setCheckingConflict(true);
+    try {
+      const result = await api.post<{ hasConflict: boolean; conflicts?: Array<{ name: string; matter: string }> }>(
+        '/matters/conflict-check', { clientId: form.clientId, title: form.title }
+      );
+      setConflictResult(result);
+    } catch {
+      setConflictResult(null);
+    } finally {
+      setCheckingConflict(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,6 +143,37 @@ export default function NewMatterPage() {
             <label className="form-label">Description</label>
             <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={3} className="form-input w-full resize-none" placeholder="Brief description of the matter…" />
           </div>
+        </div>
+
+        {/* Conflict Check */}
+        <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Shield className="h-4 w-4 text-primary-600" />
+              <span className="text-sm font-semibold text-gray-900">Conflict of Interest Check</span>
+              <span className="text-xs text-gray-400">(Required before opening a matter)</span>
+            </div>
+            <Button type="button" size="sm" variant="secondary" loading={checkingConflict} onClick={runConflictCheck}>
+              Run Check
+            </Button>
+          </div>
+          {conflictResult && (
+            conflictResult.hasConflict ? (
+              <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+                <div className="flex items-center gap-2 text-red-700 font-semibold text-sm mb-2">
+                  <AlertTriangle className="h-4 w-4" /> Conflict Detected
+                </div>
+                {conflictResult.conflicts?.map((c, i) => (
+                  <p key={i} className="text-xs text-red-600">{c.name} — {c.matter}</p>
+                ))}
+                <p className="text-xs text-red-500 mt-2">Obtain partner approval if continuing.</p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-green-700 text-sm bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                <CheckCircle className="h-4 w-4" /> No conflicts found — matter may proceed.
+              </div>
+            )
+          )}
         </div>
 
         <div className="flex gap-3 pt-2 border-t border-gray-100">

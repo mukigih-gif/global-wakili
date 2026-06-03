@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
-import { Plus, ChevronLeft, ChevronRight, List, CalendarDays } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, List, CalendarDays, ChevronDown } from 'lucide-react';
 
 type CalendarEvent = {
   id: string;
@@ -57,12 +57,21 @@ export default function CalendarPage() {
 
   useEffect(() => { loadEvents(); }, [loadEvents]);
 
+  const [showJump, setShowJump] = useState(false);
+  const [filterType, setFilterType] = useState('');
+
   const prevMonth = () => { if (month === 0) { setYear(y => y - 1); setMonth(11); } else setMonth(m => m - 1); };
   const nextMonth = () => { if (month === 11) { setYear(y => y + 1); setMonth(0); } else setMonth(m => m + 1); };
 
+  const handleDayDoubleClick = (day: number) => {
+    const date = `${year}-${String(month + 1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+    window.location.href = `/app/calendar/new?date=${date}`;
+  };
+
   const eventsOnDay = (day: number) => events.filter((e) => {
     const d = new Date(e.startTime);
-    return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day;
+    return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day
+      && (!filterType || e.eventType === filterType);
   });
 
   const daysInMonth  = getDaysInMonth(year, month);
@@ -91,12 +100,45 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {/* Month navigation */}
-      <div className="flex items-center gap-4">
+      {/* Month navigation + filter */}
+      <div className="flex items-center gap-3 flex-wrap">
         <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"><ChevronLeft className="h-5 w-5 text-gray-600" /></button>
-        <h2 className="text-lg font-semibold text-gray-900 w-44 text-center">{MONTHS[month]} {year}</h2>
+        {/* Month/Year jump picker */}
+        <div className="relative">
+          <button onClick={() => setShowJump((v) => !v)}
+            className="flex items-center gap-1 text-lg font-semibold text-gray-900 hover:text-primary-700 min-w-[160px] justify-center px-2 py-1 rounded-lg hover:bg-gray-100">
+            {MONTHS[month]} {year}
+            <ChevronDown className="h-4 w-4 text-gray-400" />
+          </button>
+          {showJump && (
+            <div className="absolute top-10 left-0 z-50 bg-white border border-gray-200 rounded-xl shadow-xl p-3 w-64">
+              <div className="flex gap-2 mb-2">
+                <select value={month} onChange={(e) => { setMonth(parseInt(e.target.value)); setShowJump(false); }} className="form-select flex-1 text-sm">
+                  {MONTHS.map((m, i) => <option key={m} value={i}>{m}</option>)}
+                </select>
+                <select value={year} onChange={(e) => { setYear(parseInt(e.target.value)); setShowJump(false); }} className="form-select w-24 text-sm">
+                  {Array.from({ length: 10 }, (_, i) => today.getFullYear() - 5 + i).map((y) => <option key={y} value={y}>{y}</option>)}
+                </select>
+              </div>
+            </div>
+          )}
+        </div>
         <button onClick={nextMonth} className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors"><ChevronRight className="h-5 w-5 text-gray-600" /></button>
-        <button onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }} className="ml-2 text-xs text-primary-600 hover:underline">Today</button>
+        <button onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth()); }} className="text-xs text-primary-600 hover:underline border border-primary-200 rounded-lg px-3 py-1">Today</button>
+
+        {/* Filter */}
+        <div className="ml-auto flex items-center gap-2">
+          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="form-select h-8 text-xs w-44">
+            <option value="">All Event Types</option>
+            <option value="COURT_HEARING">Court Hearings</option>
+            <option value="CLIENT_MEETING">Client Meetings</option>
+            <option value="DEADLINE">Deadlines</option>
+            <option value="COMPLIANCE_DATE">Compliance Dates</option>
+            <option value="BRING_UP">Bring Ups</option>
+            <option value="REMINDER">Reminders</option>
+            <option value="INTERNAL_MEETING">Internal Meetings</option>
+          </select>
+        </div>
       </div>
 
       {view === 'month' ? (
@@ -112,10 +154,14 @@ export default function CalendarPage() {
             {cells.map((day, idx) => {
               const isToday = day !== null && day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
               const dayEvents = day !== null ? eventsOnDay(day) : [];
+              const hasCompliance = dayEvents.some((e) => e.eventType === 'COMPLIANCE_DATE' || e.eventType === 'DEADLINE');
+              const hasHearing    = dayEvents.some((e) => e.eventType === 'COURT_HEARING');
               return (
                 <div
                   key={idx}
-                  className={`min-h-[100px] p-1.5 border-b border-gray-100 ${!day ? 'bg-gray-50/50' : 'hover:bg-gray-50/70'} ${idx % 7 === 0 ? '' : ''}`}
+                  onDoubleClick={() => day && handleDayDoubleClick(day)}
+                  title={day ? 'Double-click to add event' : undefined}
+                  className={`min-h-[100px] p-1.5 border-b border-gray-100 cursor-default ${!day ? 'bg-gray-50/50' : 'hover:bg-blue-50/30'} ${hasCompliance ? 'ring-1 ring-inset ring-amber-300' : ''} ${hasHearing ? 'ring-1 ring-inset ring-red-200' : ''}`}
                 >
                   {day && (
                     <>
