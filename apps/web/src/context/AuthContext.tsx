@@ -64,10 +64,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const data = await res.json();
     const token: string = data.token || data.accessToken;
     const resolvedTenantId: string = data.tenantId || tenantId || '';
+    const role: string = data.role || data.systemRole || '';
 
     if (!token) throw new Error('No token received');
-    setSession(token, resolvedTenantId);
+    setSession(token, resolvedTenantId, role);
     await fetchMe();
+    // Role-based redirect is handled by the login page after login() resolves
   }, [fetchMe]);
 
   const logout = useCallback(() => {

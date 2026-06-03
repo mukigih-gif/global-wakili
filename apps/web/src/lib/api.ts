@@ -63,9 +63,10 @@ export const api = {
 
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
-export function setSession(token: string, tenantId: string) {
+export function setSession(token: string, tenantId: string, role?: string) {
   sessionStorage.setItem('gw_token', token);
   sessionStorage.setItem('gw_tenant_id', tenantId);
+  if (role) sessionStorage.setItem('gw_role', role);
 }
 
 export function clearSession() {

@@ -7,9 +7,15 @@ import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
+function resolvePortal(isSuperAdmin: boolean, role: string): string {
+  if (isSuperAdmin) return '/admin/dashboard';
+  if (role?.toUpperCase() === 'CLIENT') return '/portal/dashboard';
+  return '/app/dashboard';
+}
+
 export default function LoginPage() {
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [tenantId, setTenantId] = useState('');
@@ -22,7 +28,11 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password, tenantId || undefined);
-      router.replace('/app/dashboard');
+      // Single-window login: route to the correct portal based on resolved user role
+      // AuthContext.user is hydrated from /auth/me after login() resolves
+      const role = sessionStorage.getItem('gw_role') || '';
+      const isSuperAdmin = user?.isSuperAdmin ?? (role === 'SUPER_ADMIN' || role === 'SYSTEM_ADMIN');
+      router.replace(resolvePortal(isSuperAdmin, role));
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
