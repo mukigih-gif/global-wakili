@@ -1,16 +1,21 @@
-import path from 'path';
-import { fileURLToPath } from 'url';
+import { createRequire } from 'module';
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const require = createRequire(import.meta.url);
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  webpack: (config) => {
-    // Prevent duplicate React instances in monorepo —
-    // forces all imports of react/react-dom to resolve to apps/web/node_modules
-    config.resolve.alias['react'] = path.resolve(__dirname, 'node_modules/react');
-    config.resolve.alias['react-dom'] = path.resolve(__dirname, 'node_modules/react-dom');
+  // Force all React imports to resolve to the same instance
+  webpack: (config, { isServer }) => {
+    const reactPath = require.resolve('react');
+    const reactDomPath = require.resolve('react-dom');
+
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      'react': reactPath,
+      'react-dom': reactDomPath,
+    };
+
     return config;
   },
   async rewrites() {

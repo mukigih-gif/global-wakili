@@ -30,6 +30,10 @@
     "socket.io": "^4.8.3",
     "zod": "^3.22.0"
   },
+  "overrides": {
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.11.0",
