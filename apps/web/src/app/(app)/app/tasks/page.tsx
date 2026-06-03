@@ -10,7 +10,8 @@ import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, StatCard } from '@/components/ui/Card';
-import { CheckSquare, Clock, AlertTriangle, Plus, Search, Check } from 'lucide-react';
+import { CheckSquare, Clock, AlertTriangle, Plus, Search, Check, Users } from 'lucide-react';
+import { useAuth } from '@/context/AuthContext';
 
 type Task = {
   id: string;
@@ -44,13 +45,18 @@ const PRIORITY_COLORS: Record<string, 'red' | 'yellow' | 'blue' | 'gray'> = {
   LOW: 'gray',
 };
 
+const MANAGER_ROLES = ['FIRM_ADMIN', 'ADMIN', 'MANAGING_PARTNER', 'PARTNER', 'SUPER_ADMIN'];
+
 export default function TasksPage() {
+  const { user } = useAuth();
+  const isManager = MANAGER_ROLES.some((r) => user?.role?.toUpperCase().includes(r));
   const [tasks, setTasks] = useState<Task[]>([]);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('');
+  const [viewMode, setViewMode] = useState<'mine' | 'all'>('all');
 
   useEffect(() => {
     api.get<Dashboard>('/tasks/dashboard')
@@ -64,13 +70,15 @@ export default function TasksPage() {
     if (query) params.set('query', query);
     if (statusFilter) params.set('status', statusFilter);
     if (priorityFilter) params.set('priority', priorityFilter);
-    params.set('limit', '50');
+    params.set('limit', '100');
+    // Managers see all tasks; others see assigned tasks only
+    if (!isManager || viewMode === 'mine') params.set('assignedToMe', 'true');
 
     api.get<{ data: Task[] }>(`/tasks/search?${params}`)
       .then((r) => setTasks(r.data ?? []))
       .catch(() => setTasks([]))
       .finally(() => setLoading(false));
-  }, [query, statusFilter, priorityFilter]);
+  }, [query, statusFilter, priorityFilter, viewMode, isManager]);
 
   const s = dashboard?.summary;
 
@@ -86,11 +94,25 @@ export default function TasksPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
-          <p className="text-sm text-gray-500">All matter tasks across your firm</p>
+          <p className="text-sm text-gray-500">{isManager && viewMode === 'all' ? 'All firm tasks — Managing Partner view' : 'Tasks assigned to me'}</p>
         </div>
-        <Link href="/app/tasks/new">
-          <Button size="sm"><Plus className="h-4 w-4" /> New Task</Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {isManager && (
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+              <button onClick={() => setViewMode('mine')}
+                className={`flex items-center gap-1 px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'mine' ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                My Tasks
+              </button>
+              <button onClick={() => setViewMode('all')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors ${viewMode === 'all' ? 'bg-primary-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
+                <Users className="h-3.5 w-3.5" /> All Firm Tasks
+              </button>
+            </div>
+          )}
+          <Link href="/app/tasks/new">
+            <Button size="sm"><Plus className="h-4 w-4" /> New Task</Button>
+          </Link>
+        </div>
       </div>
 
       {/* KPI cards */}
