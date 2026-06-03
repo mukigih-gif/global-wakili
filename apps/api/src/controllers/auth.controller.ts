@@ -1001,3 +1001,157 @@ function getRequestIp(req: Request): string {
 
   return req.ip || 'unknown';
 }
+
+// ── OAuth / Social Login ──────────────────────────────────────────────────────
+
+import { ExternalSyncService } from '../modules/calendar/ExternalSyncService';
+
+/**
+ * GET /auth/oauth/google
+ * Initiates Google OAuth 2.0 flow — redirects to Google consent screen.
+ * Query params: redirect_uri, state (optional CSRF token), tenant_id (optional)
+ */
+authRouter.get('/oauth/google', (req: Request, res: Response) => {
+  const redirectUri = String(req.query.redirect_uri ?? `${req.protocol}://${req.get('host')}/api/v1/auth/oauth/google/callback`);
+  const state = String(req.query.state ?? '');
+  const url = ExternalSyncService.getGoogleAuthorizationUrl({ redirectUri, state });
+  res.redirect(url);
+});
+
+/**
+ * GET /auth/oauth/google/callback
+ * Google OAuth callback — exchanges code for user info and issues a JWT.
+ */
+authRouter.get('/auth/oauth/google/callback', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const code = String(req.query.code ?? '');
+    const redirectUri = String(req.query.redirect_uri ?? `${req.protocol}://${req.get('host')}/api/v1/auth/oauth/google/callback`);
+
+    if (!code) return next(new HttpError(400, 'OAuth code is required'));
+
+    const tokens = await ExternalSyncService.exchangeGoogleCode({ code, redirectUri });
+
+    // Fetch user info from Google
+    const { default: axios } = await import('axios');
+    const userInfo = await axios.get('https://www.googleapis.com/oauth2/v3/userinfo', {
+      headers: { Authorization: `Bearer ${tokens.accessToken}` },
+      timeout: 10_000,
+    }).catch(() => null);
+
+    const email: string | null = userInfo?.data?.email ?? null;
+    if (!email) return next(new HttpError(400, 'Could not retrieve email from Google'));
+
+    const tenantId = String(req.query.tenant_id ?? req.headers['x-tenant-id'] ?? '');
+
+    // Find or create user
+    const user = await prisma.user.findFirst({
+      where: {
+        email,
+        ...(tenantId ? { tenantId } : {}),
+        status: 'ACTIVE',
+      },
+      include: { roles: true, tenant: { select: { id: true, slug: true, name: true, subscriptionStatus: true } } },
+    });
+
+    if (!user) {
+      return next(new HttpError(401, `No active account found for ${email}. Contact your administrator.`));
+    }
+
+    const claims = deriveRoleClaims(user);
+    const jwtPayload = {
+      sub: user.id,
+      email: user.email,
+      tenantId: user.tenantId,
+      systemRole: user.systemRole ?? 'NONE',
+      tenantRole: user.tenantRole ?? 'NONE',
+      role: claims.role,
+      primaryRole: claims.primaryRole,
+      isSuperAdmin: claims.isSuperAdmin,
+      roleIds: claims.roleIds,
+      roleNames: claims.roleNames,
+      provider: 'google',
+    };
+
+    const accessToken = signToken(jwtPayload, resolveJwtExpiresIn('access'));
+    const appUrl = process.env.APP_URL ?? `${req.protocol}://${req.get('host')}`;
+    const portal = claims.isSuperAdmin ? '/admin/dashboard' : '/app/dashboard';
+
+    // Redirect to frontend with token in query param (frontend stores in sessionStorage)
+    res.redirect(`${appUrl}/auth/oauth/complete?token=${encodeURIComponent(accessToken)}&tenantId=${encodeURIComponent(user.tenantId ?? '')}&role=${encodeURIComponent(claims.role ?? '')}&redirect=${encodeURIComponent(portal)}`);
+  } catch (error: unknown) {
+    return next(error);
+  }
+});
+
+/**
+ * GET /auth/oauth/microsoft
+ * Initiates Microsoft OAuth 2.0 flow — redirects to Microsoft login.
+ */
+authRouter.get('/oauth/microsoft', (req: Request, res: Response) => {
+  const redirectUri = String(req.query.redirect_uri ?? `${req.protocol}://${req.get('host')}/api/v1/auth/oauth/microsoft/callback`);
+  const state = String(req.query.state ?? '');
+  const url = ExternalSyncService.getOutlookAuthorizationUrl({ redirectUri, state });
+  res.redirect(url);
+});
+
+/**
+ * GET /auth/oauth/microsoft/callback
+ * Microsoft OAuth callback — exchanges code for user info and issues a JWT.
+ */
+authRouter.get('/auth/oauth/microsoft/callback', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const code = String(req.query.code ?? '');
+    const redirectUri = String(req.query.redirect_uri ?? `${req.protocol}://${req.get('host')}/api/v1/auth/oauth/microsoft/callback`);
+
+    if (!code) return next(new HttpError(400, 'OAuth code is required'));
+
+    const tokens = await ExternalSyncService.exchangeOutlookCode({ code, redirectUri });
+
+    const { default: axios } = await import('axios');
+    const userInfo = await axios.get('https://graph.microsoft.com/v1.0/me', {
+      headers: { Authorization: `Bearer ${tokens.accessToken}` },
+      timeout: 10_000,
+    }).catch(() => null);
+
+    const email: string | null = userInfo?.data?.mail ?? userInfo?.data?.userPrincipalName ?? null;
+    if (!email) return next(new HttpError(400, 'Could not retrieve email from Microsoft'));
+
+    const tenantId = String(req.query.tenant_id ?? req.headers['x-tenant-id'] ?? '');
+
+    const user = await prisma.user.findFirst({
+      where: {
+        email,
+        ...(tenantId ? { tenantId } : {}),
+        status: 'ACTIVE',
+      },
+      include: { roles: true, tenant: { select: { id: true, slug: true, name: true, subscriptionStatus: true } } },
+    });
+
+    if (!user) {
+      return next(new HttpError(401, `No active account found for ${email}. Contact your administrator.`));
+    }
+
+    const claims = deriveRoleClaims(user);
+    const jwtPayload = {
+      sub: user.id,
+      email: user.email,
+      tenantId: user.tenantId,
+      systemRole: user.systemRole ?? 'NONE',
+      tenantRole: user.tenantRole ?? 'NONE',
+      role: claims.role,
+      primaryRole: claims.primaryRole,
+      isSuperAdmin: claims.isSuperAdmin,
+      roleIds: claims.roleIds,
+      roleNames: claims.roleNames,
+      provider: 'microsoft',
+    };
+
+    const accessToken = signToken(jwtPayload, resolveJwtExpiresIn('access'));
+    const appUrl = process.env.APP_URL ?? `${req.protocol}://${req.get('host')}`;
+    const portal = claims.isSuperAdmin ? '/admin/dashboard' : '/app/dashboard';
+
+    res.redirect(`${appUrl}/auth/oauth/complete?token=${encodeURIComponent(accessToken)}&tenantId=${encodeURIComponent(user.tenantId ?? '')}&role=${encodeURIComponent(claims.role ?? '')}&redirect=${encodeURIComponent(portal)}`);
+  } catch (error: unknown) {
+    return next(error);
+  }
+});
