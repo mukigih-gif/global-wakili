@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Users, Briefcase, FileText, DollarSign,
   Shield, UserCheck, BarChart2, Brain, Bell, Settings,
   Building, LogOut, CheckSquare, Gavel, Award, ExternalLink, Scale,
-  CalendarDays, PhoneCall, ShoppingCart, Receipt,
+  CalendarDays, PhoneCall, ShoppingCart, Receipt, MessageSquare,
 } from 'lucide-react';
 import { Logo } from '@/components/ui/Logo';
 
@@ -38,6 +38,7 @@ const TENANT_NAV: NavItem[] = [
   { href: '/app/hr',             label: 'HR & Payroll',     icon: <UserCheck className="h-4 w-4" />, module: 'payroll' },
   { href: '/app/analytics',      label: 'Analytics',        icon: <BarChart2 className="h-4 w-4" />, module: 'analytics' },
   { href: '/app/ai',             label: 'AI Platform',      icon: <Brain className="h-4 w-4" />, module: 'ai' },
+  { href: '/app/messaging',      label: 'Messages',         icon: <MessageSquare className="h-4 w-4" /> },
   { href: '/app/notifications',  label: 'Notifications',    icon: <Bell className="h-4 w-4" /> },
   { href: '/app/settings',       label: 'Settings',         icon: <Settings className="h-4 w-4" /> },
 ];
