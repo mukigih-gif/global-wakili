@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { Bell, Search, HelpCircle, MessageSquare, X, Check, Plus,
-         Briefcase, Users, FileText, CheckSquare, CalendarDays, Receipt } from 'lucide-react';
+         Briefcase, Users, FileText, CheckSquare, CalendarDays, Receipt,
+         BookOpen, ExternalLink, Keyboard } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -165,6 +166,7 @@ export function TopBar({ title }: Props) {
   const { user } = useAuth();
   const [notifOpen, setNotifOpen]   = useState(false);
   const [newOpen, setNewOpen]       = useState(false);
+  const [helpOpen, setHelpOpen]     = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -172,10 +174,12 @@ export function TopBar({ title }: Props) {
   const notifRef  = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const newRef    = useRef<HTMLDivElement>(null);
+  const helpRef   = useRef<HTMLDivElement>(null);
 
   useClickOutside(notifRef,  () => setNotifOpen(false));
   useClickOutside(searchRef, () => setSearchOpen(false));
   useClickOutside(newRef,    () => setNewOpen(false));
+  useClickOutside(helpRef,   () => setHelpOpen(false));
 
   useEffect(() => {
     api.get<{ data: { unread: number } }>('/notifications/unread-count')
@@ -255,9 +259,58 @@ export function TopBar({ title }: Props) {
           {notifOpen && <NotificationPanel onClose={() => setNotifOpen(false)} />}
         </div>
 
-        <button className="btn-ghost p-2 rounded-lg" title="Help">
-          <HelpCircle className="h-5 w-5" />
-        </button>
+        {/* Help */}
+        <div ref={helpRef} className="relative">
+          <button onClick={() => setHelpOpen((v) => !v)} className="btn-ghost p-2 rounded-lg" title="Help & Keyboard Shortcuts">
+            <HelpCircle className="h-5 w-5" />
+          </button>
+          {helpOpen && (
+            <div className="absolute right-0 top-12 z-50 w-80 rounded-xl border border-gray-200 bg-white shadow-2xl">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <span className="font-semibold text-gray-900 text-sm">Help & Shortcuts</span>
+                <button onClick={() => setHelpOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
+              </div>
+              <div className="p-4 space-y-4">
+                <div>
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1"><Keyboard className="h-3.5 w-3.5" /> Keyboard Shortcuts</p>
+                  <div className="space-y-1.5">
+                    {[
+                      ['⌘K / Ctrl+K', 'Open command palette'],
+                      ['⌘/ ', 'Focus search bar'],
+                      ['Esc', 'Close modal / palette'],
+                    ].map(([key, desc]) => (
+                      <div key={key} className="flex items-center justify-between text-xs">
+                        <span className="text-gray-600">{desc}</span>
+                        <kbd className="rounded border border-gray-200 bg-gray-50 px-1.5 py-0.5 font-mono text-gray-500">{key}</kbd>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="border-t border-gray-100 pt-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> Resources</p>
+                  <div className="space-y-1.5">
+                    {[
+                      { label: 'User Guide',          href: '/docs/user-guide' },
+                      { label: 'Trust Accounting Help', href: '/docs/trust' },
+                      { label: 'eTIMS Integration',   href: '/docs/etims' },
+                      { label: 'Support Centre',      href: 'mailto:support@globalwakili.co.ke' },
+                    ].map((item) => (
+                      <a key={item.label} href={item.href} className="flex items-center justify-between text-xs text-gray-700 hover:text-primary-700 py-0.5">
+                        {item.label}
+                        <ExternalLink className="h-3 w-3 text-gray-300" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+                <div className="border-t border-gray-100 pt-3 text-center">
+                  <a href="mailto:support@globalwakili.co.ke" className="text-xs text-primary-600 hover:underline">Contact Support</a>
+                  <span className="mx-2 text-gray-300">·</span>
+                  <span className="text-xs text-gray-400">v2.0 · Global Wakili</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
         <div className="ml-1 flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-xs font-bold">
           {user?.name?.slice(0, 2).toUpperCase() ?? 'U'}
         </div>

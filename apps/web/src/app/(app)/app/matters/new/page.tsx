@@ -1,0 +1,137 @@
+'use client';
+export const dynamic = 'force-dynamic';
+
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { api } from '@/lib/api';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { ArrowLeft, Briefcase } from 'lucide-react';
+import Link from 'next/link';
+
+type Client = { id: string; name: string; clientCode: string };
+type User   = { id: string; name: string; role: string };
+
+export default function NewMatterPage() {
+  const router = useRouter();
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
+  const [clients, setClients]   = useState<Client[]>([]);
+  const [lawyers, setLawyers]   = useState<User[]>([]);
+  const [form, setForm] = useState({
+    title: '', matterType: 'GENERAL', category: 'CIVIL',
+    clientId: '', assignedLawyerId: '', description: '',
+    estimatedValue: '', currency: 'KES', openedDate: new Date().toISOString().slice(0, 10),
+  });
+
+  const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
+
+  useEffect(() => {
+    api.get<{ data: Client[] }>('/clients?limit=100').then((r) => setClients(r.data ?? [])).catch(() => {});
+    api.get<{ data: User[] }>('/users?limit=100').then((r) => setLawyers(r.data ?? [])).catch(() => {});
+  }, []);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+    try {
+      const matter = await api.post<{ id: string }>('/matters', { ...form, estimatedValue: form.estimatedValue ? parseFloat(form.estimatedValue) : undefined });
+      router.push(`/app/matters/${matter.id}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create matter');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <div className="flex items-center gap-3">
+        <Link href="/app/matters" className="text-gray-400 hover:text-gray-600"><ArrowLeft className="h-5 w-5" /></Link>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">New Matter</h1>
+          <p className="text-sm text-gray-500">Open a new legal matter</p>
+        </div>
+      </div>
+
+      {error && <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+      <form onSubmit={handleSubmit} className="card p-6 space-y-5">
+        <div className="flex items-center gap-2 mb-2">
+          <Briefcase className="h-5 w-5 text-primary-600" />
+          <h2 className="font-semibold text-gray-900">Matter Details</h2>
+        </div>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <Input label="Matter Title *" required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="e.g. Doe v Smith — Land Dispute" />
+          </div>
+          <div>
+            <label className="form-label">Client *</label>
+            <select required value={form.clientId} onChange={(e) => set('clientId', e.target.value)} className="form-select w-full">
+              <option value="">Select client…</option>
+              {clients.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.clientCode})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Assigned Lawyer</label>
+            <select value={form.assignedLawyerId} onChange={(e) => set('assignedLawyerId', e.target.value)} className="form-select w-full">
+              <option value="">Unassigned</option>
+              {lawyers.map((l) => <option key={l.id} value={l.id}>{l.name} ({l.role})</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Matter Type *</label>
+            <select required value={form.matterType} onChange={(e) => set('matterType', e.target.value)} className="form-select w-full">
+              <option value="GENERAL">General</option>
+              <option value="LITIGATION">Litigation</option>
+              <option value="COMMERCIAL">Commercial</option>
+              <option value="CONVEYANCING">Conveyancing</option>
+              <option value="PROBATE">Probate & Succession</option>
+              <option value="EMPLOYMENT">Employment</option>
+              <option value="IP">Intellectual Property</option>
+            </select>
+          </div>
+          <div>
+            <label className="form-label">Category</label>
+            <select value={form.category} onChange={(e) => set('category', e.target.value)} className="form-select w-full">
+              <option value="CIVIL">Civil</option>
+              <option value="CRIMINAL">Criminal</option>
+              <option value="FAMILY">Family</option>
+              <option value="CORPORATE">Corporate</option>
+              <option value="LAND">Land & Property</option>
+              <option value="CONSTITUTIONAL">Constitutional</option>
+              <option value="EMPLOYMENT">Employment</option>
+              <option value="TAX">Tax</option>
+            </select>
+          </div>
+          <Input label="Opened Date" type="date" value={form.openedDate} onChange={(e) => set('openedDate', e.target.value)} max={new Date().toISOString().slice(0,10)} />
+          <div className="flex gap-2">
+            <div className="flex-1">
+              <Input label="Estimated Value" type="number" value={form.estimatedValue} onChange={(e) => set('estimatedValue', e.target.value)} placeholder="0.00" min="0" />
+            </div>
+            <div className="w-24">
+              <label className="form-label">Currency</label>
+              <select value={form.currency} onChange={(e) => set('currency', e.target.value)} className="form-select w-full">
+                <option value="KES">KES</option>
+                <option value="USD">USD</option>
+                <option value="GBP">GBP</option>
+                <option value="EUR">EUR</option>
+              </select>
+            </div>
+          </div>
+          <div className="sm:col-span-2">
+            <label className="form-label">Description</label>
+            <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={3} className="form-input w-full resize-none" placeholder="Brief description of the matter…" />
+          </div>
+        </div>
+
+        <div className="flex gap-3 pt-2 border-t border-gray-100">
+          <Button type="submit" loading={loading}>Open Matter</Button>
+          <Link href="/app/matters"><Button type="button" variant="secondary">Cancel</Button></Link>
+        </div>
+      </form>
+    </div>
+  );
+}
