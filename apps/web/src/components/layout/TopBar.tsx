@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import { Bell, Search, HelpCircle, MessageSquare, X, Check } from 'lucide-react';
+import { Bell, Search, HelpCircle, MessageSquare, X, Check, Plus,
+         Briefcase, Users, FileText, CheckSquare, CalendarDays, Receipt } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -149,20 +150,32 @@ function GlobalSearchPanel({ query, onClose }: { query: string; onClose: () => v
   );
 }
 
+const NEW_ITEMS = [
+  { label: 'New Matter',   href: '/app/matters/new',   icon: <Briefcase className="h-4 w-4" /> },
+  { label: 'New Client',   href: '/app/clients/new',   icon: <Users className="h-4 w-4" /> },
+  { label: 'New Invoice',  href: '/app/billing/new',   icon: <Receipt className="h-4 w-4" /> },
+  { label: 'New Task',     href: '/app/tasks/new',     icon: <CheckSquare className="h-4 w-4" /> },
+  { label: 'New Event',    href: '/app/calendar/new',  icon: <CalendarDays className="h-4 w-4" /> },
+  { label: 'New Document', href: '/app/documents/new', icon: <FileText className="h-4 w-4" /> },
+];
+
 type Props = { title?: string };
 
 export function TopBar({ title }: Props) {
   const { user } = useAuth();
-  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifOpen, setNotifOpen]   = useState(false);
+  const [newOpen, setNewOpen]       = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  const notifRef = useRef<HTMLDivElement>(null);
+  const notifRef  = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
+  const newRef    = useRef<HTMLDivElement>(null);
 
-  useClickOutside(notifRef, () => setNotifOpen(false));
+  useClickOutside(notifRef,  () => setNotifOpen(false));
   useClickOutside(searchRef, () => setSearchOpen(false));
+  useClickOutside(newRef,    () => setNewOpen(false));
 
   useEffect(() => {
     api.get<{ data: { unread: number } }>('/notifications/unread-count')
@@ -171,19 +184,20 @@ export function TopBar({ title }: Props) {
   }, []);
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6">
-      <div className="flex items-center gap-4">
-        {title && <h1 className="text-lg font-semibold text-gray-900">{title}</h1>}
-        {/* Global search */}
-        <div ref={searchRef} className="relative hidden md:block">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+    <header className="flex h-16 items-center justify-between border-b border-gray-200 bg-white px-6 gap-4">
+      {/* Left: title + search */}
+      <div className="flex items-center gap-3 flex-1 min-w-0">
+        {title && <h1 className="text-lg font-semibold text-gray-900 flex-shrink-0">{title}</h1>}
+        {/* Global search — always visible */}
+        <div ref={searchRef} className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
             type="search"
             placeholder="Search matters, clients, documents…"
             value={searchQuery}
             onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
             onFocus={() => setSearchOpen(true)}
-            className="h-9 w-72 rounded-lg border border-gray-200 pl-9 pr-4 text-sm placeholder-gray-400 focus:border-primary-400 focus:outline-none focus:ring-1 focus:ring-primary-400"
+            className="h-9 w-full rounded-lg border border-gray-200 pl-9 pr-4 text-sm placeholder-gray-400 focus:border-primary-400 focus:outline-none focus:ring-1 focus:ring-primary-400 bg-gray-50"
           />
           {searchOpen && (
             <GlobalSearchPanel query={searchQuery} onClose={() => { setSearchOpen(false); setSearchQuery(''); }} />
@@ -191,7 +205,34 @@ export function TopBar({ title }: Props) {
         </div>
       </div>
 
-      <div className="flex items-center gap-2">
+      {/* Right: actions */}
+      <div className="flex items-center gap-1 flex-shrink-0">
+        {/* Global NEW button */}
+        <div ref={newRef} className="relative">
+          <button
+            onClick={() => setNewOpen((v) => !v)}
+            className="flex items-center gap-1.5 h-8 px-3 rounded-lg bg-primary-600 text-white text-xs font-semibold hover:bg-primary-700 transition-colors"
+            title="Create new"
+          >
+            <Plus className="h-3.5 w-3.5" /> New
+          </button>
+          {newOpen && (
+            <div className="absolute right-0 top-10 z-50 w-48 rounded-xl border border-gray-200 bg-white shadow-xl py-1">
+              {NEW_ITEMS.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setNewOpen(false)}
+                  className="flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary-700"
+                >
+                  <span className="text-gray-400">{item.icon}</span>
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* Messaging */}
         <Link href="/app/messaging" className="btn-ghost p-2 rounded-lg" title="Messages">
           <MessageSquare className="h-5 w-5" />
@@ -217,7 +258,7 @@ export function TopBar({ title }: Props) {
         <button className="btn-ghost p-2 rounded-lg" title="Help">
           <HelpCircle className="h-5 w-5" />
         </button>
-        <div className="ml-2 flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-xs font-bold">
+        <div className="ml-1 flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-xs font-bold">
           {user?.name?.slice(0, 2).toUpperCase() ?? 'U'}
         </div>
       </div>
