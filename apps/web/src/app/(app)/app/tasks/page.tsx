@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { formatDate } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { StatusBadge, Badge } from '@/components/ui/Badge';
 import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
@@ -138,7 +138,7 @@ export default function TasksPage() {
             <Th>Assignee</Th>
             <Th>Priority</Th>
             <Th>Status</Th>
-            <Th>Due Date</Th>
+            <Th>Due Date &amp; Time</Th>
             <Th></Th>
           </tr>
         </thead>
@@ -162,7 +162,7 @@ export default function TasksPage() {
                  <Td><Badge variant={PRIORITY_COLORS[t.priority] ?? 'gray'}>{t.priority}</Badge></Td>
                  <Td><StatusBadge status={t.status} /></Td>
                  <Td className={isOverdue ? 'text-red-600 font-medium text-xs' : 'text-gray-500 text-xs'}>
-                   {formatDate(t.dueDate)}
+                   {formatDateTime(t.dueDate)}
                    {isOverdue && ' ⚠'}
                  </Td>
                  <Td>

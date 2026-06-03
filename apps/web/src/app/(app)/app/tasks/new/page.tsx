@@ -66,7 +66,7 @@ export default function NewTaskPage() {
 
         <div>
           <label className="form-label">Description</label>
-          <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={3} className="form-input w-full resize-none" placeholder="What needs to be done?" />
+          <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={3} className="form-input w-full" placeholder="What needs to be done?" />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -79,7 +79,7 @@ export default function NewTaskPage() {
               <option value="URGENT">Urgent</option>
             </select>
           </div>
-          <Input label="Due Date" type="date" value={form.dueDate} onChange={(e) => set('dueDate', e.target.value)} min={new Date().toISOString().slice(0,10)} />
+          <Input label="Due Date & Time" type="datetime-local" value={form.dueDate} onChange={(e) => set('dueDate', e.target.value)} min={new Date().toISOString().slice(0,16)} />
         </div>
 
         <div>
