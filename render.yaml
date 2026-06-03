@@ -1,43 +1,142 @@
+# render.yaml — Global Wakili Legal Enterprise
+# Blueprint deployment for Render.com
+#
+# BEFORE DEPLOYING: Set all env vars marked (SET MANUALLY) in the
+# Render dashboard under Environment → Secret Files or individual vars.
+#
+# DEPLOYMENT ORDER:
+#   1. Deploy this blueprint (creates API + Redis + notification worker)
+#   2. Note your API URL (e.g. https://global-wakili-api.onrender.com)
+#   3. Deploy frontend to Vercel → note Vercel URL
+#   4. Set CORS_ORIGIN = your Vercel URL in Render dashboard
+#   5. Set APP_URL   = your Render API URL in Render dashboard
+#   6. Restart the API service
+#   7. Run: npm run provision:tenant -- <id> ENTERPRISE <email>
+
 services:
+  # ── Redis (required by production env schema and BullMQ workers) ───────────
+  - type: redis
+    name: global-wakili-redis
+    region: oregon
+    plan: free               # 25MB — sufficient for staging; upgrade for production
+    maxmemoryPolicy: allkeys-lru
+    ipAllowList: []          # only allow internal Render services
+
   # ── API Server ─────────────────────────────────────────────────────────────
   - type: web
     name: global-wakili-api
     runtime: node
-    region: oregon         # change to fra (Frankfurt) for Kenya-nearest latency
-    plan: starter          # $7/mo — upgrade to standard for production
+    region: oregon
+    plan: starter            # $7/mo — upgrade to standard for production
     rootDir: apps/api
-    buildCommand: npm install && npm run db:gen
+    buildCommand: npm install
     startCommand: npm run start
     healthCheckPath: /ping
+    autoDeploy: true         # auto-deploy on push to main
     envVars:
+      # ── Core (required — will ABORT on startup if missing) ─────────────────
       - key: NODE_ENV
         value: production
+
       - key: DATABASE_URL
-        sync: false          # set manually in Render dashboard
+        sync: false
+        # SET MANUALLY — your Neon connection string
+        # Format: postgresql://user:pass@ep-xxx.neon.tech/neondb?sslmode=require
+
       - key: JWT_SECRET
-        generateValue: true  # Render auto-generates a secure value
-      - key: JWT_REFRESH_SECRET
-        generateValue: true
+        sync: false
+        # SET MANUALLY — minimum 32 chars, strong random
+        # Generate: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
+
+      - key: ENCRYPTION_KEY
+        sync: false
+        # SET MANUALLY — exactly 64 hex characters (32 bytes, AES-256)
+        # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+        # Required: env schema enforces this in production
+
+      - key: REDIS_URL
+        fromService:
+          name: global-wakili-redis
+          type: redis
+          property: connectionString
+        # Auto-populated from the Redis service above — do not set manually
+
+      - key: APP_URL
+        sync: false
+        # SET MANUALLY — your Render API URL (after first deploy)
+        # Example: https://global-wakili-api.onrender.com
+
       - key: CORS_ORIGIN
-        sync: false          # set to your Vercel frontend URL
+        sync: false
+        # SET MANUALLY — your Vercel frontend URL (after Vercel deploy)
+        # Example: https://global-wakili.vercel.app
+        # Update and restart after Vercel deployment is complete
+
+      # ── Runtime settings ───────────────────────────────────────────────────
       - key: PORT
-        value: 10000         # Render assigns this port automatically
+        value: 10000
+        # Render serves on this port — do not change
+
       - key: LOG_LEVEL
         value: info
-      - key: REDIS_URL
-        sync: false          # optional — set for multi-instance rate limiting
+
+      - key: USE_NEON
+        value: true
+
+      # ── Security (optional but recommended for staging) ────────────────────
+      - key: DOCUMENT_SIGNING_SECRET
+        sync: false
+        # SET MANUALLY — 64 hex chars
+        # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+      - key: DOCUMENT_STORAGE_PROVIDER
+        value: local
+        # Change to s3 after S3 bucket is configured
+
+      - key: DOCUMENT_MALWARE_SCAN_REQUIRED
+        value: false
+        # Change to true after VIRUSTOTAL_API_KEY is set
+
+      # ── AI (set for full AI functionality) ────────────────────────────────
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: DOCUMENT_STORAGE_PROVIDER
-        value: local         # change to s3 when S3 is configured
-      - key: DOCUMENT_MALWARE_SCAN_REQUIRED
-        value: false         # set to true when VirusTotal key is configured
+        # SET MANUALLY — from console.anthropic.com
+        # Without this, AI scopes run rules-based fallback only
+
+      # ── Notifications (set for real delivery; simulation active without) ──
       - key: NOTIFICATION_FROM_EMAIL
         value: noreply@globalwakili.co.ke
+
       - key: SMS_SENDER_ID
         value: GlobalWakili
+
+      - key: SMTP_HOST
+        sync: false
+
+      - key: SMTP_PORT
+        value: 587
+
+      - key: SMTP_USER
+        sync: false
+
+      - key: SMTP_PASS
+        sync: false
+
+      - key: AT_API_KEY
+        sync: false
+        # Africa's Talking — africastalking.com
+
+      - key: AT_USERNAME
+        sync: false
+
+      # ── Observability ─────────────────────────────────────────────────────
       - key: OTEL_ENABLED
         value: false
+        # Set to true and configure OTEL_EXPORTER_OTLP_ENDPOINT for tracing
+
+      - key: METRICS_TOKEN
+        sync: false
+        # Optional — secures the /metrics Prometheus endpoint
 
   # ── Notification Worker ────────────────────────────────────────────────────
   - type: worker
@@ -46,12 +145,51 @@ services:
     region: oregon
     plan: starter
     rootDir: apps/api
-    buildCommand: npm install && npm run db:gen
+    buildCommand: npm install
     startCommand: npm run worker:notifications
+    autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
+
       - key: DATABASE_URL
         sync: false
+
       - key: REDIS_URL
+        fromService:
+          name: global-wakili-redis
+          type: redis
+          property: connectionString
+
+      - key: ENCRYPTION_KEY
+        sync: false
+
+      - key: JWT_SECRET
+        sync: false
+
+      - key: LOG_LEVEL
+        value: info
+
+      - key: NOTIFICATION_FROM_EMAIL
+        value: noreply@globalwakili.co.ke
+
+      - key: SMS_SENDER_ID
+        value: GlobalWakili
+
+      - key: AT_API_KEY
+        sync: false
+
+      - key: AT_USERNAME
+        sync: false
+
+      - key: SMTP_HOST
+        sync: false
+
+      - key: SMTP_PORT
+        value: 587
+
+      - key: SMTP_USER
+        sync: false
+
+      - key: SMTP_PASS
         sync: false
