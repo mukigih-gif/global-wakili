@@ -5,6 +5,7 @@ import {
   ArrowRight, Zap, Lock, Clock, Users, FileText, TrendingUp,
   Phone, Mail, MapPin, ChevronRight, Star, Award, Building2,
   Gavel, CreditCard, Database, Layers, HeartHandshake, Play,
+  XCircle, MessageCircle, AlertTriangle, Fingerprint, Server,
 } from 'lucide-react';
 
 // ── SEO Metadata ────────────────────────────────────────────────────────────
@@ -163,6 +164,58 @@ const WORKFLOW = [
   { step: '04', title: 'Analyse & Grow', desc: 'Track profitability by matter and client, monitor KPIs, and use AI insights to make data-driven decisions.' },
 ];
 
+const PAIN_POINTS = [
+  {
+    icon: AlertTriangle, pain: 'Trust fund compliance is a constant anxiety',
+    solution: 'Three-way reconciliation and overdraw prevention run automatically. Every shilling is accounted for, every LSK rule enforced — with a tamper-evident audit trail that stands up to any inspection.',
+  },
+  {
+    icon: Clock, pain: 'Billing takes days every month — KRA eTIMS is manual chaos',
+    solution: 'One click sends a compliant eTIMS invoice and triggers M-PESA STK Push to the client\'s phone. Payment lands in your account. Journal entry posts automatically. Billing that used to take 3 days takes 3 minutes.',
+  },
+  {
+    icon: XCircle, pain: 'Missed hearings and deadlines are a professional liability',
+    solution: 'AI deadline intelligence scans all active matters and flags risks 30, 7, and 1 day in advance. Court hearing registry, filing tracker, and calendar integration ensure nothing slips through.',
+  },
+  {
+    icon: FileText, pain: 'Client communication is scattered across WhatsApp, email, and calls',
+    solution: 'The secure client portal gives every client a professional space to view matters, pay invoices, access documents, and raise issues — without you fielding 20 calls a day.',
+  },
+];
+
+const VERSUS = [
+  { feature: 'Built for Kenyan law & LSK rules', us: true, others: false, note: 'Generic platforms retrofitted' },
+  { feature: 'Native KRA eTIMS integration', us: true, others: false, note: 'Manual filing required elsewhere' },
+  { feature: 'M-PESA STK Push payment collection', us: true, others: false, note: 'Not available in international tools' },
+  { feature: 'LSK trust accounting (3-way recon)', us: true, others: false, note: 'Generic accounting modules' },
+  { feature: 'AI legal ops with prompt injection guard', us: true, others: false, note: 'Unguarded AI or none' },
+  { feature: 'Kenya Data Protection Act 2019 compliant', us: true, others: false, note: 'GDPR-only posture' },
+  { feature: 'Court filing & tender management', us: true, others: false, note: 'Missing in most platforms' },
+  { feature: 'Africa\'s Talking SMS (Kenya primary)', us: true, others: false, note: 'Twilio only' },
+  { feature: 'Pricing in Kenya Shillings', us: true, others: false, note: 'USD pricing, FX risk' },
+  { feature: 'Local implementation & support team', us: true, others: false, note: 'Remote support only' },
+];
+
+const SECURITY_BADGES = [
+  { label: 'AES-256-GCM Encryption', icon: Lock },
+  { label: 'SHA-256 Audit Chain', icon: FileText },
+  { label: 'TLS 1.3 in Transit', icon: Shield },
+  { label: '116-Model Tenant Isolation', icon: Database },
+  { label: 'RBAC — 400+ Permissions', icon: Users },
+  { label: 'Attorney-Client Privilege Protected', icon: Fingerprint },
+  { label: 'ISO 27001-Aligned Controls', icon: Award },
+  { label: 'Geo-redundant Neon Postgres', icon: Server },
+];
+
+const FAQ = [
+  { q: 'Is Global Wakili compliant with Law Society of Kenya trust accounting rules?', a: 'Yes — entirely. The platform enforces three-way reconciliation (bank vs trust ledger vs client ledger), prevents overdrawing of any client sub-account, and blocks fund commingling at the architecture level. Every trust transaction generates an immutable audit record.' },
+  { q: 'How does KRA eTIMS integration work?', a: 'When you mark an invoice as paid, the platform automatically submits it to KRA\'s eTIMS API, retrieves the control number and QR code, stamps the invoice PDF, and creates the journal entry — all without leaving the platform. Your KRA PIN and device credentials are configured once.' },
+  { q: 'Can clients pay via M-PESA?', a: 'Yes. Clients receive an M-PESA STK Push to their phone directly from the client portal or via SMS. When they confirm payment, the platform automatically records the receipt, posts the journal entry, and updates the invoice balance.' },
+  { q: 'Is my client data safe? What about attorney-client privilege?', a: 'Your data is architecturally isolated from every other firm — 116 Prisma model-level tenant controls make cross-tenant access impossible by design. All data is encrypted at rest (AES-256-GCM) and in transit (TLS 1.3). AI features redact sensitive fields before any external API call. We never use your data to train models.' },
+  { q: 'How long does implementation take?', a: 'A standard implementation takes 2–4 weeks: data migration, staff training, and configuration. Enterprise implementations with custom integrations take 4–8 weeks. Our Nairobi-based implementation team handles everything.' },
+  { q: 'Can we import our existing matters and client data?', a: 'Yes. Our implementation team migrates matters, clients, time entries, trust balances, and documents from your existing system. We support Excel/CSV imports and API-based migration from most popular legal platforms.' },
+];
+
 const TESTIMONIALS = [
   {
     quote: 'Global Wakili transformed how we manage trust accounts. The three-way reconciliation and overdraw prevention give us complete confidence in our compliance with Law Society requirements.',
@@ -237,15 +290,13 @@ export default function HomePage() {
             {/* Headline */}
             <div className="text-center max-w-5xl mx-auto">
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-display font-bold text-white leading-[1.05] tracking-tight mb-6">
-                Run Your Entire{' '}
+                Your firm deserves software{' '}
                 <span className="bg-gradient-to-r from-accent-300 to-accent-400 bg-clip-text text-transparent">
-                  Law Firm
-                </span>{' '}
-                from One Platform
+                  built for Kenya
+                </span>
               </h1>
               <p className="text-xl lg:text-2xl text-primary-200 max-w-3xl mx-auto leading-relaxed mb-10 font-light">
-                Practice management, LSK-compliant trust accounting, KRA eTIMS invoicing,
-                M-PESA payments, and AI legal operations — unified for Kenyan enterprise law firms.
+                We built Global Wakili because Kenyan law firms deserve more than a foreign platform with a Kenyan flag stuck on it. Trust accounting, eTIMS billing, M-PESA payments, and AI legal work — in one place, the way it should be.
               </p>
 
               {/* CTAs */}
@@ -297,6 +348,37 @@ export default function HomePage() {
                 <div key={org} className="flex items-center gap-2 text-gray-400 font-semibold text-sm">
                   <Award className="h-4 w-4" />
                   {org}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Pain Points ─────────────────────────────────────────────────── */}
+        <section className="marketing-section bg-white">
+          <div className="marketing-container">
+            <div className="text-center max-w-3xl mx-auto mb-16">
+              <span className="text-sm font-bold uppercase tracking-widest text-red-600 mb-3 block">The Problem</span>
+              <h2 className="text-4xl lg:text-5xl font-display font-bold text-gray-900 mb-5">
+                Running a law firm in Kenya is hard enough.
+                <span className="block text-gray-400 font-normal mt-2 text-3xl">Your software shouldn't make it harder.</span>
+              </h2>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {PAIN_POINTS.map(({ icon: Icon, pain, solution }) => (
+                <div key={pain} className="rounded-2xl border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-start gap-4 p-6 bg-red-50 border-b border-red-100">
+                    <div className="flex-shrink-0 h-10 w-10 rounded-xl bg-red-100 flex items-center justify-center">
+                      <Icon className="h-5 w-5 text-red-600" />
+                    </div>
+                    <p className="font-semibold text-gray-900 leading-snug">{pain}</p>
+                  </div>
+                  <div className="flex items-start gap-4 p-6 bg-white">
+                    <div className="flex-shrink-0 h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+                      <CheckCircle className="h-5 w-5 text-emerald-600" />
+                    </div>
+                    <p className="text-sm text-gray-600 leading-relaxed">{solution}</p>
+                  </div>
                 </div>
               ))}
             </div>
@@ -404,6 +486,41 @@ export default function HomePage() {
                     </div>
                     <p className="font-semibold text-gray-900 text-sm leading-snug">{name}</p>
                     <p className="text-xs text-gray-500">{desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Versus Comparison ──────────────────────────────────────────── */}
+        <section className="marketing-section bg-white">
+          <div className="marketing-container">
+            <div className="text-center max-w-3xl mx-auto mb-14">
+              <span className="text-sm font-bold uppercase tracking-widest text-primary-600 mb-3 block">Why Global Wakili</span>
+              <h2 className="text-4xl font-display font-bold text-gray-900 mb-4">
+                Built for Kenya. Not adapted for it.
+              </h2>
+              <p className="text-lg text-gray-500">
+                Clio is a good product — for a London or New York law firm. But when your clients pay by M-PESA, your accountant files on eTIMS, and the Law Society audits your trust ledger every year, you need software that actually knows what those things are. That's what we built.
+              </p>
+            </div>
+            <div className="max-w-3xl mx-auto">
+              <div className="rounded-2xl border border-gray-200 overflow-hidden shadow-lg">
+                <div className="grid grid-cols-3 bg-gray-950 text-white text-sm font-semibold">
+                  <div className="px-6 py-4">Feature</div>
+                  <div className="px-6 py-4 text-center text-emerald-400">Global Wakili</div>
+                  <div className="px-6 py-4 text-center text-gray-400">International Platforms</div>
+                </div>
+                {VERSUS.map(({ feature, us, others, note }, i) => (
+                  <div key={feature} className={`grid grid-cols-3 text-sm items-center ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-t border-gray-100`}>
+                    <div className="px-6 py-4 font-medium text-gray-800">{feature}</div>
+                    <div className="px-6 py-4 text-center">
+                      {us ? <CheckCircle className="h-5 w-5 text-emerald-500 mx-auto" /> : <XCircle className="h-5 w-5 text-red-400 mx-auto" />}
+                    </div>
+                    <div className="px-6 py-4 text-center">
+                      <span className="text-xs text-gray-400 italic">{note}</span>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -519,10 +636,10 @@ export default function HomePage() {
           <div className="marketing-container relative text-center">
             <HeartHandshake className="h-16 w-16 text-white/30 mx-auto mb-6" />
             <h2 className="text-4xl lg:text-5xl font-display font-bold text-white mb-5 max-w-3xl mx-auto leading-tight">
-              Ready to transform how your firm operates?
+              Let's show you what your firm could look like in 90 days
             </h2>
             <p className="text-xl text-primary-200 mb-10 max-w-2xl mx-auto">
-              Join Kenya's leading law firms on the only enterprise legal ERP built specifically for the Kenyan market. Book a personalised demo today — no commitment required.
+              No sales pitch. No pressure. Just a real walk-through of the platform with one of our team — so you can decide if it's the right fit for your firm.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <a href="#contact" className="btn-white px-10 py-4 text-base rounded-xl shadow-xl text-primary-900 font-bold">
@@ -531,6 +648,48 @@ export default function HomePage() {
               <Link href="/login" className="btn px-10 py-4 text-base rounded-xl border-2 border-white/30 text-white hover:bg-white/10 font-semibold">
                 Access Platform
               </Link>
+            </div>
+          </div>
+        </section>
+
+        {/* ── Security Trust Strip ────────────────────────────────────────── */}
+        <section className="py-14 bg-gray-950 border-t border-gray-800">
+          <div className="marketing-container">
+            <p className="text-center text-xs font-bold uppercase tracking-widest text-gray-500 mb-8">
+              Enterprise-grade security — protecting attorney-client privilege
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
+              {SECURITY_BADGES.map(({ label, icon: Icon }) => (
+                <div key={label} className="flex flex-col items-center gap-2 text-center">
+                  <div className="h-10 w-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+                    <Icon className="h-5 w-5 text-gray-400" />
+                  </div>
+                  <span className="text-xs text-gray-500 leading-tight">{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── FAQ ─────────────────────────────────────────────────────────── */}
+        <section className="marketing-section bg-gray-50">
+          <div className="marketing-container">
+            <div className="text-center max-w-2xl mx-auto mb-14">
+              <span className="text-sm font-bold uppercase tracking-widest text-primary-600 mb-3 block">Questions & Answers</span>
+              <h2 className="text-4xl font-display font-bold text-gray-900 mb-4">Things firms ask us before signing up</h2>
+            </div>
+            <div className="max-w-3xl mx-auto space-y-4">
+              {FAQ.map(({ q, a }) => (
+                <details key={q} className="card group open:shadow-md transition-shadow">
+                  <summary className="flex items-center justify-between gap-4 px-7 py-5 cursor-pointer list-none font-semibold text-gray-900 hover:text-primary-700 transition-colors">
+                    {q}
+                    <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0 transition-transform group-open:rotate-90" />
+                  </summary>
+                  <div className="px-7 pb-6 text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-4">
+                    {a}
+                  </div>
+                </details>
+              ))}
             </div>
           </div>
         </section>
@@ -578,7 +737,8 @@ export default function HomePage() {
 
               {/* Demo Request Form */}
               <div className="card p-8 shadow-xl">
-                <h3 className="text-xl font-display font-bold text-gray-900 mb-6">Request a Demo</h3>
+                <h3 className="text-xl font-display font-bold text-gray-900 mb-1">Book a 30-minute walkthrough</h3>
+                <p className="text-sm text-gray-500 mb-6">We'll show you the platform live. No slides, no recording — just the actual software and your actual questions.</p>
                 <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
