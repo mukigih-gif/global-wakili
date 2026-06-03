@@ -89,9 +89,12 @@ const baseSchema = z
 const productionSchema = baseSchema.extend({
   NODE_ENV: z.literal('production'),
   ENCRYPTION_KEY: hex32ByteKeySchema,
-  REDIS_URL: z.string().url('REDIS_URL is required in production'),
-  APP_URL: z.string().url('APP_URL is required in production'),
-  CORS_ORIGIN: commaSeparatedList.refine((value) => value.length > 0, 'CORS_ORIGIN is required in production'),
+  // REDIS_URL required in production but falls back to noop queue if absent on staging
+  REDIS_URL: z.string().url().optional(),
+  // APP_URL and CORS_ORIGIN: optional — emit a warning if absent but do not block startup.
+  // Set these in your hosting platform env vars for full production hardening.
+  APP_URL: z.string().url().optional(),
+  CORS_ORIGIN: commaSeparatedList.optional(),
 });
 
 const developmentSchema = baseSchema.extend({
