@@ -11,6 +11,7 @@ import {
   Plus, Search, Phone, Users, FileText, ArrowDownToLine,
   ArrowUpFromLine, UserCheck, Package,
 } from 'lucide-react';
+import Link from 'next/link';
 
 type LogEntry = {
   id: string; type: string; visitorName?: string | null; callerName?: string | null;
@@ -72,6 +73,9 @@ export default function ReceptionPage() {
           <p className="text-sm text-gray-500">Visitor logs, calls, and document handling (in/out)</p>
         </div>
         <div className="flex gap-2">
+          <Link href="/app/reception/walk-ins">
+            <Button size="sm" variant="secondary"><UserCheck className="h-4 w-4" /> Walk-In Clients</Button>
+          </Link>
           {(tab === 'visitors') && <Button size="sm"><Plus className="h-4 w-4" /> Log Visitor</Button>}
           {(tab === 'calls')    && <Button size="sm"><Plus className="h-4 w-4" /> Log Call</Button>}
           {(tab === 'docs_in')  && <Button size="sm"><Plus className="h-4 w-4" /> Record Incoming Doc</Button>}
