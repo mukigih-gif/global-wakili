@@ -11,6 +11,7 @@ import { unifiedTenancy } from './middleware/unified-tenancy';
 import { requestContext } from './middleware/request-context';
 import { requestLogger } from './middleware/request-logger';
 import { rateLimiter } from './middleware/rate-limit';
+import { metricsMiddleware, registry } from './lib/metrics';
 
 const app = express();
 
@@ -48,6 +49,7 @@ app.use(express.urlencoded({ extended: false, limit: '2mb' }));
 app.use(requestContext);
 app.use(requestLogger());
 app.use(rateLimiter());
+app.use(metricsMiddleware());
 
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({
@@ -56,6 +58,20 @@ app.get('/health', (_req: Request, res: Response) => {
     environment: env.NODE_ENV,
     timestamp: new Date().toISOString(),
   });
+});
+
+// Prometheus metrics endpoint — restrict to internal access in production
+app.get('/metrics', async (req: Request, res: Response) => {
+  const token = process.env.METRICS_TOKEN?.trim();
+  if (token) {
+    const auth = req.headers.authorization ?? '';
+    if (auth !== `Bearer ${token}`) {
+      res.status(403).json({ error: 'Metrics access denied' });
+      return;
+    }
+  }
+  res.set('Content-Type', registry.contentType);
+  res.end(await registry.metrics());
 });
 
 app.get('/api/v1/health', (_req: Request, res: Response) => {
