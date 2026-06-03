@@ -255,13 +255,53 @@ Current blockers: Frontend (Gap 017), Testing (Gap 018), Infra (Gap 019), Docs (
 
 ---
 
-## Open Work (Active)
+## Phase Completion Register (2026-06-03)
 
-Phase 9 — Frontend Completion (Gap 017) — ACTIVE
-Phase 10 — Testing Matrix (Gap 018)
-Phase 11 — Documentation (Gap 020)
-Phase 12 — Production Readiness (Gap 019)
-Gate 16 — Go-Live Review
+| Phase | Gate | Description | Status | Last Commit |
+|-------|------|-------------|--------|-------------|
+| Phase 9 | Gate 12 | Frontend — 11 domains | ✅ CLOSED | 1f4849b |
+| Phase 10 | Gate 13 | Testing Matrix | ⚠️ PARTIAL | 9c9e80f |
+| Phase 11 | Gate 14 | Documentation | ✅ CLOSED | 417e3ae |
+| Phase 12 | Gate 15 | Production Readiness | ✅ CLOSED | a455bba |
+| — | Gate 16 | Go-Live Review | ⏳ PENDING | — |
+
+---
+
+## Additional Modules Closed (Session 2026-06-03)
+
+| Module | Commit | What Was Done |
+|--------|--------|---------------|
+| Court Filing Registry | 69c8e08 | CourtFiling schema + CourtFilingService (clerks can record, scan, track filings) |
+| Legal Tender Management | 69c8e08 | TenderRecord + TenderActivity + TenderDocument — full pipeline |
+| Client Issues Ticketing (tenant) | d6bf770 | ClientIssue schema + service (law firm client → firm) |
+| Client Prospects Pipeline (CRM) | d6bf770 | ClientProspect + ProspectActivity — 8 pipeline stages |
+| Matter → Client Notification | 69c8e08 | MatterProgressNotificationService wired in matter.controller |
+| Reception Document Bridge | 69c8e08 | DOC_INCOMING/OUTGOING now creates Document record + notifies |
+| Task Reminder Bridge | 51018f2 | TaskReminderBridgeService wired to NotificationQueueService |
+| Task Calendar Bridge | 51018f2 | TaskCalendarBridgeService wired to CalendarEvent.create |
+| OAuth SSO | 1f4849b | Google + Microsoft login, role-based portal routing |
+| Terms & Conditions | 1f4849b | 17-section T&C (Kenya law) |
+| Privacy Policy | 1f4849b | KDPA 2019 + GDPR compliant |
+
+---
+
+## Gate 16 — Go-Live Conditions
+
+Gate 16 will be authorised when:
+
+| Condition | Status |
+|-----------|--------|
+| All implementation gaps closed (Gaps 001–020) | ✅ DONE |
+| 365 unit tests passing | ✅ 365/365 |
+| 32 integration tests passing | ✅ 32/32 |
+| All commits pushed to origin/main | ✅ DONE (417e3ae) |
+| Prisma migrate deploy on production Neon DB | ⏳ PENDING (credentials) |
+| All production env vars set | ⏳ PENDING (credentials) |
+| E2E M-PESA flow verified on Daraja sandbox | ⏳ PENDING (2–4 weeks) |
+| E2E eTIMS flow verified on KRA sandbox | ⏳ PENDING (2–4 weeks) |
+| Load test p95 < 500ms documented | ⏳ PENDING (staging needed) |
+| DR drill executed and documented | ⏳ PENDING |
+| Stakeholder sign-off | ⏳ PENDING |
 
 ---
 
