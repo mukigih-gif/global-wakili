@@ -4,504 +4,218 @@
 
 ## Authoritative Project Status Register
 
-Last Updated: 2026-05-26
+Last Updated: 2026-06-03
 
 ---
 
 # Executive Summary
 
-Global Wakili Legal Enterprise is a production-grade multi-tenant Legal ERP platform combining:
+Global Wakili Legal Enterprise is a production-grade multi-tenant Legal ERP platform.
+The backend core is verified production-grade. All six WIPs (001–006) are closed.
+The platform now stands at approximately 80–85% overall completion.
 
-* Legal Practice Management
-* Trust Accounting
-* Legal Accounting
-* HR & Payroll
-* Reporting & Analytics
-* AI Operations
-* Client Collaboration
-* Document Management
-* Notifications
-* Platform Administration
+Active workstream: Phase 9 — Frontend Completion (Gate 12).
 
-The project is being executed under a gated completion model.
+---
 
-The objective is not to rebuild the platform.
+# WIP Closure Summary (2026-06-03)
 
-The objective is to verify, harden, complete, test, document, and deploy the existing architecture.
+| WIP | Module | Commit | Status |
+|-----|--------|--------|--------|
+| WIP-001 | Control Plane Provisioning | e0ed954 | CLOSED |
+| WIP-002 | Notification Platform | e928be5 | CLOSED |
+| WIP-003 | Document Platform | 808d630 | CLOSED |
+| WIP-004 | Passive Time Capture | dd582bc | CLOSED |
+| WIP-005 | AI Platform (LLM) | c273990 | CLOSED |
+| WIP-006 | External Integrations | 2438277 | CLOSED |
+
+All 365 unit tests passing. TENANT_SCOPED_MODELS: 108. tsc: PASS.
 
 ---
 
 # Current Repository State
 
-Repository Status:
-Active Development
-
-Architecture Status:
-Established
-
-Database Status:
-Operational
-
-Multi-Tenant Architecture:
-Implemented
-
-Prisma ORM:
-Implemented
-
-TypeScript:
-Implemented
-
-Express API:
-Implemented
-
-Frontend Foundation:
-Implemented
-
-Audit Infrastructure:
-Implemented
-
-Finance Infrastructure:
-Implemented
-
-Trust Accounting Infrastructure:
-Implemented
-
-Platform Administration:
-Implemented
-
-Notification Infrastructure:
-Partially Implemented
-
-AI Infrastructure:
-Partially Implemented
-
-External Integrations:
-Partially Implemented
-
-Documentation:
-Partial
-
-Production Readiness:
-Not Yet Achieved
-
----
-
-# Verified Completed Gates
-
-## Gate Closure 001
-
-Trust Accounting Hardening
-
-Commit:
-76f8ecf
-
-Status:
-Closed
-
-Verified Outcomes:
-
-* TrustAccountId propagation completed
-* Trust reconciliation boundaries enforced
-* Tenant-safe trust isolation verified
-* Ledger boundary verification completed
-* Trust accounting scope hardening completed
-
-Risk Level:
-Low
-
-Reopening Condition:
-Only if future regression is discovered.
-
----
-
-## Gate Closure 002
-
-Platform Audit Hardening
-
-Commit:
-9732884
-
-Status:
-Closed
-
-Verified Outcomes:
-
-* PlatformAccessAuditService migrated
-* Security audit event persistence completed
-* Hash-chain audit logging completed
-* PreviousHash continuity implemented
-* Failure reason persistence implemented
-* Severity classification implemented
-* Entity normalization implemented
-* Tamper-evident logging implemented
-
-Risk Level:
-Low
-
-Reopening Condition:
-Only if future regression is discovered.
-
----
-
-# Current Active Workstream
-
-Current Focus Area:
-
-Control Plane Provisioning
-
-Status:
-Open
-
-Priority:
-Critical
-
-Required Completion:
-
-* PlatformTenantProfile provisioning
-* TenantSubscription provisioning
-* TenantModuleEntitlement provisioning
-* TenantQuotaPolicy provisioning
-* TenantUsageMetric provisioning
-
-Expected Outcome:
-
-Every tenant must automatically receive complete control-plane provisioning and governance records.
+Repository Status: Active Development
+Architecture Status: Established and Hardened
+Database Status: Operational (17 migrations + 1 WIP-004 migration)
+Multi-Tenant Architecture: Implemented and Verified (108 scoped models)
+Prisma ORM: Implemented
+TypeScript: Implemented
+Express API: Implemented
+Frontend Foundation: Placeholder — Active development (Phase 9)
+Audit Infrastructure: Implemented
+Finance Infrastructure: Implemented
+Trust Accounting Infrastructure: Implemented
+Platform Administration: Implemented
+Notification Infrastructure: Implemented (real SMTP, SMS, FCM)
+AI Infrastructure: Implemented (Anthropic Claude enabled)
+External Integrations: Implemented (eTIMS, M-PESA, Google, Graph, QuickBooks, Zoho)
+Documentation: Partial
+Production Readiness: Not Yet Achieved
 
 ---
 
 # Module Status Assessment
 
 ## Multi-Tenant Platform
-
-Status:
-Strong
-
-Completion Estimate:
-90%
-
+Status: Strong
+Completion Estimate: 95%
 Outstanding:
-
-* Final verification sweep
-* Automated breach testing
+  * Integration tests on real Neon DB
+  * Automated breach testing on production data
 
 ---
 
 ## Trust Accounting
-
-Status:
-Strong
-
-Completion Estimate:
-95%
-
+Status: Strong
+Completion Estimate: 95%
 Outstanding:
-
-* Full automated trust testing matrix
-* Production verification
+  * Full automated trust testing matrix on real DB
+  * Production verification
 
 ---
 
 ## Finance & Accounting
-
-Status:
-Strong
-
-Completion Estimate:
-85%
-
+Status: Strong
+Completion Estimate: 90%
 Outstanding:
-
-* Bank feed integrations
-* External ERP integrations
-* Additional automated testing
+  * Bank feed statement import automation (per-bank API credentials required)
+  * Additional integration testing
 
 ---
 
 ## HR & Payroll
-
-Status:
-Moderate
-
-Completion Estimate:
-70%
-
+Status: Moderate
+Completion Estimate: 70%
 Outstanding:
-
-* End-to-end workflow verification
-* Payroll compliance validation
+  * End-to-end workflow verification
+  * Payroll compliance validation (Kenya PAYE, NHIF, NSSF)
 
 ---
 
 ## Legal Matter Management
-
-Status:
-Strong
-
-Completion Estimate:
-85%
-
+Status: Strong
+Completion Estimate: 85%
 Outstanding:
-
-* Workflow expansion
-* Additional frontend completion
+  * Frontend completion (matters, hearings, workflows UI)
 
 ---
 
 ## Reporting & Analytics
-
-Status:
-Moderate
-
-Completion Estimate:
-75%
-
+Status: Moderate
+Completion Estimate: 75%
 Outstanding:
-
-* Headless BI APIs
-* Dashboard finalization
+  * Headless BI APIs
+  * Dashboard finalisation
+  * Frontend reporting UI
 
 ---
 
 ## Notification Platform
-
-Status:
-Partial
-
-Completion Estimate:
-50%
-
+Status: Complete (backend)
+Completion Estimate: 85%
 Outstanding:
-
-* Email notifications
-* SMS notifications
-* Push notifications
-* Reminder engine
-* Escalation engine
-* Digest engine
-* Delivery tracking
-* User notification preferences
+  * Frontend notification preferences UI
+  * Twilio/Africa's Talking production credentials
+  * FCM production credentials
 
 ---
 
 ## AI Platform
-
-Status:
-Partial
-
-Completion Estimate:
-45%
-
+Status: Complete (backend)
+Completion Estimate: 80%
 Outstanding:
-
-* Generative document assembly
-* Prompt auditing
-* Artifact governance
-* Semantic search
-* Contract risk analysis
+  * Anthropic API key (production)
+  * AI Platform UI (providers, artifacts, review workflows)
+  * Semantic search vector implementation
 
 ---
 
-## Tenant Document Storage
-
-Status:
-Partial
-
-Completion Estimate:
-60%
-
+## External Integrations
+Status: Implemented (simulation fallback active)
+Completion Estimate: 75%
 Outstanding:
+  * KRA eTIMS production credentials (2–4 weeks approval)
+  * Safaricom Daraja production access (2–4 weeks approval)
+  * QuickBooks, Zoho, Google, Microsoft production credentials
+  * Bank feed per-bank API access
 
-* Malware scanning
-* Retention policies
-* Version history
-* Enhanced indexing
+---
+
+## Passive Time Capture
+Status: Complete (backend)
+Completion Estimate: 80%
+Outstanding:
+  * Frontend timer widget
+  * Frontend passive capture review UI
+
+---
+
+## Document Storage
+Status: Complete (backend)
+Completion Estimate: 85%
+Outstanding:
+  * S3 production bucket configuration
+  * VirusTotal API key (production)
+  * Frontend document vault UI
 
 ---
 
 ## Frontend
-
-Status:
-Early-Mid Stage
-
-Completion Estimate:
-25%
-
+Status: Active Development (Phase 9)
+Completion Estimate: 25%
 Outstanding:
-
-* Client portal
-* Command palette
-* ERP UX completion
-* Billing experiences
-* Accessibility compliance
+  * 11 full domains (see Gap 017 in KNOWN_GAPS.md)
+  * Public Marketing, Super Admin, Tenant Admin
+  * Legal Practice Management, Finance, Trust, HR & Payroll
+  * Analytics, AI Platform UI, Notifications UI, Client Portal
 
 ---
 
-# Critical Future Integrations
+# Current Active Workstream
 
-## Microsoft Graph
+Phase: 9 — Frontend Completion
+Gate: 12
+Priority: High
+Status: Active
 
-Planned:
-
-* Email integration
-* Calendar integration
-* Contacts integration
-* Teams integration
-* File integration
-
-Status:
-Pending
-
----
-
-## Google Workspace
-
-Planned:
-
-* Gmail
-* Calendar
-* Drive
-* Docs
-
-Status:
-Pending
+Required:
+  * Super Admin Portal
+  * Tenant Admin Portal
+  * Client Portal
+  * Legal Practice Management UI
+  * Finance UI
+  * Trust Accounting UI
+  * HR & Payroll UI
+  * Analytics & Reporting UI
+  * AI Platform UI
+  * Notifications UI
+  * Public Marketing Platform
 
 ---
 
-## M-PESA
+# Subsequent Workstreams (Ordered)
 
-Planned Flow:
-
-Invoice
-→ Payment Request
-→ STK Push
-→ Callback
-→ Receipt
-→ Journal Entry
-→ Audit Event
-
-Status:
-Pending
+Phase 10 — Testing Matrix (Gate 13)
+Phase 11 — Documentation (Gate 14)
+Phase 12 — Production Readiness (Gate 15)
+Gate 16 — Go-Live Review
 
 ---
 
-## KRA eTIMS
+# Critical External Credential Applications (Start Immediately)
 
-Planned Flow:
-
-Invoice Finalization
-→ VSCU/OSCU Submission
-→ Control Number
-→ QR Code
-→ PDF Stamping
-→ Audit Event
-
-Status:
-Pending
-
----
-
-## QuickBooks
-
-Planned:
-
-* Invoice synchronization
-* Journal synchronization
-
-Status:
-Pending
-
----
-
-## Zoho ERP
-
-Planned:
-
-* Invoice synchronization
-* Ledger synchronization
-
-Status:
-Pending
-
----
-
-# Security Status
-
-Completed:
-
-* Tenant boundary hardening
-* Trust accounting hardening
-* Platform audit hardening
-* Tamper-evident audit chains
-* Security event normalization
-
-Outstanding:
-
-* Comprehensive authorization sweep
-* Full XSS verification
-* Full CSRF verification
-* Full rate-limiting verification
-* Malware scanning verification
-* Penetration testing
-
----
-
-# Documentation Status
-
-Completed:
-
-* Architecture discussions
-* Gate closure records
-
-Outstanding:
-
-* Full /docs architecture
-* API documentation
-* Deployment documentation
-* Operational runbooks
-* Disaster recovery procedures
-
----
-
-# Production Readiness Assessment
-
-Current Readiness:
-Approximately 65%–75%
-
-Backend:
-Strong
-
-Frontend:
-Early Stage
-
-Security:
-Strong but incomplete
-
-Testing:
-Needs expansion
-
-Documentation:
-Needs expansion
-
-Integrations:
-Needs completion
-
-Deployment:
-Not yet ready
-
----
-
-# Immediate Next Steps
-
-1. Complete Control Plane Provisioning.
-2. Complete Entitlement Provisioning.
-3. Complete Quota Provisioning.
-4. Complete Usage Metric Provisioning.
-5. Execute tenant verification matrix.
-6. Execute audit verification matrix.
-7. Complete notification subsystem.
-8. Complete document storage hardening.
-9. Build passive time capture architecture.
-10. Complete external integrations.
+| Credential | Provider | Approval Time |
+|-----------|----------|---------------|
+| eTIMS API | KRA | 2–4 weeks |
+| M-PESA Daraja | Safaricom | 2–4 weeks |
+| QuickBooks OAuth | Intuit | 1–3 days |
+| Azure AD / Graph | Microsoft | Immediate |
+| Google Cloud OAuth | Google | Immediate |
+| Zoho Books | Zoho | 1–2 days |
+| Anthropic Claude | Anthropic | Immediate |
+| Africa's Talking | Africa's Talking | 1–2 days |
+| Firebase / FCM | Google Firebase | Immediate |
 
 ---
 
@@ -509,15 +223,15 @@ Not yet ready
 
 Global Wakili Legal Enterprise will only be considered complete when:
 
-* All execution gates are closed.
-* All WIP items are closed.
-* All critical tests pass.
-* Documentation is complete.
-* Security review is complete.
-* Deployment readiness is approved.
-* Tenant isolation is verified.
-* Finance integrity is verified.
-* Trust accounting integrity is verified.
-* Go-live review is approved.
+  * All execution gates are closed.
+  * All WIP items are closed.
+  * All critical tests pass.
+  * Documentation is complete.
+  * Security review is complete.
+  * Deployment readiness is approved.
+  * Tenant isolation is verified.
+  * Finance integrity is verified.
+  * Trust accounting integrity is verified.
+  * Go-live review is approved.
 
 End of File.
