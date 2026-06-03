@@ -127,18 +127,18 @@ export default function NewInvoicePage() {
           </div>
 
           {/* Totals */}
-          <div className="mt-4 pt-4 border-t border-gray-100 space-y-1 text-sm text-right">
+          <div className="mt-4 pt-4 border-t border-gray-100 space-y-1.5 text-sm">
             <div className="flex justify-end gap-8 text-gray-600">
-              <span>Subtotal</span>
-              <span className="w-28 font-medium">{form.currency} {subtotal.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
+              <span className="w-32 text-right text-xs text-gray-500">Subtotal</span>
+              <span className="w-36 text-right font-medium">{form.currency} {subtotal.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
             <div className="flex justify-end gap-8 text-gray-600">
-              <span>VAT</span>
-              <span className="w-28 font-medium">{form.currency} {vat.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
+              <span className="w-32 text-right text-xs text-gray-500">VAT</span>
+              <span className="w-36 text-right font-medium">{form.currency} {vat.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
-            <div className="flex justify-end gap-8 font-bold text-gray-900 text-base border-t border-gray-200 pt-1 mt-1">
-              <span>Total</span>
-              <span className="w-28">{form.currency} {total.toLocaleString('en-KE', { minimumFractionDigits: 2 })}</span>
+            <div className="flex justify-end gap-8 font-bold text-gray-900 text-base border-t border-gray-200 pt-2 mt-2">
+              <span className="w-32 text-right">Total</span>
+              <span className="w-36 text-right text-primary-700">{form.currency} {total.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
             </div>
           </div>
         </div>
