@@ -37,9 +37,19 @@
 - Impersonation sessions tracked
 
 ## Outstanding for Full Production Go-Live
-- Push all 70+ local commits to origin/main
-- Run prisma migrate deploy against production Neon DB
-- Set all required env vars (CORS_ORIGIN, JWT_SECRET, etc.)
-- Redis-backed rate limiter for multi-instance deployment
-- Full frontend development (Gate 12 WIP items)
-- External integrations (Gate 11 WIP-006)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| Push all commits to origin/main | ✅ DONE — 2026-06-03 | 91 commits. Ref: dc621a0..b325c1a → github.com:mukigih-gif/global-wakili.git |
+| Redis-backed rate limiter | ✅ DONE — 2026-06-03 | Commit 183e94a — rate-limit-redis + in-memory fallback |
+| Full frontend development | ✅ DONE — 2026-06-03 | Phase 9 — all 11 domains built (commit 0ae84f0) |
+| External integrations | ✅ DONE — 2026-06-03 | WIP-006 — eTIMS, M-PESA, Graph, Google, QuickBooks, Zoho (commit 2438277) |
+| Run prisma migrate deploy against production Neon DB | ⏳ PENDING | Requires production DATABASE_URL |
+| Set all required env vars | ⏳ PENDING | CORS_ORIGIN, JWT_SECRET, ANTHROPIC_API_KEY, SMTP, AT, FCM, S3, etc. |
+| OpenTelemetry distributed tracing | ⏳ PENDING | Gap 019 partial — not yet implemented |
+| Log aggregation (Loki / Datadog / CloudWatch) | ⏳ PENDING | Gap 019 partial — Pino logs to stdout only |
+| Uptime monitoring (external probe) | ⏳ PENDING | Gap 019 partial — not yet configured |
+| Disaster recovery drill executed | ⏳ PENDING | DR plan in docs/DISASTER_RECOVERY.md — drill not yet run |
+| Production secrets rotation | ⏳ PENDING | All sandbox/placeholder credentials must be replaced |
+| KRA eTIMS production credentials | ⏳ EXTERNAL | Apply at etims.kra.go.ke — 2–4 week approval |
+| Safaricom Daraja production access | ⏳ EXTERNAL | Apply at developer.safaricom.co.ke — 2–4 week approval |
