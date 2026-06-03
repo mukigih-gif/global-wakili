@@ -53,8 +53,13 @@ async function request<T>(
 
   if (res.status === 204) return undefined as unknown as T;
   const json = await res.json();
-  // API wraps all responses as { success, data } — unwrap transparently
-  return (json && typeof json === 'object' && 'data' in json ? json.data : json) as T;
+  // Only unwrap the { success: true, data: ... } envelope.
+  // List responses like { data: [...], pagination: {} } do NOT have a 'success' key
+  // and must be returned as-is so callers can read r.data and r.pagination.
+  if (json && typeof json === 'object' && json.success === true && 'data' in json) {
+    return json.data as T;
+  }
+  return json as T;
 }
 
 export const api = {
