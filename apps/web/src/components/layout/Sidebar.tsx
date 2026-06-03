@@ -7,7 +7,8 @@ import { useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard, Users, Briefcase, FileText, DollarSign,
   Shield, UserCheck, BarChart2, Brain, Bell, Settings,
-  Building, Globe, LogOut, CheckSquare, Gavel, Award, ExternalLink, Scale,
+  Building, LogOut, CheckSquare, Gavel, Award, ExternalLink, Scale,
+  CalendarDays, PhoneCall, ShoppingCart, Receipt,
 } from 'lucide-react';
 import { Logo } from '@/components/ui/Logo';
 
@@ -27,7 +28,11 @@ const TENANT_NAV: NavItem[] = [
   { href: '/app/tenders',        label: 'Tenders',          icon: <Award className="h-4 w-4" /> },
   { href: '/app/resources',      label: 'Legal Resources',  icon: <ExternalLink className="h-4 w-4" /> },
   { href: '/app/clients',        label: 'Clients',          icon: <Users className="h-4 w-4" /> },
+  { href: '/app/billing',        label: 'Billing',          icon: <Receipt className="h-4 w-4" />, module: 'billing' },
   { href: '/app/documents',      label: 'Documents',        icon: <FileText className="h-4 w-4" /> },
+  { href: '/app/calendar',       label: 'Calendar',         icon: <CalendarDays className="h-4 w-4" /> },
+  { href: '/app/reception',      label: 'Reception',        icon: <PhoneCall className="h-4 w-4" /> },
+  { href: '/app/vendors',        label: 'Vendors',          icon: <ShoppingCart className="h-4 w-4" /> },
   { href: '/app/finance',        label: 'Finance',          icon: <DollarSign className="h-4 w-4" />, module: 'finance' },
   { href: '/app/trust',          label: 'Trust Accounting', icon: <Scale className="h-4 w-4" />, module: 'trust' },
   { href: '/app/hr',             label: 'HR & Payroll',     icon: <UserCheck className="h-4 w-4" />, module: 'payroll' },
