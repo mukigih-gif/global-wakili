@@ -122,6 +122,11 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
 
   'ExchangeRate',
   'InvoiceSequence',
+
+  'ClientIssue',
+  'ClientIssueComment',
+  'ClientProspect',
+  'ProspectActivity',
 ]);
 
 const READ_OPERATIONS = new Set([

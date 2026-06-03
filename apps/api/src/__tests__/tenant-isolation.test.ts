@@ -320,8 +320,8 @@ describe('TENANT_SCOPED_MODELS integrity', () => {
   it('has the expected model count after Gate 3 additions', () => {
     assert.equal(
       TENANT_SCOPED_MODELS.size,
-      108,
-      `Expected 108 scoped models; got ${TENANT_SCOPED_MODELS.size}. ` +
+      112,
+      `Expected 112 scoped models; got ${TENANT_SCOPED_MODELS.size}. ` +
       'If this fails, a model was added or removed without updating this test.',
     );
   });
@@ -773,7 +773,7 @@ describe('Billing run isolation (G4-D06)', () => {
   });
 
   it('TENANT_SCOPED_MODELS count updated to 94 after BillingRun', () => {
-    assert.equal(TENANT_SCOPED_MODELS.size, 108);
+    assert.equal(TENANT_SCOPED_MODELS.size, 112);
   });
 
   it('buildBillingScope always includes tenantId', () => {
@@ -2212,7 +2212,7 @@ describe('Notification security (G8-D01/D02/D03)', () => {
   });
 
   it('TENANT_SCOPED_MODELS count updated to 99 after notification additions', () => {
-    assert.equal(TENANT_SCOPED_MODELS.size, 108);
+    assert.equal(TENANT_SCOPED_MODELS.size, 112);
   });
 
   // --- G8-D02: Template interpolation security ---

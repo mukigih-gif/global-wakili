@@ -137,6 +137,10 @@ model Tenant {
   payslips                     Payslip[]
   timerSessions                TimerSession[]
   passiveCaptureEvents         PassiveCaptureEvent[]
+  clientIssues                 ClientIssue[]
+  clientIssueComments          ClientIssueComment[]
+  prospectActivities           ProspectActivity[]
+  clientProspects              ClientProspect[]
   departments                  Department[]
   jobTitles                    JobTitle[]
   employeeProfiles             EmployeeProfile[]
@@ -278,6 +282,7 @@ model Branch {
   employeeProfiles          EmployeeProfile[]
   attendances               Attendance[]
   payrollBatches            PayrollBatch[]
+  clientProspects           ClientProspect[]
 
   @@unique([tenantId, kraPin])
   @@index([tenantId])
@@ -461,6 +466,11 @@ model User {
   payslips                            Payslip[]
   timerSessions                       TimerSession[]
   passiveCaptureEvents                PassiveCaptureEvent[]
+  assignedClientIssues                ClientIssue[]                 @relation("IssueAssignee")
+  raisedClientIssues                  ClientIssue[]                 @relation("IssueRaisedBy")
+  clientIssueComments                 ClientIssueComment[]          @relation("IssueCommentAuthor")
+  assignedProspects                   ClientProspect[]              @relation("ProspectAssignee")
+  prospectActivities                  ProspectActivity[]            @relation("ProspectActivityUser")
   clientKycVerified                   ClientKycProfile[]
   createdContracts                    Contract[]
   contractVersionsCreated             ContractVersion[]
@@ -1149,6 +1159,7 @@ model Matter {
   vendorBills                VendorBill[]
   timerSessions              TimerSession[]
   passiveCaptureEvents       PassiveCaptureEvent[]
+  clientIssues               ClientIssue[]
   withholdingTaxCertificates WithholdingTaxCertificate[]
 
   @@index([tenantId])
@@ -2266,6 +2277,7 @@ model Client {
   metadata                 Json?
   journalLines             JournalLine[]
   disbursementRequestNotes DisbursementRequestNote[]
+  clientIssues             ClientIssue[]
 
   @@unique([tenantId, clientCode])
   @@unique([tenantId, email])
@@ -2279,6 +2291,189 @@ model Client {
   @@index([pepStatus])
   @@index([sanctionsStatus])
   @@index([riskBand])
+}
+
+// ── Tenant-level Client Issues Ticketing ─────────────────────────────────────
+// Clients raise issues with the law firm through the client portal or directly.
+// Separate from PlatformSupportTicket (Super Admin → law firm support).
+
+model ClientIssue {
+  id              String            @id @default(cuid())
+  tenantId        String
+  clientId        String
+  matterId        String?
+  raisedByUserId  String?           // portal user or firm user on behalf of client
+  assignedToId    String?           // firm staff member assigned to handle
+  status          ClientIssueStatus @default(OPEN)
+  priority        ClientIssuePriority @default(NORMAL)
+  category        ClientIssueCategory @default(GENERAL)
+  subject         String
+  description     String
+  resolvedAt      DateTime?
+  closedAt        DateTime?
+  firstResponseAt DateTime?
+  metadata        Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @default(now()) @updatedAt
+
+  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  client      Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  matter      Matter?       @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  assignedTo  User?         @relation("IssueAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  raisedBy    User?         @relation("IssueRaisedBy", fields: [raisedByUserId], references: [id], onDelete: SetNull)
+  comments    ClientIssueComment[]
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([matterId])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedToId])
+}
+
+model ClientIssueComment {
+  id         String    @id @default(cuid())
+  tenantId   String
+  issueId    String
+  userId     String
+  body       String
+  isInternal Boolean   @default(false)  // false = visible to client; true = internal note
+  createdAt  DateTime  @default(now())
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  issue  ClientIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
+  user   User        @relation("IssueCommentAuthor", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([issueId])
+}
+
+// ── Client Prospects Pipeline (CRM) ──────────────────────────────────────────
+// Tracks potential clients through a sales pipeline before they become clients.
+
+model ClientProspect {
+  id              String              @id @default(cuid())
+  tenantId        String
+  branchId        String?
+  name            String
+  email           String?
+  phoneNumber     String?
+  company         String?
+  source          ProspectSource      @default(REFERRAL)
+  stage           PipelineStage       @default(INITIAL_CONTACT)
+  status          ProspectStatus      @default(ACTIVE)
+  estimatedValue  Decimal?            @db.Decimal(18, 2)
+  currency        String              @default("KES")
+  practiceArea    String?
+  notes           String?
+  assignedToId    String?
+  expectedCloseDate DateTime?
+  convertedClientId String?           // set when prospect converts to client
+  convertedAt     DateTime?
+  lostReason      String?
+  metadata        Json?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @default(now()) @updatedAt
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch          Branch?  @relation(fields: [branchId], references: [id])
+  assignedTo      User?    @relation("ProspectAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  activities      ProspectActivity[]
+
+  @@index([tenantId])
+  @@index([stage])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([source])
+}
+
+model ProspectActivity {
+  id           String              @id @default(cuid())
+  tenantId     String
+  prospectId   String
+  userId       String
+  activityType ProspectActivityType
+  subject      String
+  notes        String?
+  outcome      String?
+  scheduledAt  DateTime?
+  completedAt  DateTime?
+  metadata     Json?
+  createdAt    DateTime            @default(now())
+
+  tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  prospect ClientProspect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
+  user     User           @relation("ProspectActivityUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([prospectId])
+}
+
+enum ClientIssueStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_CLIENT
+  ESCALATED
+  RESOLVED
+  CLOSED
+}
+
+enum ClientIssuePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum ClientIssueCategory {
+  GENERAL
+  BILLING
+  DOCUMENT
+  MATTER_UPDATE
+  TRUST_ACCOUNT
+  LEGAL_ADVICE
+  COMPLAINT
+  OTHER
+}
+
+enum ProspectSource {
+  REFERRAL
+  WEBSITE
+  SOCIAL_MEDIA
+  COLD_OUTREACH
+  WALK_IN
+  EVENT
+  ADVERTISEMENT
+  EXISTING_CLIENT
+  OTHER
+}
+
+enum PipelineStage {
+  INITIAL_CONTACT
+  NEEDS_ASSESSMENT
+  PROPOSAL_SENT
+  NEGOTIATION
+  RETAINER_SIGNED
+  CONVERTED
+  LOST
+  DORMANT
+}
+
+enum ProspectStatus {
+  ACTIVE
+  CONVERTED
+  LOST
+  DORMANT
+}
+
+enum ProspectActivityType {
+  CALL
+  EMAIL
+  MEETING
+  FOLLOW_UP
+  PROPOSAL
+  DEMO
+  NOTE
 }
 
 model ClientComplianceCheck {
