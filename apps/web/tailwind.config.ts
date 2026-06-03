@@ -11,52 +11,77 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Global Wakili brand palette — deep legal blue + gold accent
+        // ── Royal Justice — Deep Navy + Prestige Gold ──────────────────────
         primary: {
-          50:  '#eef2ff',
-          100: '#e0e7ff',
-          200: '#c7d2fe',
-          300: '#a5b4fc',
-          400: '#818cf8',
-          500: '#6366f1',
-          600: '#4f46e5',
-          700: '#4338ca',
-          800: '#3730a3',
-          900: '#312e81',
-          950: '#1e1b4b',
+          50:  '#EEF2FA',
+          100: '#D5E0F0',
+          200: '#ADC2E3',
+          300: '#7A9ACE',
+          400: '#4D75B8',
+          500: '#2A5298',
+          600: '#1B3A6B',   // ← Main brand blue
+          700: '#142E57',   // ← Hover / darker
+          800: '#0D1F3C',   // ← Hero backgrounds
+          900: '#071529',
+          950: '#040D1C',
         },
         accent: {
-          50:  '#fffbeb',
-          100: '#fef3c7',
-          200: '#fde68a',
-          300: '#fcd34d',
-          400: '#fbbf24',
-          500: '#f59e0b',
-          600: '#d97706',
-          700: '#b45309',
-          800: '#92400e',
-          900: '#78350f',
+          50:  '#FDFAEE',
+          100: '#F9F0CC',
+          200: '#F3E098',
+          300: '#ECCB5C',
+          400: '#D4AF37',   // ← Classic prestige gold
+          500: '#C9A227',   // ← Main accent gold
+          600: '#A8841F',
+          700: '#856919',
+          800: '#624E12',
+          900: '#3F320B',
         },
-        trust: {
-          50:  '#f0fdf4',
-          500: '#22c55e',
-          700: '#15803d',
+        // Navy dark surfaces (hero, sidebar, modals)
+        navy: {
+          50:  '#EEF2FA',
+          800: '#0D1F3C',
+          900: '#071529',
+          950: '#040D1C',
+        },
+        // Supporting semantic colours
+        success: {
+          50:  '#F0FDF4',
+          500: '#059669',
+          700: '#047857',
+        },
+        warning: {
+          50:  '#FFFBEB',
+          500: '#D97706',
+          700: '#B45309',
         },
         danger: {
-          50:  '#fef2f2',
-          500: '#ef4444',
-          700: '#b91c1c',
+          50:  '#FEF2F2',
+          500: '#DC2626',
+          700: '#B91C1C',
         },
       },
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans:    ['Inter', 'ui-sans-serif', 'system-ui', 'sans-serif'],
         display: ['Lexend', 'Inter', 'sans-serif'],
-        mono: ['JetBrains Mono', 'ui-monospace', 'monospace'],
+        mono:    ['JetBrains Mono', 'ui-monospace', 'monospace'],
       },
       borderRadius: {
-        lg: '0.625rem',
-        xl: '0.875rem',
+        lg:  '0.625rem',
+        xl:  '0.875rem',
         '2xl': '1.25rem',
+        '3xl': '1.75rem',
+      },
+      boxShadow: {
+        'gold':    '0 4px 24px 0 rgba(201,162,39,0.25)',
+        'navy':    '0 8px 40px 0 rgba(11,29,60,0.40)',
+        'card':    '0 1px 4px 0 rgba(27,58,107,0.08)',
+        'card-lg': '0 4px 16px 0 rgba(27,58,107,0.12)',
+      },
+      backgroundImage: {
+        'gradient-royal': 'linear-gradient(135deg, #0D1F3C 0%, #1B3A6B 60%, #2A5298 100%)',
+        'gradient-gold':  'linear-gradient(135deg, #C9A227 0%, #D4AF37 50%, #A8841F 100%)',
+        'gradient-hero':  'linear-gradient(160deg, #071529 0%, #0D1F3C 40%, #1B3A6B 100%)',
       },
     },
   },

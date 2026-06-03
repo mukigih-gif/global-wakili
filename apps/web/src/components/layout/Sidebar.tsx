@@ -7,8 +7,9 @@ import { useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard, Users, Briefcase, FileText, DollarSign,
   Shield, UserCheck, BarChart2, Brain, Bell, Settings,
-  Building, Globe, LogOut, Scale, CheckSquare, Gavel, Award
+  Building, Globe, LogOut, CheckSquare, Gavel, Award, ExternalLink, Scale,
 } from 'lucide-react';
+import { Logo } from '@/components/ui/Logo';
 
 type NavItem = {
   href: string;
@@ -24,6 +25,7 @@ const TENANT_NAV: NavItem[] = [
   { href: '/app/tasks',          label: 'Tasks',            icon: <CheckSquare className="h-4 w-4" /> },
   { href: '/app/court/filings',  label: 'Court Filings',    icon: <Gavel className="h-4 w-4" /> },
   { href: '/app/tenders',        label: 'Tenders',          icon: <Award className="h-4 w-4" /> },
+  { href: '/app/resources',      label: 'Legal Resources',  icon: <ExternalLink className="h-4 w-4" /> },
   { href: '/app/clients',        label: 'Clients',          icon: <Users className="h-4 w-4" /> },
   { href: '/app/documents',      label: 'Documents',        icon: <FileText className="h-4 w-4" /> },
   { href: '/app/finance',        label: 'Finance',          icon: <DollarSign className="h-4 w-4" />, module: 'finance' },
@@ -66,14 +68,8 @@ export function Sidebar() {
   return (
     <aside className="flex h-full w-60 flex-col border-r border-gray-200 bg-white">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-3 border-b border-gray-100 px-4">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-600">
-          <Scale className="h-5 w-5 text-white" />
-        </div>
-        <div>
-          <p className="text-sm font-bold text-gray-900 leading-tight">Global Wakili</p>
-          <p className="text-xs text-gray-500">Legal Enterprise</p>
-        </div>
+      <div className="flex h-16 items-center border-b border-gray-100 px-4" style={{ background: 'linear-gradient(135deg, #071529 0%, #1B3A6B 100%)' }}>
+        <Logo variant="full" size="sm" href="/app/dashboard" darkBg />
       </div>
 
       {/* Tenant context */}

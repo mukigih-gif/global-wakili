@@ -2,8 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Scale } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
+import { Logo } from '@/components/ui/Logo';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 
@@ -79,15 +79,15 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-950 via-primary-900 to-primary-800 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(160deg, #071529 0%, #0D1F3C 50%, #1B3A6B 100%)' }}>
       <div className="w-full max-w-md">
         {/* Brand */}
-        <div className="mb-8 text-center">
-          <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-white/10 backdrop-blur mb-4">
-            <Scale className="h-8 w-8 text-white" />
+        <div className="mb-8 flex flex-col items-center">
+          <div className="mb-5 p-3 rounded-2xl" style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)' }}>
+            <Logo variant="full" size="lg" darkBg />
           </div>
-          <h1 className="text-2xl font-bold text-white">Global Wakili</h1>
-          <p className="text-primary-300 text-sm mt-1">Legal Enterprise Platform</p>
+          {/* Gold accent line */}
+          <div className="gold-accent-line" />
         </div>
 
         {/* Card */}

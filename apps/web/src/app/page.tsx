@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   Scale, Shield, Brain, BarChart2, Globe, CheckCircle,
   ArrowRight, Zap, Lock, Clock, Users, FileText, TrendingUp,
@@ -7,6 +8,7 @@ import {
   Gavel, CreditCard, Database, Layers, HeartHandshake, Play,
   XCircle, MessageCircle, AlertTriangle, Fingerprint, Server,
 } from 'lucide-react';
+import { Logo } from '@/components/ui/Logo';
 
 // ── SEO Metadata ────────────────────────────────────────────────────────────
 export const metadata: Metadata = {
@@ -242,15 +244,7 @@ export default function HomePage() {
         {/* ── Navigation ─────────────────────────────────────────────────── */}
         <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/95 backdrop-blur-sm">
           <nav className="marketing-container h-16 flex items-center justify-between">
-            <Link href="/" className="flex items-center gap-2.5 group">
-              <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary-600 to-primary-800 flex items-center justify-center shadow-lg shadow-primary-200 group-hover:shadow-primary-300 transition-shadow">
-                <Scale className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <span className="font-display font-bold text-gray-900 text-base">Global Wakili</span>
-                <span className="block text-[10px] font-medium text-gray-400 -mt-0.5 tracking-wider uppercase">Legal Enterprise</span>
-              </div>
-            </Link>
+            <Logo variant="full" size="md" href="/" />
 
             <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
               <a href="#features" className="hover:text-gray-900 transition-colors">Features</a>
@@ -810,15 +804,9 @@ export default function HomePage() {
           <div className="marketing-container py-16">
             <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
               <div className="col-span-2">
-                <Link href="/" className="flex items-center gap-2.5 mb-4">
-                  <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-primary-600 to-primary-800 flex items-center justify-center">
-                    <Scale className="h-5 w-5 text-white" />
-                  </div>
-                  <div>
-                    <span className="font-display font-bold text-white text-base">Global Wakili</span>
-                    <span className="block text-[10px] text-gray-500 -mt-0.5 tracking-wider uppercase">Legal Enterprise</span>
-                  </div>
-                </Link>
+                <div className="mb-4">
+                  <Logo variant="full" size="md" href="/" darkBg />
+                </div>
                 <p className="text-sm leading-relaxed max-w-xs">
                   Kenya's premier enterprise legal ERP. Built for Kenyan law firms, compliant with Kenyan regulations, powered by global technology.
                 </p>
