@@ -14,6 +14,8 @@ import {
   getReceptionLog,
   requestReceptionHandoff,
   searchReceptionLogs,
+  createExpressService,
+  listExpressServices,
 } from './reception.controller';
 import {
   callLogSchema,
@@ -100,6 +102,19 @@ router.get(
   '/:logId',
   requirePermissions(PERMISSIONS.reception.viewLog),
   getReceptionLog,
+);
+
+// ── Express Services (Walk-In Clients) ────────────────────────────────────────
+router.get(
+  '/express-services',
+  requirePermissions(PERMISSIONS.reception.viewLog),
+  listExpressServices,
+);
+
+router.post(
+  '/express-services',
+  requirePermissions(PERMISSIONS.reception.createVisitorLog),
+  createExpressService,
 );
 
 export default router;

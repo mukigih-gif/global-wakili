@@ -210,3 +210,43 @@ export const requestReceptionHandoff = asyncHandler(async (req: Request, res: Re
 
   res.status(202).json({ success: true });
 });
+// ── Express Services (Walk-In Clients) ────────────────────────────────────────
+
+export const createExpressService = asyncHandler(async (req: Request, res: Response) => {
+  const { clientName, serviceType, amount, isPaid, mpesaRef, notes } = req.body;
+
+  const service = await req.db.expressService.create({
+    data: {
+      tenantId:    req.tenantId!,
+      clientName:  clientName?.trim(),
+      serviceType: serviceType ?? 'OTHER',
+      amount:      parseFloat(amount) || 0,
+      isPaid:      isPaid === true || isPaid === 'true',
+      mpesaRef:    mpesaRef ?? null,
+    },
+  });
+
+  res.status(201).json({ success: true, data: service });
+});
+
+export const listExpressServices = asyncHandler(async (req: Request, res: Response) => {
+  const { date, limit = '50' } = req.query as Record<string, string>;
+
+  const where: Record<string, unknown> = { tenantId: req.tenantId! };
+
+  if (date) {
+    const start = new Date(date);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(date);
+    end.setHours(23, 59, 59, 999);
+    where.createdAt = { gte: start, lte: end };
+  }
+
+  const services = await req.db.expressService.findMany({
+    where,
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(parseInt(limit) || 50, 200),
+  });
+
+  res.status(200).json({ success: true, data: services });
+});
