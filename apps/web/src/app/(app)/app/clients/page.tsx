@@ -47,10 +47,10 @@ export default function ClientsPage() {
         </div>
         <div className="flex gap-2">
           <Link href="/app/clients/issues">
-            <Button size="sm" variant="outline"><AlertCircle className="h-4 w-4" /> Issues</Button>
+            <Button size="sm" variant="secondary"><AlertCircle className="h-4 w-4" /> Issues</Button>
           </Link>
           <Link href="/app/clients/prospects">
-            <Button size="sm" variant="outline"><TrendingUp className="h-4 w-4" /> Prospects</Button>
+            <Button size="sm" variant="secondary"><TrendingUp className="h-4 w-4" /> Prospects</Button>
           </Link>
           <Link href="/app/clients/new">
             <Button size="sm"><Plus className="h-4 w-4" /> New Client</Button>
