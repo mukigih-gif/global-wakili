@@ -136,8 +136,13 @@
     box-shadow: 0 0 0 3px rgba(27,58,107,0.12);
   }
   .form-select { @apply form-input appearance-none bg-white; }
-  /* Textareas: allow vertical resize, prevent horizontal overflow */
-  textarea.form-input { resize: vertical; min-height: 80px; }
+  /* Textareas: allow vertical resize only, respect rows attribute */
+  textarea.form-input {
+    resize: vertical;
+    overflow: auto;
+    min-height: 2.5rem;   /* matches a 1-row input height */
+    line-height: 1.5;
+  }
 
   /* ── Tables ── */
   .table-wrapper { @apply overflow-x-auto rounded-xl border border-gray-200; box-shadow: var(--shadow-sm); }
