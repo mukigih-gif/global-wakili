@@ -18,7 +18,8 @@ type Matter = {
   status: string;
   category: string;
   createdAt: string;
-  client?: { name: string } | null;
+  client?: { id: string; name: string } | null;
+  clientId?: string | null;
   assignedLawyer?: { name: string } | null;
 };
 
@@ -91,7 +92,12 @@ export default function MattersPage() {
              <tr key={m.id}>
                <Td><span className="font-mono text-xs text-gray-600">{m.matterCode}</span></Td>
                <Td><Link href={`/app/matters/${m.id}`} className="font-medium text-primary-700 hover:underline">{m.title}</Link></Td>
-               <Td className="text-gray-600">{m.client?.name ?? '—'}</Td>
+               <Td>
+                 {m.client
+                   ? <Link href={`/app/clients/${m.client.id}`} className="text-primary-700 hover:underline text-sm">{m.client.name}</Link>
+                   : <span className="text-gray-400">—</span>
+                 }
+               </Td>
                <Td className="text-gray-600 text-xs">{m.category?.replace(/_/g, ' ')}</Td>
                <Td><StatusBadge status={m.status} /></Td>
                <Td className="text-gray-500 text-xs">{formatDate(m.createdAt)}</Td>

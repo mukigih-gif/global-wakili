@@ -37,7 +37,13 @@ export default function ClientDetailPage() {
     if (!id) return;
     setLoading(true);
     Promise.all([
-      api.get<Client>(`/clients/${id}`).then(setClient).catch(() => null),
+      api.get<any>(`/clients/${id}`)
+        .then((r) => {
+          // Handle both { id, name, ... } and { client: { ... } } shapes
+          const c = r?.id ? r : (r?.client ?? r?.data ?? r);
+          setClient(c && c.id ? c : null);
+        })
+        .catch(() => setClient(null)),
       api.get<{ data: Matter[] }>(`/matters?clientId=${id}&limit=20`).then((r) => setMatters(r.data ?? [])).catch(() => {}),
       api.get<{ data: Invoice[] }>(`/billing/invoices?clientId=${id}&limit=20`).then((r) => setInvoices(r.data ?? [])).catch(() => {}),
       api.get<{ data: Task[] }>(`/tasks?clientId=${id}&limit=20`).then((r) => setTasks(r.data ?? [])).catch(() => {}),

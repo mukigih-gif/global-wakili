@@ -97,7 +97,7 @@ export default function ClientsPage() {
            clients.map((c) => (
              <tr key={c.id}>
                <Td><span className="font-mono text-xs text-gray-600">{c.clientCode}</span></Td>
-               <Td><span className="font-medium text-gray-900">{c.name}</span></Td>
+               <Td><Link href={`/app/clients/${c.id}`} className="font-medium text-primary-700 hover:underline">{c.name}</Link></Td>
                <Td className="text-gray-600 text-sm">{c.email ?? '—'}</Td>
                <Td className="text-gray-600 text-sm">{c.phone ?? '—'}</Td>
                <Td>{c.riskLevel ? <StatusBadge status={c.riskLevel} /> : <span className="text-gray-400 text-xs">—</span>}</Td>

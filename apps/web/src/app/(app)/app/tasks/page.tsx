@@ -10,7 +10,7 @@ import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card, CardHeader, StatCard } from '@/components/ui/Card';
-import { CheckSquare, Clock, AlertTriangle, Plus, Search } from 'lucide-react';
+import { CheckSquare, Clock, AlertTriangle, Plus, Search, Check } from 'lucide-react';
 
 type Task = {
   id: string;
@@ -74,6 +74,13 @@ export default function TasksPage() {
 
   const s = dashboard?.summary;
 
+  const markDone = async (taskId: string) => {
+    try {
+      await api.patch(`/tasks/${taskId}`, { status: 'DONE' });
+      setTasks((prev) => prev.map((t) => t.id === taskId ? { ...t, status: 'DONE' } : t));
+    } catch { /* silently ignore */ }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -81,6 +88,9 @@ export default function TasksPage() {
           <h1 className="text-2xl font-bold text-gray-900">Tasks</h1>
           <p className="text-sm text-gray-500">All matter tasks across your firm</p>
         </div>
+        <Link href="/app/tasks/new">
+          <Button size="sm"><Plus className="h-4 w-4" /> New Task</Button>
+        </Link>
       </div>
 
       {/* KPI cards */}
@@ -166,7 +176,21 @@ export default function TasksPage() {
                    {isOverdue && ' ⚠'}
                  </Td>
                  <Td>
-                   <Link href={`/app/tasks/${t.id}`} className="text-xs text-primary-600 hover:underline">Open</Link>
+                   <div className="flex items-center gap-2">
+                     <Link href={`/app/tasks/${t.id}`} className="text-xs text-primary-600 hover:underline">Open</Link>
+                     {!['DONE','CANCELLED'].includes(t.status) && (
+                       <button onClick={() => markDone(t.id)}
+                         className="text-xs text-green-600 hover:text-green-800 flex items-center gap-0.5 hover:underline"
+                         title="Mark as done">
+                         <Check className="h-3 w-3" /> Done
+                       </button>
+                     )}
+                     {t.status === 'DONE' && (
+                       <span className="text-xs text-green-600 flex items-center gap-0.5">
+                         <Check className="h-3 w-3" /> Completed
+                       </span>
+                     )}
+                   </div>
                  </Td>
                </tr>
              );

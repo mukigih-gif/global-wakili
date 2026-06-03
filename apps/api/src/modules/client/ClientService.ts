@@ -468,8 +468,7 @@ export class ClientService {
           select: {
             id: true,
             email: true,
-            firstName: true,
-            lastName: true,
+            name: true,
             status: true,
           },
         },
