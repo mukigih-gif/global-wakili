@@ -41,8 +41,10 @@ async function request<T>(
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ message: res.statusText }));
+    // Surface validation details so forms can show the real error
+    const details = err.details?.map((d: { path: string; message: string }) => `${d.path}: ${d.message}`).join(', ');
     const error: ApiError = {
-      message: err.message ?? 'Request failed',
+      message: details || err.message || err.error || `Request failed (${res.status})`,
       code: err.code,
       statusCode: res.status,
     };

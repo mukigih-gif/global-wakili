@@ -44,7 +44,12 @@ export default function NewInvoicePage() {
     setError('');
     setLoading(true);
     try {
-      const inv = await api.post<{ id: string }>('/billing/invoices', { ...form, lineItems: lines });
+      const inv = await api.post<{ id: string }>('/billing/invoices', {
+        ...form,
+        matterId: form.matterId || null,
+        dueDate:  form.dueDate  || null,
+        lineItems: lines,
+      });
       router.push(`/app/billing`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create invoice');

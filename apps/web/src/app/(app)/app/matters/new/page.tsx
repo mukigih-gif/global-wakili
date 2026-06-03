@@ -71,8 +71,10 @@ export default function NewMatterPage() {
     try {
       const matter = await api.post<{ id: string }>('/matters', {
         ...form,
-        estimatedValue: parseFloat(form.estimatedValue),
-        commissionRate: form.commissionRate ? parseFloat(form.commissionRate) : undefined,
+        estimatedValue:   parseFloat(form.estimatedValue),
+        commissionRate:   form.commissionRate ? parseFloat(form.commissionRate) : null,
+        assignedLawyerId: form.assignedLawyerId   || null,
+        originatorId:     form.originatorId        || null,
       });
       const matterId = matter.id ?? (matter as unknown as { matter?: { id: string } }).matter?.id;
       router.push(`/app/matters/${matterId}`);

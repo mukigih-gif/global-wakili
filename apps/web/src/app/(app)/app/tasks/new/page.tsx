@@ -35,7 +35,12 @@ export default function NewTaskPage() {
     setError('');
     setLoading(true);
     try {
-      const task = await api.post<{ id: string }>('/tasks', form);
+      const task = await api.post<{ id: string }>('/tasks', {
+        ...form,
+        matterId:       form.matterId       || null,
+        assignedToId:   form.assignedToId   || null,
+        dueDate:        form.dueDate        || null,
+      });
       router.push(`/app/tasks/${task.id}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create task');

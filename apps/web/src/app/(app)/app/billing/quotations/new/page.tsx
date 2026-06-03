@@ -50,7 +50,13 @@ export default function NewQuotationPage() {
     if (!form.clientId) { setError('Please select a client'); return; }
     setError(''); setLoading(true);
     try {
-      await api.post('/billing/quotations', { ...form, lineItems: lines, totalAmount: total });
+      await api.post('/billing/quotations', {
+        ...form,
+        matterId:    form.matterId    || null,
+        validUntil:  form.validUntil  || null,
+        lineItems:   lines,
+        totalAmount: total,
+      });
       router.push('/app/billing');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create quotation');

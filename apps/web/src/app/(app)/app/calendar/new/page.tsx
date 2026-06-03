@@ -41,7 +41,12 @@ function NewEventForm() {
     setError('');
     setLoading(true);
     try {
-      await api.post('/calendar/events', form);
+      await api.post('/calendar/events', {
+        ...form,
+        matterId:        form.matterId        || null,
+        endTime:         form.isAllDay ? null : (form.endTime || null),
+        reminderMinutes: form.reminderMinutes  || 0,
+      });
       router.push('/app/calendar');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create event');
