@@ -1,12 +1,12 @@
 {
-  "installCommand": "npm install --prefix apps/web",
-  "buildCommand": "cd apps/web && next build",
-  "outputDirectory": "apps/web/.next",
+  "installCommand": "npm install",
+  "buildCommand": "next build",
+  "outputDirectory": ".next",
   "framework": "nextjs",
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://global-wakili-api.onrender.com/:path*"
+      "destination": "https://global-wakili-api.onrender.com/api/:path*"
     }
   ]
 }
