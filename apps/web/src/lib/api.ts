@@ -50,7 +50,9 @@ async function request<T>(
   }
 
   if (res.status === 204) return undefined as unknown as T;
-  return res.json();
+  const json = await res.json();
+  // API wraps all responses as { success, data } — unwrap transparently
+  return (json && typeof json === 'object' && 'data' in json ? json.data : json) as T;
 }
 
 export const api = {
