@@ -6,6 +6,7 @@ import { CalendarSubscriptionService } from './CalendarSubscriptionService';
 import { CalendarDashboardService } from './calendar.dashboard';
 import { CalendarAvailabilityService } from './CalendarAvailabilityService';
 import { DocumentAuditService } from '../document/DocumentAuditService';
+import { NotificationService } from '../notifications/NotificationService';
 
 export const createCalendarEvent = asyncHandler(async (req: Request, res: Response) => {
   const event = await CalendarService.createEvent(req.db, {
@@ -42,6 +43,74 @@ export const createCalendarEvent = asyncHandler(async (req: Request, res: Respon
       endTime: event.endTime,
     },
   });
+
+  // Send notification to creator + attendees when event is created
+  try {
+    const creator = await req.db.user.findUnique({
+      where: { id: req.user!.sub },
+      select: { id: true, email: true, name: true },
+    });
+
+    const startFormatted = new Date(event.startTime).toLocaleString('en-KE', {
+      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+
+    // In-app alert for creator
+    if (creator) {
+      await NotificationService.dispatch(req.db, {
+        tenantId: req.tenantId!,
+        recipients: [{ userId: creator.id, email: creator.email, name: creator.name }],
+        channels: ['SYSTEM_ALERT'],
+        category: 'CALENDAR',
+        priority: event.type === 'COURT_HEARING' || event.type === 'DEADLINE' ? 'HIGH' : 'NORMAL',
+        entityType: 'CALENDAR_EVENT',
+        entityId: event.id,
+        debounceKey: `event-created:${event.id}`,
+        template: {
+          systemTitle: `Event Created: ${event.title}`,
+          systemMessage: `Your event "${event.title}" has been scheduled for ${startFormatted}.`,
+        },
+      });
+    }
+
+    // Email reminder if requested (reminderMinutes > 0)
+    const reminderMinutes = Number(req.body.reminderMinutes ?? 30);
+    if (reminderMinutes > 0 && creator) {
+      const reminderTime = new Date(new Date(event.startTime).getTime() - reminderMinutes * 60 * 1000);
+      const now = new Date();
+      // Only schedule if reminder is in the future
+      if (reminderTime > now) {
+        await NotificationService.dispatch(req.db, {
+          tenantId: req.tenantId!,
+          recipients: [{ userId: creator.id, email: creator.email, name: creator.name }],
+          channels: ['EMAIL', 'SYSTEM_ALERT'],
+          category: 'CALENDAR',
+          priority: 'HIGH',
+          entityType: 'CALENDAR_EVENT',
+          entityId: event.id,
+          debounceKey: `event-reminder:${event.id}:${reminderMinutes}`,
+          template: {
+            systemTitle: `Reminder: ${event.title} in ${reminderMinutes < 60 ? `${reminderMinutes} mins` : `${reminderMinutes / 60}h`}`,
+            systemMessage: `Your event "${event.title}" starts at ${startFormatted}.`,
+            emailSubject: `[Reminder] ${event.title} — ${startFormatted}`,
+            emailBody: `
+              <p>Hello ${creator.name ?? ''},</p>
+              <p>This is a reminder for your upcoming event:</p>
+              <table style="border-collapse:collapse;width:100%;max-width:480px">
+                <tr><td style="padding:8px;font-weight:600;color:#6b7280">Event</td><td style="padding:8px">${event.title}</td></tr>
+                <tr style="background:#f9fafb"><td style="padding:8px;font-weight:600;color:#6b7280">When</td><td style="padding:8px">${startFormatted}</td></tr>
+                ${event.location ? `<tr><td style="padding:8px;font-weight:600;color:#6b7280">Location</td><td style="padding:8px">${event.location}</td></tr>` : ''}
+                <tr style="background:#f9fafb"><td style="padding:8px;font-weight:600;color:#6b7280">Type</td><td style="padding:8px">${String(event.type).replace(/_/g,' ')}</td></tr>
+              </table>
+              <p style="color:#9ca3af;font-size:12px;margin-top:16px">Global Wakili Legal Enterprise</p>
+            `,
+          },
+        });
+      }
+    }
+  } catch (notifErr) {
+    console.warn('[CALENDAR] Notification send failed:', notifErr instanceof Error ? notifErr.message : notifErr);
+  }
 
   res.status(201).json(event);
 });

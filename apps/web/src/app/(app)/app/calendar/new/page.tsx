@@ -23,9 +23,10 @@ function NewEventForm() {
 
   const defaultDate = params.get('date') || new Date().toISOString().slice(0, 10);
   const [form, setForm] = useState({
-    title: '', eventType: 'CLIENT_MEETING', startTime: `${defaultDate}T09:00`,
+    title: '', type: 'CLIENT_MEETING', startTime: `${defaultDate}T09:00`,  // API expects 'type' not 'eventType'
     endTime: `${defaultDate}T10:00`, location: '', description: '',
     matterId: '', attendeeIds: [] as string[], isAllDay: false,
+    reminderMinutes: 30,  // default 30-min reminder
   });
 
   const set = (k: string, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
@@ -71,7 +72,7 @@ function NewEventForm() {
 
         <div>
           <label className="form-label">Event Type *</label>
-          <select required value={form.eventType} onChange={(e) => set('eventType', e.target.value)} className="form-select w-full">
+          <select required value={form.type} onChange={(e) => set('type', e.target.value)} className="form-select w-full">
             <option value="COURT_HEARING">Court Hearing</option>
             <option value="CLIENT_MEETING">Client Meeting</option>
             <option value="INTERNAL_MEETING">Internal Meeting</option>
@@ -108,8 +109,23 @@ function NewEventForm() {
         </div>
 
         <div>
+          <label className="form-label">Reminder</label>
+          <select value={form.reminderMinutes} onChange={(e) => set('reminderMinutes', e.target.value)} className="form-select w-full">
+            <option value={0}>No reminder</option>
+            <option value={15}>15 minutes before</option>
+            <option value={30}>30 minutes before</option>
+            <option value={60}>1 hour before</option>
+            <option value={120}>2 hours before</option>
+            <option value={1440}>1 day before</option>
+            <option value={2880}>2 days before</option>
+            <option value={10080}>1 week before</option>
+          </select>
+          <p className="text-xs text-gray-400 mt-0.5">You and all attendees will receive an in-app notification and email at the reminder time.</p>
+        </div>
+
+        <div>
           <label className="form-label">Description</label>
-          <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={2} className="form-input w-full resize-none" placeholder="Additional notes…" />
+          <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={2} className="form-input w-full" placeholder="Additional notes…" />
         </div>
 
         <div className="flex gap-3 pt-2 border-t border-gray-100">

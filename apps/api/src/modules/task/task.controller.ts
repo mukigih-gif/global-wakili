@@ -9,6 +9,7 @@ import { TaskCapabilityService } from './TaskCapabilityService';
 import { TaskReminderBridgeService } from './TaskReminderBridgeService';
 import { TaskCalendarBridgeService } from './TaskCalendarBridgeService';
 import { TaskAuditService } from './TaskAuditService';
+import { NotificationService } from '../notifications/NotificationService';
 import type { LegalTaskPriority, LegalTaskStatus } from './task.types';
 import {
   getRequestId,
@@ -106,6 +107,56 @@ export const createTask = asyncHandler(async (req: Request, res: Response) => {
       dueDate: task.dueDate ?? null,
     },
   });
+
+  // Send in-app + email notification to assignee when task is assigned
+  if (task.assignedTo && task.assignedTo !== getUserId(req)) {
+    try {
+      const assignee = await req.db.user.findUnique({
+        where: { id: task.assignedTo },
+        select: { id: true, email: true, name: true },
+      });
+      const assigner = await req.db.user.findUnique({
+        where: { id: getUserId(req) },
+        select: { name: true },
+      });
+      if (assignee) {
+        const dueText = task.dueDate
+          ? ` · Due: ${new Date(task.dueDate).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' })}`
+          : '';
+        await NotificationService.dispatch(req.db, {
+          tenantId: getTenantId(req),
+          recipients: [{ userId: assignee.id, email: assignee.email, name: assignee.name }],
+          channels: ['SYSTEM_ALERT', 'EMAIL'],
+          category: 'TASK',
+          priority: task.priority === 'URGENT' ? 'HIGH' : 'NORMAL',
+          entityType: 'TASK',
+          entityId: task.id,
+          debounceKey: `task-assigned:${task.id}`,
+          template: {
+            systemTitle: `Task Assigned: ${task.title}`,
+            systemMessage: `${assigner?.name ?? 'Someone'} assigned you a task: "${task.title}"${dueText}`,
+            emailSubject: `[Global Wakili] Task Assigned — ${task.title}`,
+            emailBody: `
+              <p>Hello ${assignee.name ?? 'Team Member'},</p>
+              <p>You have been assigned a new task on Global Wakili:</p>
+              <table style="border-collapse:collapse;width:100%;max-width:480px">
+                <tr><td style="padding:8px;font-weight:600;color:#6b7280">Task</td><td style="padding:8px">${task.title}</td></tr>
+                <tr style="background:#f9fafb"><td style="padding:8px;font-weight:600;color:#6b7280">Priority</td><td style="padding:8px">${task.priority}</td></tr>
+                ${task.dueDate ? `<tr><td style="padding:8px;font-weight:600;color:#6b7280">Due Date</td><td style="padding:8px">${new Date(task.dueDate).toLocaleDateString('en-KE')}</td></tr>` : ''}
+                ${task.description ? `<tr style="background:#f9fafb"><td style="padding:8px;font-weight:600;color:#6b7280">Description</td><td style="padding:8px">${task.description}</td></tr>` : ''}
+                <tr><td style="padding:8px;font-weight:600;color:#6b7280">Assigned By</td><td style="padding:8px">${assigner?.name ?? '—'}</td></tr>
+              </table>
+              <p style="margin-top:16px"><a href="https://web-five-rust-44.vercel.app/app/tasks/${task.id}" style="background:#1B3A6B;color:white;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:600">View Task</a></p>
+              <p style="color:#9ca3af;font-size:12px;margin-top:16px">Global Wakili Legal Enterprise</p>
+            `,
+          },
+        });
+      }
+    } catch (notifErr) {
+      // Notification failure must not block task creation
+      console.warn('[TASK] Notification send failed:', notifErr instanceof Error ? notifErr.message : notifErr);
+    }
+  }
 
   res.status(201).json(task);
 });
