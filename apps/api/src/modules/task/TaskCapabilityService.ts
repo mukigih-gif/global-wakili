@@ -81,19 +81,19 @@ export class TaskCapabilityService {
       },
       {
         key: 'task.reminders',
-        status: 'PENDING_CROSS_MODULE',
+        status: 'ACTIVE',
         risk: 'HIGH',
         requiredForCloseout: false,
         description:
-          'Task reminders are reserved for the Notifications/Queues/Calendar reminder integration layer.',
+          'Task reminders are queued via NotificationQueueService (WIP-002 complete). Fires at remindAt via BullMQ notification worker.',
       },
       {
         key: 'task.calendar_link',
-        status: 'PENDING_CROSS_MODULE',
+        status: 'ACTIVE',
         risk: 'HIGH',
         requiredForCloseout: false,
         description:
-          'Calendar linkage is reserved until a task-calendar schema bridge or event linkage standard is introduced.',
+          'Task-to-calendar linking creates a CalendarEvent record linked to the task\'s matter (WIP-006 calendar integration complete).',
       },
       {
         key: 'task.subtasks_checklists',

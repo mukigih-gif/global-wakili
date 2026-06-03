@@ -7,7 +7,7 @@ import { useAuth } from '@/context/AuthContext';
 import {
   LayoutDashboard, Users, Briefcase, FileText, DollarSign,
   Shield, UserCheck, BarChart2, Brain, Bell, Settings,
-  Building, Globe, LogOut, Scale
+  Building, Globe, LogOut, Scale, CheckSquare
 } from 'lucide-react';
 
 type NavItem = {
@@ -21,6 +21,7 @@ type NavItem = {
 const TENANT_NAV: NavItem[] = [
   { href: '/app/dashboard',      label: 'Dashboard',        icon: <LayoutDashboard className="h-4 w-4" /> },
   { href: '/app/matters',        label: 'Matters',          icon: <Briefcase className="h-4 w-4" /> },
+  { href: '/app/tasks',          label: 'Tasks',            icon: <CheckSquare className="h-4 w-4" /> },
   { href: '/app/clients',        label: 'Clients',          icon: <Users className="h-4 w-4" /> },
   { href: '/app/documents',      label: 'Documents',        icon: <FileText className="h-4 w-4" /> },
   { href: '/app/finance',        label: 'Finance',          icon: <DollarSign className="h-4 w-4" />, module: 'finance' },
