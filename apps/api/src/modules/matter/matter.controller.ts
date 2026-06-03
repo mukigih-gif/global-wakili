@@ -3,6 +3,7 @@
 import type { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/async-handler';
 import MatterService from './MatterService';
+import { MatterProgressNotificationService } from './MatterProgressNotificationService';
 import type { MatterInput } from './matter.types';
 
 type MetadataRecord = Record<string, unknown>;
@@ -130,7 +131,26 @@ export const updateMatter = asyncHandler(async (req: Request, res: Response) => 
   const matterId = getMatterId(req);
   const input = req.body as Partial<MatterInput>;
 
+  // Capture current stage before update for change detection
+  const existingMatter = await req.db.matter.findFirst({
+    where: { tenantId, id: matterId },
+    select: { metadata: true },
+  }).catch(() => null);
+  const previousStage = (existingMatter?.metadata as any)?.progressStage ?? null;
+
   const updated = await MatterService.update(req.db, tenantId, matterId, input);
+
+  // Notify client + lead advocate if progress stage changed
+  if (input.progressStage !== undefined) {
+    const actorId = (req as any).user?.sub ?? (req as any).user?.id ?? null;
+    void MatterProgressNotificationService.notifyIfProgressChanged(req.db, {
+      tenantId,
+      matterId,
+      previousStage,
+      newStage: input.progressStage ?? null,
+      updatedBy: actorId,
+    });
+  }
 
   res.status(200).json(shapeMatterResponse(updated));
 });

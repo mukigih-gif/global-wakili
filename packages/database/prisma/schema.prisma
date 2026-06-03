@@ -141,6 +141,10 @@ model Tenant {
   clientIssueComments          ClientIssueComment[]
   prospectActivities           ProspectActivity[]
   clientProspects              ClientProspect[]
+  courtFilings                 CourtFiling[]
+  tenderRecords                TenderRecord[]
+  tenderActivities             TenderActivity[]
+  tenderDocuments              TenderDocument[]
   departments                  Department[]
   jobTitles                    JobTitle[]
   employeeProfiles             EmployeeProfile[]
@@ -471,6 +475,9 @@ model User {
   clientIssueComments                 ClientIssueComment[]          @relation("IssueCommentAuthor")
   assignedProspects                   ClientProspect[]              @relation("ProspectAssignee")
   prospectActivities                  ProspectActivity[]            @relation("ProspectActivityUser")
+  courtFilings                        CourtFiling[]                 @relation("FilingClerk")
+  assignedTenders                     TenderRecord[]                @relation("TenderAssignee")
+  tenderActivities                    TenderActivity[]              @relation("TenderActivityUser")
   clientKycVerified                   ClientKycProfile[]
   createdContracts                    Contract[]
   contractVersionsCreated             ContractVersion[]
@@ -1150,6 +1157,8 @@ model Matter {
   rateCards                  RateCard[]
   writeOffs                  WriteOff[]
   courtHearings              CourtHearing[]
+  courtFilings               CourtFiling[]
+  tenderRecords              TenderRecord[]
   profitabilitySnapshots     MatterProfitabilitySnapshot[]
   recurringExpenseTemplates  RecurringExpenseTemplate[]
   purchaseOrders             PurchaseOrder[]
@@ -1318,6 +1327,7 @@ model CourtHearing {
   matter        Matter         @relation(fields: [matterId], references: [id], onDelete: Cascade)
   calendarEvent CalendarEvent? @relation("CourtHearingCalendarEvent", fields: [calendarEventId], references: [id], onDelete: SetNull)
   createdBy     User?          @relation("CourtHearingCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  filings       CourtFiling[]
 
   @@index([tenantId])
   @@index([matterId])
@@ -1325,6 +1335,182 @@ model CourtHearing {
   @@index([hearingDate])
   @@index([status])
   @@index([createdById])
+}
+
+// ── Court Filing Registry ─────────────────────────────────────────────────────
+// Records discrete court filings made by clerks or advocates.
+// Supports scan URL, document linkage, and filing receipts.
+
+model CourtFiling {
+  id             String            @id @default(cuid())
+  tenantId       String
+  matterId       String
+  hearingId      String?           // optional: linked to a specific hearing
+  filingType     CourtFilingType   @default(OTHER)
+  status         CourtFilingStatus @default(PREPARED)
+  title          String            // e.g. "Notice of Motion — Stay of Execution"
+  courtRef       String?           // court-issued reference/stamp number
+  filedAt        DateTime?
+  filedById      String?           // user who filed (clerk/advocate)
+  receivedAt     DateTime?         // when court stamps receipt
+  dueDate        DateTime?         // deadline for filing
+  documentId     String?           // link to Document Management
+  scanUrl        String?           // URL of scanned filed copy
+  notes          String?
+  metadata       Json?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @default(now()) @updatedAt
+
+  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  matter    Matter        @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  hearing   CourtHearing? @relation(fields: [hearingId], references: [id], onDelete: SetNull)
+  filedBy   User?         @relation("FilingClerk", fields: [filedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([matterId])
+  @@index([hearingId])
+  @@index([status])
+  @@index([filingType])
+  @@index([dueDate])
+}
+
+// ── Legal Tender Management ───────────────────────────────────────────────────
+// Tracks tendering activities on behalf of clients:
+// documents used, deadlines, submissions, outcomes.
+
+model TenderRecord {
+  id               String          @id @default(cuid())
+  tenantId         String
+  matterId         String?         // optional matter linkage
+  tenderNumber     String?         // official tender number
+  tenderName       String
+  issuedBy         String?         // procuring entity
+  category         TenderCategory  @default(GOODS)
+  status           TenderStatus    @default(IDENTIFIED)
+  estimatedValue   Decimal?        @db.Decimal(18, 2)
+  currency         String          @default("KES")
+  openingDate      DateTime?       // tender opening date
+  deadline         DateTime?       // submission deadline
+  submittedAt      DateTime?
+  outcomeDate      DateTime?
+  outcome          TenderOutcome?
+  outcomeNotes     String?
+  assignedToId     String?
+  clientId         String?
+  metadata         Json?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @default(now()) @updatedAt
+
+  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  matter      Matter?           @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  assignedTo  User?             @relation("TenderAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  activities  TenderActivity[]
+  documents   TenderDocument[]
+
+  @@index([tenantId])
+  @@index([matterId])
+  @@index([status])
+  @@index([deadline])
+  @@index([assignedToId])
+}
+
+model TenderActivity {
+  id           String              @id @default(cuid())
+  tenantId     String
+  tenderId     String
+  userId       String
+  activityType TenderActivityType
+  subject      String
+  notes        String?
+  documentId   String?
+  completedAt  DateTime?
+  metadata     Json?
+  createdAt    DateTime            @default(now())
+
+  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tender  TenderRecord @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  user    User         @relation("TenderActivityUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenderId])
+}
+
+model TenderDocument {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenderId   String
+  documentId String?  // link to Document Management
+  title      String
+  docType    String   // e.g. "Technical Proposal", "Financial Bid", "Certificate"
+  scanUrl    String?
+  uploadedAt DateTime @default(now())
+
+  tenant Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tender TenderRecord @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([tenderId])
+}
+
+enum CourtFilingType {
+  APPLICATION
+  PETITION
+  NOTICE_OF_MOTION
+  AFFIDAVIT
+  WRITTEN_SUBMISSIONS
+  PLEADING
+  RESPONSE
+  REPLY
+  NOTICE_OF_APPEAL
+  MEMORANDUM
+  OTHER
+}
+
+enum CourtFilingStatus {
+  PREPARED
+  FILED
+  RECEIVED_BY_COURT
+  REJECTED_BY_COURT
+  SERVED
+  COMPLETED
+}
+
+enum TenderCategory {
+  GOODS
+  WORKS
+  SERVICES
+  CONSULTANCY
+  OTHER
+}
+
+enum TenderStatus {
+  IDENTIFIED
+  DOCUMENTS_PREPARATION
+  SUBMITTED
+  EVALUATION
+  AWARDED
+  NOT_AWARDED
+  CANCELLED
+  WITHDRAWN
+}
+
+enum TenderOutcome {
+  AWARDED
+  NOT_AWARDED
+  DISQUALIFIED
+  WITHDRAWN
+  CANCELLED
+}
+
+enum TenderActivityType {
+  DOCUMENT_PREPARED
+  SUBMISSION_MADE
+  CLARIFICATION_SENT
+  CLARIFICATION_RECEIVED
+  EVALUATION_ATTENDED
+  AWARD_RECEIVED
+  APPEAL_FILED
+  NOTE
 }
 
 model MatterProfitabilitySnapshot {

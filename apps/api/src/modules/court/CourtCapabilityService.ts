@@ -78,11 +78,11 @@ export class CourtCapabilityService {
       },
       {
         key: 'court.filing_registry',
-        status: 'PENDING_SCHEMA',
+        status: 'ACTIVE',
         risk: 'CRITICAL',
-        requiredForCloseout: false,
+        requiredForCloseout: true,
         description:
-          'Court filing registry requires a CourtFiling or Filing model before activation.',
+          'CourtFiling model active. Clerks can record filings (Notice of Motion, Application, Petition, Affidavit, etc.) with scan URL, court ref, and dueDate tracking.',
       },
       {
         key: 'court.pleadings_registry',
@@ -118,11 +118,11 @@ export class CourtCapabilityService {
       },
       {
         key: 'court.notifications',
-        status: 'PENDING_CROSS_MODULE',
+        status: 'ACTIVE',
         risk: 'HIGH',
         requiredForCloseout: false,
         description:
-          'Court notifications and reminders should wait for full Notifications and Queues buildout.',
+          'Court hearing notifications wired to NotificationQueueService (WIP-002 complete). Reminders fire at configured times via reminder engine.',
       },
     ];
   }

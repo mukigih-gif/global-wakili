@@ -96,19 +96,19 @@ export class ReceptionCapabilityService {
       },
       {
         key: 'reception.document_handoff',
-        status: 'PENDING_CROSS_MODULE',
+        status: 'ACTIVE',
         risk: 'HIGH',
         requiredForCloseout: false,
         description:
-          'Received files should later link to Document Management with a formal document/reception bridge.',
+          'DOC_INCOMING and DOC_OUTGOING logs now bridge to Document Management (creates Document record with scan URL, matter linkage, delivery metadata). Urgent incoming docs fire SYSTEM_ALERT notification.',
       },
       {
         key: 'reception.notifications',
-        status: 'PENDING_CROSS_MODULE',
+        status: 'ACTIVE',
         risk: 'MEDIUM',
         requiredForCloseout: false,
         description:
-          'Reception notifications should wait for the full Notifications module buildout.',
+          'Reception notifications wired to NotificationQueueService (WIP-002 complete). Urgent document receipts auto-notify the receiving staff member.',
       },
     ];
   }
