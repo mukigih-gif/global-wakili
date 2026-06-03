@@ -68,10 +68,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       throw new Error(err.message || 'Invalid credentials');
     }
 
-    const data = await res.json();
-    const token: string = data.token || data.accessToken;
-    const resolvedTenantId: string = data.tenantId || tenantId || '';
-    const role: string = data.role || data.systemRole || '';
+    const payload = await res.json();
+    // API wraps response as { success, data: { token, user, ... } }
+    const responseData = payload.data ?? payload;
+    const token: string = responseData.token || responseData.accessToken;
+    const resolvedTenantId: string = responseData.user?.tenantId || responseData.tenantId || tenantId || '';
+    const role: string = responseData.user?.role || responseData.role || responseData.systemRole || '';
 
     if (!token) throw new Error('No token received');
     setSession(token, resolvedTenantId, role);
