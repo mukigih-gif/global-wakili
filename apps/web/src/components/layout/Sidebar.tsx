@@ -21,32 +21,67 @@ type NavItem = {
   module?: string;
 };
 
-const TENANT_NAV: NavItem[] = [
-  { href: '/app/dashboard',      label: 'Dashboard',        icon: <LayoutDashboard className="h-4 w-4" /> },
-  { href: '/app/calendar',       label: 'Calendar',         icon: <CalendarDays className="h-4 w-4" /> },
-  { href: '/app/clients',        label: 'Clients',          icon: <Users className="h-4 w-4" /> },
-  { href: '/app/matters',        label: 'Matters',          icon: <Briefcase className="h-4 w-4" /> },
-  { href: '/app/documents',      label: 'Documents',        icon: <FileText className="h-4 w-4" /> },
-  { href: '/app/tasks',          label: 'Tasks',            icon: <CheckSquare className="h-4 w-4" /> },
-  { href: '/app/workflows',      label: 'Workflows',        icon: <GitBranch className="h-4 w-4" /> },
-  { href: '/app/time-capture',   label: 'Time Capture',     icon: <Clock className="h-4 w-4" /> },
-  { href: '/app/billing',        label: 'Billing',          icon: <Receipt className="h-4 w-4" />, module: 'billing' },
-  { href: '/app/finance',        label: 'Finance',          icon: <DollarSign className="h-4 w-4" />, module: 'finance' },
-  { href: '/app/tax',            label: 'Tax Compliance',   icon: <Calculator className="h-4 w-4" />, module: 'finance' },
-  { href: '/app/trust',          label: 'Trust Accounting', icon: <Scale className="h-4 w-4" />, module: 'trust' },
-  { href: '/app/hr',             label: 'HR & Payroll',     icon: <UserCheck className="h-4 w-4" />, module: 'payroll' },
-  { href: '/app/analytics',      label: 'Analytics',        icon: <BarChart2 className="h-4 w-4" />, module: 'analytics' },
-  { href: '/app/reports',        label: 'Reports',          icon: <Globe className="h-4 w-4" /> },
-  { href: '/app/ai',             label: 'AI Platform',      icon: <Brain className="h-4 w-4" />, module: 'ai' },
-  { href: '/app/court/filings',  label: 'Court Filings',    icon: <Gavel className="h-4 w-4" /> },
-  { href: '/app/tenders',        label: 'Tenders',          icon: <Award className="h-4 w-4" /> },
-  { href: '/app/procurement',    label: 'Procurement',      icon: <ShoppingCart className="h-4 w-4" /> },
-  { href: '/app/reception',      label: 'Reception',        icon: <PhoneCall className="h-4 w-4" /> },
-  { href: '/app/resources',      label: 'Legal Resources',  icon: <ExternalLink className="h-4 w-4" /> },
-  { href: '/app/messaging',      label: 'Messages',         icon: <MessageSquare className="h-4 w-4" /> },
-  { href: '/app/notifications',  label: 'Notifications',    icon: <Bell className="h-4 w-4" /> },
-  { href: '/app/settings',       label: 'Settings',         icon: <Settings className="h-4 w-4" /> },
+type NavGroup = { label: string; items: NavItem[] };
+
+const TENANT_GROUPS: NavGroup[] = [
+  {
+    label: 'Core',
+    items: [
+      { href: '/app/dashboard',     label: 'Dashboard',       icon: <LayoutDashboard className="h-4 w-4" /> },
+      { href: '/app/calendar',      label: 'Calendar',        icon: <CalendarDays className="h-4 w-4" /> },
+      { href: '/app/messaging',     label: 'Messages',        icon: <MessageSquare className="h-4 w-4" /> },
+      { href: '/app/notifications', label: 'Notifications',   icon: <Bell className="h-4 w-4" /> },
+    ],
+  },
+  {
+    label: 'Legal Practice',
+    items: [
+      { href: '/app/clients',       label: 'Clients',         icon: <Users className="h-4 w-4" /> },
+      { href: '/app/matters',       label: 'Matters',         icon: <Briefcase className="h-4 w-4" /> },
+      { href: '/app/documents',     label: 'Documents',       icon: <FileText className="h-4 w-4" /> },
+      { href: '/app/tasks',         label: 'Tasks',           icon: <CheckSquare className="h-4 w-4" /> },
+      { href: '/app/workflows',     label: 'Workflows',       icon: <GitBranch className="h-4 w-4" /> },
+      { href: '/app/court/filings', label: 'Court Filings',   icon: <Gavel className="h-4 w-4" /> },
+      { href: '/app/tenders',       label: 'Tenders',         icon: <Award className="h-4 w-4" /> },
+    ],
+  },
+  {
+    label: 'Finance',
+    items: [
+      { href: '/app/billing',       label: 'Billing',         icon: <Receipt className="h-4 w-4" />,    module: 'billing' },
+      { href: '/app/finance',       label: 'Finance',         icon: <DollarSign className="h-4 w-4" />, module: 'finance' },
+      { href: '/app/tax',           label: 'Tax Compliance',  icon: <Calculator className="h-4 w-4" />, module: 'finance' },
+      { href: '/app/trust',         label: 'Trust Accounting',icon: <Scale className="h-4 w-4" />,      module: 'trust' },
+    ],
+  },
+  {
+    label: 'Operations',
+    items: [
+      { href: '/app/time-capture',  label: 'Time Capture',    icon: <Clock className="h-4 w-4" /> },
+      { href: '/app/procurement',   label: 'Procurement',     icon: <ShoppingCart className="h-4 w-4" /> },
+      { href: '/app/reception',     label: 'Reception',       icon: <PhoneCall className="h-4 w-4" /> },
+      { href: '/app/hr',            label: 'HR & Payroll',    icon: <UserCheck className="h-4 w-4" />,  module: 'payroll' },
+    ],
+  },
+  {
+    label: 'Intelligence',
+    items: [
+      { href: '/app/analytics',     label: 'Analytics',       icon: <BarChart2 className="h-4 w-4" />, module: 'analytics' },
+      { href: '/app/reports',       label: 'Reports',         icon: <Globe className="h-4 w-4" /> },
+      { href: '/app/ai',            label: 'AI Platform',     icon: <Brain className="h-4 w-4" />,     module: 'ai' },
+    ],
+  },
+  {
+    label: 'Firm',
+    items: [
+      { href: '/app/resources',     label: 'Legal Resources', icon: <ExternalLink className="h-4 w-4" /> },
+      { href: '/app/settings',      label: 'Settings',        icon: <Settings className="h-4 w-4" /> },
+    ],
+  },
 ];
+
+// Flat list for any code still referencing TENANT_NAV
+const TENANT_NAV: NavItem[] = TENANT_GROUPS.flatMap((g) => g.items);
 
 const SUPER_ADMIN_NAV: NavItem[] = [
   { href: '/admin/dashboard',    label: 'Overview',         icon: <LayoutDashboard className="h-4 w-4" /> },
@@ -71,10 +106,12 @@ function NavLink({ item }: { item: NavItem }) {
   );
 }
 
+const role = typeof window !== 'undefined' ? sessionStorage.getItem('gw_role') ?? '' : '';
+
 export function Sidebar() {
   const { user, logout } = useAuth();
-  const isSuperAdmin = user?.isSuperAdmin;
-  const nav = isSuperAdmin ? SUPER_ADMIN_NAV : TENANT_NAV;
+  const isSuperAdmin = user?.isSuperAdmin || user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
+  const nav = isSuperAdmin ? SUPER_ADMIN_NAV : TENANT_NAV; // kept for compat
 
   return (
     <aside className="flex h-full w-60 flex-col border-r border-gray-200 bg-white">
@@ -96,9 +133,17 @@ export function Sidebar() {
         </div>
       )}
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        {nav.map((item) => <NavLink key={item.href} item={item} />)}
+      {/* Nav — grouped for tenant users */}
+      <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0">
+        {isSuperAdmin
+          ? SUPER_ADMIN_NAV.map((item) => <NavLink key={item.href} item={item} />)
+          : TENANT_GROUPS.map((group) => (
+              <div key={group.label} className="mb-2">
+                <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">{group.label}</p>
+                {group.items.map((item) => <NavLink key={item.href} item={item} />)}
+              </div>
+            ))
+        }
       </nav>
 
       {/* User footer */}

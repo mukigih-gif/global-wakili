@@ -7,7 +7,9 @@ import { formatDate, formatCurrency } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
 import { StatCard } from '@/components/ui/Card';
-import { Briefcase, Clock, AlertTriangle, TrendingUp } from 'lucide-react';
+import { Briefcase, Clock, AlertTriangle, TrendingUp, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import Link from 'next/link';
 
 type Tender = {
   id: string;
@@ -67,9 +69,14 @@ export default function TendersPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Tender Management</h1>
-        <p className="text-sm text-gray-500">Track tendering activities — documents, deadlines, submissions, and outcomes</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Tender Management</h1>
+          <p className="text-sm text-gray-500">Track tendering activities — documents, deadlines, submissions, and outcomes</p>
+        </div>
+        <Link href="/app/tenders/new">
+          <Button size="sm"><Plus className="h-4 w-4" /> New Tender</Button>
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">

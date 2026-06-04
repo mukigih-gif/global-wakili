@@ -10,14 +10,19 @@ import { Table, Th, Td, EmptyRow } from '@/components/ui/Table';
 import { ArrowLeft, Calendar, DollarSign, Clock, FileText } from 'lucide-react';
 
 type MatterDetail = {
-  id: string; title: string; matterCode: string; status: string;
+  id: string; title: string; matterCode?: string | null; status: string;
   category: string; description?: string; createdAt: string;
-  client?: { id: string; name: string; email: string } | null;
+  openedDate?: string; estimatedValue?: string | null; currency?: string;
+  riskLevel?: string;
+  client?: { id: string; name: string; email?: string } | null;
+  leadAdvocate?: { id: string; name: string; role?: string } | null;
+  originator?: { advocate?: { id: string; name: string } } | null;
   assignedLawyer?: { name: string } | null;
-  tasks?: Array<{ id: string; title: string; status: string; dueDate?: string }>;
-  timeEntries?: Array<{ id: string; description: string; durationHours: string; status: string; entryDate: string }>;
+  tasks?: Array<{ id: string; title: string; status: string; dueDate?: string; assignee?: { name: string } }>;
+  timeEntries?: Array<{ id: string; description: string; durationHours: string; billableAmount: string; status: string; entryDate: string }>;
   invoices?: Array<{ id: string; invoiceNumber: string; total: string; status: string; dueDate?: string }>;
-  hearings?: Array<{ id: string; caseNumber: string; hearingDate: string; court: string; status: string }>;
+  hearings?: Array<{ id: string; caseNumber?: string; hearingDate?: string; court?: string; status: string }>;
+  wipValue?: string; trustBalance?: string;
 };
 
 export function MatterDetailClient({ id }: { id: string }) {
@@ -25,8 +30,12 @@ export function MatterDetailClient({ id }: { id: string }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<{ matter: MatterDetail }>(`/matters/${id}`)
-      .then((r) => setMatter(r.matter))
+    api.get<any>(`/matters/${id}`)
+      .then((r) => {
+        // API can return { matter: {...} } or flat { id, title, ... }
+        const m = r?.id ? r : (r?.matter ?? r?.data ?? r);
+        setMatter(m?.id ? m : null);
+      })
       .catch(() => setMatter(null))
       .finally(() => setLoading(false));
   }, [id]);
@@ -43,11 +52,42 @@ export function MatterDetailClient({ id }: { id: string }) {
             <h1 className="text-2xl font-bold text-gray-900">{matter.title}</h1>
             <StatusBadge status={matter.status} />
           </div>
-          <p className="text-sm text-gray-500 mt-0.5">
-            <span className="font-mono">{matter.matterCode}</span>
-            {matter.client && <> · {matter.client.name}</>}
-            {matter.category && <> · {matter.category.replace(/_/g, ' ')}</>}
+          <p className="text-sm text-gray-500 mt-0.5 flex items-center flex-wrap gap-2">
+            <span className="font-mono text-gray-700 bg-gray-100 rounded px-1.5 py-0.5 text-xs">
+              {matter.matterCode ?? `MTR-${matter.id.slice(-6).toUpperCase()}`}
+            </span>
+            {matter.client && (
+              <Link href={`/app/clients/${matter.client.id}`} className="text-primary-600 hover:underline text-xs">
+                {matter.client.name}
+              </Link>
+            )}
+            {matter.category && <span className="text-xs text-gray-400">{matter.category.replace(/_/g, ' ')}</span>}
           </p>
+          {/* Advocate info */}
+          <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 flex-wrap">
+            {matter.leadAdvocate && (
+              <span className="flex items-center gap-1">
+                <span className="font-medium text-gray-700">Lead:</span> {matter.leadAdvocate.name}
+              </span>
+            )}
+            {matter.originator?.advocate && matter.originator.advocate.id !== matter.leadAdvocate?.id && (
+              <span className="flex items-center gap-1">
+                <span className="font-medium text-gray-700">Originator:</span> {matter.originator.advocate.name}
+              </span>
+            )}
+            {matter.estimatedValue && (
+              <span className="flex items-center gap-1">
+                <span className="font-medium text-gray-700">Est. Value:</span>
+                {matter.currency ?? 'KES'} {Number(matter.estimatedValue).toLocaleString()}
+              </span>
+            )}
+            {matter.wipValue && Number(matter.wipValue) > 0 && (
+              <span className="flex items-center gap-1">
+                <span className="font-medium text-gray-700">WIP:</span>
+                {matter.currency ?? 'KES'} {Number(matter.wipValue).toLocaleString()}
+              </span>
+            )}
+          </div>
         </div>
       </div>
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">

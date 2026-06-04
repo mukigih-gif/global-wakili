@@ -20,6 +20,7 @@ type Matter = {
   createdAt: string;
   client?: { id: string; name: string } | null;
   clientId?: string | null;
+  leadAdvocate?: { id: string; name: string } | null;
   assignedLawyer?: { name: string } | null;
 };
 
@@ -76,9 +77,10 @@ export default function MattersPage() {
       <Table>
         <thead>
           <tr>
-            <Th>Matter Code</Th>
+            <Th>Reference</Th>
             <Th>Title</Th>
             <Th>Client</Th>
+            <Th>Lead Advocate</Th>
             <Th>Category</Th>
             <Th>Status</Th>
             <Th>Opened</Th>
@@ -90,7 +92,11 @@ export default function MattersPage() {
            !matters.length ? <EmptyRow colSpan={7} message="No matters found" /> :
            matters.map((m) => (
              <tr key={m.id}>
-               <Td><span className="font-mono text-xs text-gray-600">{m.matterCode}</span></Td>
+               <Td>
+                 <span className="font-mono text-xs text-gray-600 bg-gray-50 rounded px-1.5 py-0.5">
+                   {m.matterCode ?? `MTR-${m.id.slice(-6).toUpperCase()}`}
+                 </span>
+               </Td>
                <Td><Link href={`/app/matters/${m.id}`} className="font-medium text-primary-700 hover:underline">{m.title}</Link></Td>
                <Td>
                  {m.client
@@ -98,6 +104,7 @@ export default function MattersPage() {
                    : <span className="text-gray-400">—</span>
                  }
                </Td>
+               <Td className="text-sm text-gray-600">{m.leadAdvocate?.name ?? m.assignedLawyer?.name ?? '—'}</Td>
                <Td className="text-gray-600 text-xs">{m.category?.replace(/_/g, ' ')}</Td>
                <Td><StatusBadge status={m.status} /></Td>
                <Td className="text-gray-500 text-xs">{formatDate(m.createdAt)}</Td>
