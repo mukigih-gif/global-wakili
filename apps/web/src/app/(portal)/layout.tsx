@@ -1,5 +1,10 @@
-// Client portal — publicly accessible with OTP/magic link auth
+'use client';
+import { clearSession } from '@/lib/api';
+import { useRouter } from 'next/navigation';
+// Client portal — accessible to clients with portal activation
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+  const handleSignOut = () => { clearSession(); router.replace('/login'); };
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200">
@@ -10,7 +15,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             </div>
             <span className="text-sm font-semibold text-gray-900">Global Wakili — Client Portal</span>
           </div>
-          <a href="/portal/logout" className="text-xs text-gray-500 hover:text-gray-700">Sign out</a>
+          <button onClick={handleSignOut} className="text-xs text-gray-500 hover:text-gray-700">Sign out</button>
         </div>
       </header>
       <main className="max-w-4xl mx-auto px-4 py-8">{children}</main>
