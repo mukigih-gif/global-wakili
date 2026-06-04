@@ -24,6 +24,7 @@ type SearchResult = {
   id: string;
   label: string;
   sub?: string;
+  reference?: string;  // matter code / client code
   href: string;
 };
 
@@ -105,11 +106,33 @@ function GlobalSearchPanel({ query, onClose }: { query: string; onClose: () => v
   useEffect(() => {
     if (query.trim().length < 2) { setResults([]); return; }
     setLoading(true);
-    const timeout = setTimeout(() => {
-      api.get<{ data: SearchResult[] }>(`/search?q=${encodeURIComponent(query)}&limit=10`)
-        .then((r) => setResults(r.data ?? []))
-        .catch(() => setResults([]))
-        .finally(() => setLoading(false));
+    const timeout = setTimeout(async () => {
+      try {
+        // Try dedicated search endpoint; fall back to parallel matter+client search
+        const res = await api.get<{ data: SearchResult[] }>(`/search?q=${encodeURIComponent(query)}&limit=10`).catch(() => null);
+        if (res?.data?.length) { setResults(res.data); setLoading(false); return; }
+        // Fallback: search matters (by title OR matterCode) and clients in parallel
+        const [mRes, cRes] = await Promise.all([
+          api.get<{ data: any[] }>(`/matters?search=${encodeURIComponent(query)}&limit=5`).catch(() => ({ data: [] })),
+          api.get<{ data: any[] }>(`/clients?search=${encodeURIComponent(query)}&limit=5`).catch(() => ({ data: [] })),
+        ]);
+        const combined: SearchResult[] = [
+          ...(mRes.data ?? []).map((m: any) => ({
+            type: 'matter' as const, id: m.id,
+            label: m.title,
+            sub: m.client?.name,
+            reference: m.matterCode ?? `MTR-${m.id.slice(-6).toUpperCase()}`,
+            href: `/app/matters/${m.id}`,
+          })),
+          ...(cRes.data ?? []).map((c: any) => ({
+            type: 'client' as const, id: c.id,
+            label: c.name, sub: c.email,
+            reference: c.clientCode,
+            href: `/app/clients/${c.id}`,
+          })),
+        ];
+        setResults(combined);
+      } catch { setResults([]); } finally { setLoading(false); }
     }, 300);
     return () => clearTimeout(timeout);
   }, [query]);
@@ -139,7 +162,10 @@ function GlobalSearchPanel({ query, onClose }: { query: string; onClose: () => v
                   {TYPE_LABEL[r.type] ?? r.type}
                 </span>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">{r.label}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-medium text-gray-900 truncate">{r.label}</p>
+                    {r.reference && <span className="font-mono text-[10px] text-gray-400 bg-gray-100 rounded px-1 flex-shrink-0">{r.reference}</span>}
+                  </div>
                   {r.sub && <p className="text-xs text-gray-500 truncate">{r.sub}</p>}
                 </div>
               </Link>
@@ -290,10 +316,11 @@ export function TopBar({ title }: Props) {
                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1"><BookOpen className="h-3.5 w-3.5" /> Resources</p>
                   <div className="space-y-1.5">
                     {[
-                      { label: 'User Guide',          href: '/docs/user-guide' },
-                      { label: 'Trust Accounting Help', href: '/docs/trust' },
-                      { label: 'eTIMS Integration',   href: '/docs/etims' },
-                      { label: 'Support Centre',      href: 'mailto:support@globalwakili.co.ke' },
+                      { label: 'User Guide',            href: '/app/resources' },
+                      { label: 'Trust Accounting Help', href: '/app/trust' },
+                      { label: 'eTIMS / Tax Centre',    href: '/app/tax' },
+                      { label: 'Integrations Setup',    href: '/app/settings/integrations' },
+                      { label: 'Support Centre',        href: 'mailto:support@globalwakili.co.ke' },
                     ].map((item) => (
                       <a key={item.label} href={item.href} className="flex items-center justify-between text-xs text-gray-700 hover:text-primary-700 py-0.5">
                         {item.label}
