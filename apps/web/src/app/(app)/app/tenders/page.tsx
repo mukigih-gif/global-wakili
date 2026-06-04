@@ -23,6 +23,8 @@ type Tender = {
   deadline?: string | null;
   submittedAt?: string | null;
   outcome?: string | null;
+  documents?: string | null;
+  description?: string | null;
   matter?: { title: string; matterCode: string } | null;
   assignedTo?: { name: string } | null;
 };
@@ -104,26 +106,34 @@ export default function TendersPage() {
 
       <Table>
         <thead>
-          <tr><Th>Tender Name</Th><Th>No.</Th><Th>Issued By</Th><Th>Matter</Th><Th>Category</Th><Th>Value</Th><Th>Status</Th><Th>Deadline</Th><Th>Submitted</Th><Th>Outcome</Th></tr>
+          <tr><Th>Tender Name</Th><Th>No.</Th><Th>Issued By</Th><Th>Matter</Th><Th>Value</Th><Th>Documents Sent</Th><Th>Status</Th><Th>Deadline</Th><Th>Outcome</Th></tr>
         </thead>
         <tbody>
-          {loading ? <LoadingRow colSpan={10} /> :
-           !tenders.length ? <EmptyRow colSpan={10} message="No tenders found" /> :
+          {loading ? <LoadingRow colSpan={9} /> :
+           !tenders.length ? <EmptyRow colSpan={9} message="No tenders found — click New Tender to add one" /> :
            tenders.map((t) => {
              const overdue = t.deadline && new Date(t.deadline) < new Date() && !['SUBMITTED','AWARDED','NOT_AWARDED','CANCELLED','WITHDRAWN'].includes(t.status);
              return (
                <tr key={t.id} className={overdue ? 'bg-red-50/30' : ''}>
-                 <Td className="font-medium text-sm">{t.tenderName}</Td>
-                 <Td className="text-xs font-mono text-gray-500">{t.tenderNumber ?? '—'}</Td>
+                 <Td>
+                   <div>
+                     <p className="font-medium text-sm text-gray-900">{t.tenderName}</p>
+                     {t.tenderNumber && <p className="text-xs font-mono text-gray-400">{t.tenderNumber}</p>}
+                   </div>
+                 </Td>
                  <Td className="text-xs text-gray-600">{t.issuedBy ?? '—'}</Td>
-                 <Td className="text-xs text-gray-500">{t.matter?.title ?? '—'}</Td>
-                 <Td className="text-xs text-gray-500">{t.category}</Td>
+                 <Td className="text-xs text-gray-500">{t.matter ? `${t.matter.matterCode} — ${t.matter.title.slice(0,20)}` : '—'}</Td>
                  <Td className="text-sm font-medium">{t.estimatedValue ? formatCurrency(t.estimatedValue, t.currency) : '—'}</Td>
+                 <Td className="text-xs text-gray-600 max-w-[140px]">
+                   {t.documents
+                     ? <span className="truncate block" title={t.documents}>{t.documents}</span>
+                     : <span className="text-gray-300 italic">None listed</span>
+                   }
+                 </Td>
                  <Td><StatusBadge status={t.status} label={STATUS_LABELS[t.status]} /></Td>
                  <Td className={`text-xs ${overdue ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
                    {formatDate(t.deadline)}{overdue && ' ⚠'}
                  </Td>
-                 <Td className="text-xs text-gray-500">{formatDate(t.submittedAt)}</Td>
                  <Td>
                    {t.outcome
                      ? <span className={t.outcome === 'AWARDED' ? 'badge-green' : 'badge-red'}>{t.outcome}</span>

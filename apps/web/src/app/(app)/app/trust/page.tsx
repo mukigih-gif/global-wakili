@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
 import { StatCard } from '@/components/ui/Card';
 import { Scale, Plus, ArrowUpRight, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
+import Link from 'next/link';
 
 type TrustAccount = { id: string; accountName: string; accountNumber: string; bankName: string; currentBalance: string; reconciliationBalance: string; isActive: boolean; lastReconciled?: string | null };
 type TrustTransaction = { id: string; reference: string; description: string; transactionType: string; credit: string; debit: string; transactionDate: string; isReconciled: boolean; client?: { name: string } | null; matter?: { matterCode: string } | null };
@@ -73,7 +74,9 @@ export default function TrustPage() {
           <Button size="sm" variant="secondary" onClick={() => setTab('reconcile')}>
             <RefreshCw className="h-4 w-4" /> 3-Way Reconciliation
           </Button>
-          <Button size="sm"><Plus className="h-4 w-4" /> New Deposit</Button>
+          <Link href="/app/trust/deposit">
+            <Button size="sm"><Plus className="h-4 w-4" /> New Deposit</Button>
+          </Link>
         </div>
       </div>
 

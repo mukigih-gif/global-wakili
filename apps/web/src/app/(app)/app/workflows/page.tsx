@@ -7,7 +7,7 @@ import { formatDate } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
-import { Plus, GitBranch, Scale, Briefcase, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { Plus, GitBranch, Scale, Briefcase, CheckCircle, Clock, AlertCircle, Play, Users } from 'lucide-react';
 
 type WorkflowInstance = {
   id: string;
@@ -55,6 +55,8 @@ export default function WorkflowsPage() {
   const [loading, setLoading]     = useState(true);
   const [tab, setTab]             = useState<'active' | 'templates'>('active');
   const [typeFilter, setTypeFilter] = useState('');
+  const [starting, setStarting]   = useState<string | null>(null);
+  const [startSuccess, setStartSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -66,6 +68,25 @@ export default function WorkflowsPage() {
       .finally(() => setLoading(false));
   }, [typeFilter]);
 
+  const startWorkflow = async (key: string, name: string) => {
+    setStarting(key);
+    try {
+      const wf = await api.post<WorkflowInstance>('/workflows', {
+        workflowType: key.toUpperCase(),
+        name,
+      });
+      setInstances((prev) => [wf, ...prev]);
+      setStartSuccess(name);
+      setTab('active');
+      setTimeout(() => setStartSuccess(null), 4000);
+    } catch (err: unknown) {
+      // Show inline error on the template card
+      console.warn('Workflow start failed:', err instanceof Error ? err.message : err);
+    } finally {
+      setStarting(null);
+    }
+  };
+
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -73,8 +94,14 @@ export default function WorkflowsPage() {
           <h1 className="text-2xl font-bold text-gray-900">Workflows</h1>
           <p className="text-sm text-gray-500">Commercial and litigation workflow management</p>
         </div>
-        <Button size="sm"><Plus className="h-4 w-4" /> Start Workflow</Button>
+        <Button size="sm" onClick={() => setTab('templates')}><Play className="h-4 w-4" /> Start Workflow</Button>
       </div>
+
+      {startSuccess && (
+        <div className="rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-700 flex items-center gap-2">
+          <CheckCircle className="h-4 w-4" /> Workflow &quot;{startSuccess}&quot; started successfully — tracking in Active tab.
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
@@ -151,8 +178,13 @@ export default function WorkflowsPage() {
                   <div key={tpl.key} className="rounded-xl border border-gray-200 bg-white p-5 hover:shadow-sm transition-shadow">
                     <div className="flex items-start justify-between mb-2">
                       <h3 className="font-semibold text-gray-900">{tpl.name}</h3>
-                      <Button size="sm" variant="secondary" className="flex-shrink-0 ml-2">
-                        <Plus className="h-3.5 w-3.5" /> Start
+                      <Button
+                        size="sm"
+                        loading={starting === tpl.key}
+                        onClick={() => startWorkflow(tpl.key, tpl.name)}
+                        className="flex-shrink-0 ml-2"
+                      >
+                        <Play className="h-3.5 w-3.5" /> Start
                       </Button>
                     </div>
                     <p className="text-xs text-gray-500 mb-3">{tpl.desc}</p>
