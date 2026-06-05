@@ -203,15 +203,15 @@ export const searchTasks = asyncHandler(async (req: Request, res: Response) => {
     },
   });
 
-  await TaskAuditService.logAction(req.db, {
+  // Audit task search — wrapped to prevent blocking if audit schema mismatch
+  TaskAuditService.logAction(req.db, {
     tenantId: getTenantId(req),
     userId: getOptionalUserId(req),
     action: 'SEARCHED',
     ...requestMeta(req),
-    metadata: {
-      query: req.query.query ?? null,
-      resultCount: result.meta.total,
-    },
+    metadata: { query: req.query.query ?? null, resultCount: result.meta.total },
+  }).catch((auditErr: Error) => {
+    console.warn('[TASK] Audit log failed (non-blocking):', auditErr.message);
   });
 
   res.status(200).json(result);
