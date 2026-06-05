@@ -132,3 +132,61 @@ router.get(
 );
 
 export default router;
+// ── Disbursements (DRN) ────────────────────────────────────────────────────────
+router.get(
+  '/:matterId/disbursements',
+  requirePermissions(PERMISSIONS.matter.viewMatter),
+  async (req, res) => {
+    try {
+      const drns = await req.db.disbursementRequestNote.findMany({
+        where: { tenantId: req.tenantId, matterId: req.params.matterId },
+        include: {
+          requestedBy: { select: { id: true, name: true } },
+          approvedBy:  { select: { id: true, name: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+      res.json({ success: true, data: drns });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
+);
+
+router.post(
+  '/:matterId/disbursements',
+  requirePermissions(PERMISSIONS.matter.viewMatter),
+  async (req, res) => {
+    try {
+      const drn = await req.db.disbursementRequestNote.create({
+        data: {
+          tenantId:         req.tenantId,
+          matterId:         req.params.matterId,
+          disbursementType: req.body.disbursementType || 'OTHER',
+          description:      req.body.description,
+          amount:           parseFloat(req.body.amount) || 0,
+          currency:         req.body.currency || 'KES',
+          requestNote:      req.body.requestNote || req.body.notes || '',
+          status:           'PENDING',
+          requestedById:    req.user.sub,
+        },
+      });
+      res.status(201).json({ success: true, data: drn });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
+);
+
+// ── Expense Entries ─────────────────────────────────────────────────────────────
+router.get(
+  '/:matterId/expenses',
+  requirePermissions(PERMISSIONS.matter.viewMatter),
+  async (req, res) => {
+    try {
+      const expenses = await req.db.expenseEntry.findMany({
+        where: { tenantId: req.tenantId, matterId: req.params.matterId },
+        include: { user: { select: { id: true, name: true } } },
+        orderBy: { expenseDate: 'desc' },
+        take: 50,
+      });
+      res.json({ success: true, data: expenses });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
+);

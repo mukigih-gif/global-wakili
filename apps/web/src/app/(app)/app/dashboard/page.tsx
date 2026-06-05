@@ -125,7 +125,7 @@ export default function DashboardPage() {
   useEffect(() => {
     api.get<DashboardSummary>('/matters/dashboard/summary')
       .then(setData).catch(() => setData(null)).finally(() => setLoading(false));
-    api.get<{ data: ActivityEntry[] }>('/audit/recent?limit=15')
+    api.get<{ data: ActivityEntry[] }>('/matters/dashboard/activity?limit=15')
       .then((r) => setActs(r.data ?? [])).catch(() => setActs([])).finally(() => setAL(false));
   }, []);
 

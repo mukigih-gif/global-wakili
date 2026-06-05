@@ -32,7 +32,7 @@ export default function TrustDepositPage() {
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    api.get<{ data: TrustAccount[] }>('/finance/trust/accounts').then((r) => setAccounts(r.data ?? [])).catch(() => {});
+    api.get<any>('/trust/overview').then((r) => setAccounts(r.dashboard?.accounts ?? [])).catch(() => {});
     api.get<{ data: Client[] }>('/clients?limit=200').then((r) => setClients(r.data ?? [])).catch(() => {});
     api.get<{ data: Matter[] }>('/matters?limit=200').then((r) => setMatters(r.data ?? [])).catch(() => {});
   }, []);
@@ -44,7 +44,7 @@ export default function TrustDepositPage() {
     if (!form.amount || parseFloat(form.amount) <= 0) { setError('Amount must be greater than 0'); return; }
     setError(''); setLoading(true);
     try {
-      await api.post('/finance/trust/deposit', {
+      await api.post('/trust/transactions', {
         trustAccountId:  form.trustAccountId,
         clientId:        form.clientId,
         matterId:        form.matterId        || null,

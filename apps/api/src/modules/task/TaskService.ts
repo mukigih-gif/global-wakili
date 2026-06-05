@@ -72,17 +72,11 @@ function buildAccessScope(userId: string): Record<string, unknown> {
     OR: [
       { createdById: userId },
       { assignedTo: userId },
+      // leadAdvocateId is the correct field on Matter (not assignedLawyerId/partnerId)
       {
         matter: {
           is: {
-            partnerId: userId,
-          },
-        },
-      },
-      {
-        matter: {
-          is: {
-            assignedLawyerId: userId,
+            leadAdvocateId: userId,
           },
         },
       },

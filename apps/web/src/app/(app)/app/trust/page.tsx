@@ -30,17 +30,20 @@ export default function TrustPage() {
   useEffect(() => {
     setLoading(true);
     if (tab === 'accounts') {
-      api.get<{ data: TrustAccount[] }>('/finance/trust/accounts')
-        .then((r) => setAccounts(r.data ?? [])).catch(() => setAccounts([])).finally(() => setLoading(false));
+      // Trust overview returns { dashboard: { accounts: [...] }, recentTransactions: [...] }
+      api.get<any>('/trust/overview')
+        .then((r) => setAccounts(r.dashboard?.accounts ?? []))
+        .catch(() => setAccounts([])).finally(() => setLoading(false));
     } else if (tab === 'transactions') {
       const p = new URLSearchParams();
       if (selectedAccount) p.set('trustAccountId', selectedAccount);
       p.set('limit', '100');
-      api.get<{ data: TrustTransaction[] }>(`/finance/trust/transactions?${p}`)
+      api.get<{ data: TrustTransaction[] }>(`/trust/transactions?${p}`)
         .then((r) => setTxns(r.data ?? [])).catch(() => setTxns([])).finally(() => setLoading(false));
     } else if (tab === 'ledger') {
-      api.get<{ data: ClientLedger[] }>('/finance/trust/client-ledgers')
-        .then((r) => setLedger(r.data ?? [])).catch(() => setLedger([])).finally(() => setLoading(false));
+      api.get<any>('/trust/overview')
+        .then((r) => setLedger(r.dashboard?.clientLedgers ?? []))
+        .catch(() => setLedger([])).finally(() => setLoading(false));
     } else {
       setLoading(false);
     }
@@ -49,7 +52,7 @@ export default function TrustPage() {
   const runThreeWay = async () => {
     setRunning3Way(true);
     try {
-      const result = await api.post<any>('/finance/trust/reconcile', {
+      const result = await api.post<any>('/trust/reconciliations/three-way', {
         trustAccountId: selectedAccount || accounts[0]?.id,
       });
       setReconResult(result.data ?? result);

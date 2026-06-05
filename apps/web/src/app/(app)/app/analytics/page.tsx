@@ -42,7 +42,7 @@ export default function AnalyticsPage() {
       api.get<{ data: ClientRaw[] }>('/clients?limit=500').then((r) => setClients(r.data ?? [])).catch(() => {}),
       api.get<{ data: TaskRaw[] }>('/tasks/search?limit=500').then((r) => setTasks(r.data ?? [])).catch(() => {}),
       api.get<{ data: TimeRaw[] }>('/time-entries?limit=500').then((r) => setTime(r.data ?? [])).catch(() => {}),
-      api.get<{ data: TrustRaw[] }>('/finance/trust/accounts').then((r) => setTrust(r.data ?? [])).catch(() => {}),
+      api.get<any>('/trust/overview').then((r) => setTrust(r.dashboard?.accounts ?? [])).catch(() => {}),
     ]).finally(() => { setLoading(false); setLast(new Date().toISOString()); });
   };
 

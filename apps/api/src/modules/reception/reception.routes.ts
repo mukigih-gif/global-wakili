@@ -91,6 +91,19 @@ router.get(
   getReceptionCapabilities,
 );
 
+// ── Express Services (Walk-In Clients) — MUST be before /:logId catch-all ────
+router.get(
+  '/express-services',
+  requirePermissions(PERMISSIONS.reception.viewLog),
+  listExpressServices,
+);
+
+router.post(
+  '/express-services',
+  requirePermissions(PERMISSIONS.reception.createVisitorLog),
+  createExpressService,
+);
+
 router.post(
   '/:logId/handoff/:type',
   requirePermissions(PERMISSIONS.reception.manageHandoff),
@@ -102,19 +115,6 @@ router.get(
   '/:logId',
   requirePermissions(PERMISSIONS.reception.viewLog),
   getReceptionLog,
-);
-
-// ── Express Services (Walk-In Clients) ────────────────────────────────────────
-router.get(
-  '/express-services',
-  requirePermissions(PERMISSIONS.reception.viewLog),
-  listExpressServices,
-);
-
-router.post(
-  '/express-services',
-  requirePermissions(PERMISSIONS.reception.createVisitorLog),
-  createExpressService,
 );
 
 export default router;

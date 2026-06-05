@@ -10,8 +10,8 @@ export default function AnalyticsPage() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    api.get<{ data: any[] }>('/finance/trust/accounts?limit=50')
-      .then((r) => setData(r.data ?? [])).catch(() => setData([])).finally(() => setLoading(false));
+    api.get<any>('/trust/overview')
+      .then((r) => setData(r.dashboard?.accounts ?? [])).catch(() => setData([])).finally(() => setLoading(false));
   }, []);
   return (
     <div className="space-y-5">

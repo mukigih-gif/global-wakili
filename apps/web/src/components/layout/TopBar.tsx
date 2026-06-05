@@ -43,7 +43,7 @@ function NotificationPanel({ onClose }: { onClose: () => void }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<{ data: Notification[] }>('/notifications?limit=15')
+    api.get<{ data: Notification[] }>('/notifications/search?limit=15')
       .then((r) => setNotifications(r.data ?? []))
       .catch(() => setNotifications([]))
       .finally(() => setLoading(false));
@@ -208,7 +208,7 @@ export function TopBar({ title }: Props) {
   useClickOutside(helpRef,   () => setHelpOpen(false));
 
   useEffect(() => {
-    api.get<{ data: { unread: number } }>('/notifications/unread-count')
+    api.get<{ data: { unread: number } }>('/notifications/dashboard')
       .then((r) => setUnreadCount(r.data?.unread ?? 0))
       .catch(() => null);
   }, []);

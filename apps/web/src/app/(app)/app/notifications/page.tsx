@@ -24,7 +24,7 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get<{ data: Notification[] }>('/notifications?limit=30')
+    api.get<{ data: Notification[] }>('/notifications/search?limit=30')
       .then((r) => setNotifications(r.data ?? []))
       .catch(() => setNotifications([]))
       .finally(() => setLoading(false));

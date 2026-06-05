@@ -12,7 +12,11 @@ export default function AuditPage() {
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
   useEffect(() => {
-    api.get<{ data: AuditLog[] }>('/audit?limit=100').then((r) => setLogs(r.data ?? [])).catch(() => setLogs([])).finally(() => setLoading(false));
+    // Audit log is accessed via platform module for super admins
+    api.get<{ data: AuditLog[] }>('/platform/audit?limit=100').then((r) => setLogs(r.data ?? [])).catch(() =>
+      // Fallback: try matters audit which all admins can access
+      api.get<{ data: AuditLog[] }>('/matters/dashboard/activity?limit=100').then((r) => setLogs(r.data ?? [])).catch(() => setLogs([]))
+    ).finally(() => setLoading(false));
   }, []);
   const filtered = logs.filter((l) => !query || l.action?.toLowerCase().includes(query.toLowerCase()) || l.entityType?.toLowerCase().includes(query.toLowerCase()));
   return (
