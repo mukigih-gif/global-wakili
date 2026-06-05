@@ -9,7 +9,7 @@ import {
   Shield, UserCheck, BarChart2, Brain, Bell, Settings,
   Building, LogOut, CheckSquare, Gavel, Award, ExternalLink, Scale,
   CalendarDays, PhoneCall, ShoppingCart, Receipt, MessageSquare, Globe,
-  GitBranch, Clock, Calculator,
+  GitBranch, Clock, Calculator, ThumbsUp,
 } from 'lucide-react';
 import { Logo } from '@/components/ui/Logo';
 
@@ -41,6 +41,7 @@ const TENANT_GROUPS: NavGroup[] = [
       { href: '/app/documents',     label: 'Documents',       icon: <FileText className="h-4 w-4 icon-legal" /> },
       { href: '/app/tasks',         label: 'Tasks',           icon: <CheckSquare className="h-4 w-4 icon-tasks" /> },
       { href: '/app/workflows',     label: 'Workflows',       icon: <GitBranch className="h-4 w-4 icon-tasks" /> },
+      { href: '/app/approvals',     label: 'Approvals',       icon: <ThumbsUp className="h-4 w-4 icon-tasks" /> },
       { href: '/app/court/filings', label: 'Court Filings',   icon: <Gavel className="h-4 w-4 icon-danger" /> },
       { href: '/app/tenders',       label: 'Tenders',         icon: <Award className="h-4 w-4 icon-ops" /> },
     ],

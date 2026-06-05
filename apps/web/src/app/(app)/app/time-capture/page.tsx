@@ -7,7 +7,7 @@ import { formatDate, formatDuration } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
-import { Clock, Mail, FileText, CalendarDays, CheckSquare, Plus, Zap } from 'lucide-react';
+import { Clock, Mail, FileText, CalendarDays, CheckSquare, Plus, Zap, Play, Square, Timer } from 'lucide-react';
 
 type WIPEntry = {
   id: string;
@@ -56,14 +56,69 @@ export default function TimeCapturePage() {
   const pendingCount   = entries.filter((e) => e.status === 'PENDING_APPROVAL').length;
   const totalMinutes   = entries.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
 
+  // Live timer state
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [timerDesc, setTimerDesc]       = useState('');
+  const [timerRef, setTimerRef]         = useState<ReturnType<typeof setInterval> | null>(null);
+
+  const startTimer = () => {
+    setTimerRunning(true);
+    const ref = setInterval(() => setTimerSeconds((s) => s + 1), 1000);
+    setTimerRef(ref);
+  };
+
+  const stopTimer = async () => {
+    if (timerRef) clearInterval(timerRef);
+    setTimerRunning(false);
+    const minutes = Math.round(timerSeconds / 60);
+    if (minutes > 0 && timerDesc) {
+      try {
+        await api.post('/time-capture/wip', {
+          source: 'MANUAL', description: timerDesc, durationMinutes: minutes, status: 'PENDING_APPROVAL',
+        });
+        setEntries((prev) => [{ id: Date.now().toString(), activityType: 'MANUAL', description: timerDesc, durationMinutes: minutes, status: 'PENDING_APPROVAL', source: 'MANUAL', capturedAt: new Date().toISOString() } as any, ...prev]);
+      } catch { /* silently ignore */ }
+    }
+    setTimerSeconds(0);
+    setTimerDesc('');
+  };
+
+  const fmtTimer = (s: number) => `${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor((s%3600)/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Passive Time Capture</h1>
-          <p className="text-sm text-gray-500">Background activity engine — auto-generated WIP entries from emails, docs, calendar and tasks</p>
+          <h1 className="text-2xl font-bold text-gray-900">Time Capture</h1>
+          <p className="text-sm text-gray-500">Live timer + passive background activity engine — WIP entries for billing</p>
         </div>
         <Button size="sm"><Plus className="h-4 w-4" /> Manual Entry</Button>
+      </div>
+
+      {/* Live Timer Widget */}
+      <div className={`rounded-2xl border-2 p-5 ${timerRunning ? 'border-green-400 bg-green-50' : 'border-gray-200 bg-white'}`}>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <Timer className={`h-6 w-6 ${timerRunning ? 'text-green-600 animate-pulse' : 'text-gray-400'}`} />
+            <div>
+              <p className="text-3xl font-bold font-mono text-gray-900">{fmtTimer(timerSeconds)}</p>
+              <p className="text-xs text-gray-500">{timerRunning ? 'Timer running — stop to save as WIP entry' : 'Click Start to begin timing a task'}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input type="text" value={timerDesc} onChange={(e) => setTimerDesc(e.target.value)} placeholder="What are you working on?" disabled={timerRunning} className="form-input h-9 w-56" />
+            {!timerRunning ? (
+              <Button size="sm" onClick={startTimer} disabled={!timerDesc.trim()} className="bg-green-600 hover:bg-green-700">
+                <Play className="h-4 w-4" /> Start
+              </Button>
+            ) : (
+              <Button size="sm" variant="danger" onClick={stopTimer}>
+                <Square className="h-4 w-4" /> Stop & Save
+              </Button>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Summary cards */}

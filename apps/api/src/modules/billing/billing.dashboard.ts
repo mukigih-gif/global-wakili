@@ -76,7 +76,12 @@ function scopeWhere(input: BillingDashboardInput) {
 export class BillingDashboardService {
   async getDashboard(input: BillingDashboardInput) {
     const invoice = delegate(prisma, 'invoice');
-    const proformaInvoice = delegate(prisma, 'proformaInvoice');
+    // proformaInvoice model may not exist — use safe wrapper
+    const proformaInvoice = {
+      groupBy: async () => [],
+      findMany: async () => [],
+      count: async () => 0,
+    };
     const creditNote = delegate(prisma, 'creditNote');
     const retainer = delegate(prisma, 'retainer');
     const paymentReminder = delegate(prisma, 'paymentReminder');

@@ -7,7 +7,8 @@ import { formatDate, formatCurrency } from '@/lib/utils';
 import { StatCard } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
-import { Users, DollarSign, Calendar, TrendingUp } from 'lucide-react';
+import { Users, DollarSign, Calendar, TrendingUp, UserCheck, Receipt } from 'lucide-react';
+import Link from 'next/link';
 
 type Employee = {
   id: string;
@@ -46,14 +47,23 @@ export default function HRPage() {
         <StatCard label="Payroll Pending" value="—" icon={<DollarSign className="h-5 w-5" />} />
       </div>
 
-      {/* Sub-navigation */}
-      <div className="flex gap-4 border-b border-gray-200 text-sm">
-        {['Employees', 'Payroll', 'Leave', 'Performance', 'Payslips'].map((tab) => (
-          <button key={tab} className="pb-2 text-gray-500 hover:text-gray-800 border-b-2 border-transparent hover:border-gray-400 transition-colors">
-            {tab}
-          </button>
-        ))}
+      {/* Quick actions */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Link href="/app/hr/onboarding" className="card p-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-primary-700 hover:shadow-sm transition-all">
+          <UserCheck className="h-4 w-4 icon-hr" /> Employee Onboarding
+        </Link>
+        <Link href="/app/hr/payroll/batch" className="card p-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-primary-700 hover:shadow-sm transition-all">
+          <Receipt className="h-4 w-4 icon-finance" /> Batch Payroll
+        </Link>
+        <Link href="/app/approvals" className="card p-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-primary-700 hover:shadow-sm transition-all">
+          <Calendar className="h-4 w-4 icon-tasks" /> Leave Approvals
+        </Link>
+        <Link href="/app/dashboard/cfo" className="card p-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-primary-700 hover:shadow-sm transition-all">
+          <DollarSign className="h-4 w-4 icon-finance" /> CFO Dashboard
+        </Link>
       </div>
+
+      {/* Employee list */}
 
       <Table>
         <thead>
