@@ -140,4 +140,107 @@ router.use((req: Request, res: Response) => {
   });
 });
 
+// ── Frontend-compatible aliases ────────────────────────────────────────────────
+// The frontend uses /procurement/requests, /orders, /bills, /vendors
+
+router.get('/requests', requirePermissions(PERMISSIONS.procurement.viewBill), async (req: Request, res: Response) => {
+  try {
+    const { status, search, limit = '50' } = req.query as Record<string, string>;
+    const rfqs = await req.db.requestForQuotation.findMany({
+      where: {
+        tenantId: req.tenantId,
+        ...(status ? { status: status as any } : {}),
+        ...(search ? { title: { contains: search, mode: 'insensitive' as any } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(parseInt(limit) || 50, 200),
+    });
+    const shaped = rfqs.map((r: any) => ({
+      ...r,
+      prNumber: r.rfqNumber ?? `RFQ-${r.id.slice(-6).toUpperCase()}`,
+      title: r.title ?? r.description ?? 'Purchase Request',
+      requestedBy: null,
+      estimatedAmount: parseFloat(String(r.estimatedAmount ?? r.budget ?? 0)),
+      currency: r.currency ?? 'KES',
+      priority: r.priority ?? 'NORMAL',
+    }));
+    res.json({ success: true, data: shaped });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+router.post('/requests/approve', requirePermissions(PERMISSIONS.procurement.approveBill), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.body;
+    await req.db.requestForQuotation.updateMany({ where: { tenantId: req.tenantId, id }, data: { status: 'AWARDED' as any } });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+router.post('/requests/reject', requirePermissions(PERMISSIONS.procurement.rejectBill), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.body;
+    await req.db.requestForQuotation.updateMany({ where: { tenantId: req.tenantId, id }, data: { status: 'CANCELLED' as any } });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+router.get('/orders', requirePermissions(PERMISSIONS.procurement.viewBill), async (req: Request, res: Response) => {
+  try {
+    const { status, limit = '50' } = req.query as Record<string, string>;
+    const orders = await req.db.purchaseOrder.findMany({
+      where: { tenantId: req.tenantId, ...(status ? { status: status as any } : {}) },
+      include: { supplier: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(parseInt(limit) || 50, 200),
+    });
+    const shaped = orders.map((o: any) => ({
+      ...o,
+      poNumber: o.poNumber ?? `PO-${o.id.slice(-6).toUpperCase()}`,
+      vendor: o.supplier,
+      totalAmount: parseFloat(String(o.totalAmount ?? o.total ?? 0)),
+    }));
+    res.json({ success: true, data: shaped });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+router.get('/bills', requirePermissions(PERMISSIONS.procurement.viewBill), async (req: Request, res: Response) => {
+  try {
+    const { status, limit = '50' } = req.query as Record<string, string>;
+    const bills = await req.db.vendorBill.findMany({
+      where: { tenantId: req.tenantId, ...(status ? { status: status as any } : {}) },
+      include: { supplier: { select: { id: true, name: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(parseInt(limit) || 50, 200),
+    });
+    const shaped = bills.map((b: any) => ({
+      ...b,
+      billNumber: b.billNumber ?? `BILL-${b.id.slice(-6).toUpperCase()}`,
+      vendor: b.supplier,
+      amount: parseFloat(String(b.total ?? 0)),
+    }));
+    res.json({ success: true, data: shaped });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+router.post('/bills/:billId/approve', requirePermissions(PERMISSIONS.procurement.approveBill), async (req: Request, res: Response) => {
+  try {
+    await req.db.vendorBill.updateMany({ where: { tenantId: req.tenantId, id: req.params.billId }, data: { status: 'APPROVED' as any } });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+router.post('/bills/:billId/reject', requirePermissions(PERMISSIONS.procurement.rejectBill), async (req: Request, res: Response) => {
+  try {
+    await req.db.vendorBill.updateMany({ where: { tenantId: req.tenantId, id: req.params.billId }, data: { status: 'REJECTED' as any } });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+router.post('/bills/:billId/pay', requirePermissions(PERMISSIONS.procurement.payBill), async (req: Request, res: Response) => {
+  try {
+    await req.db.vendorBill.updateMany({ where: { tenantId: req.tenantId, id: req.params.billId }, data: { status: 'PAID' as any, paidAt: new Date() } });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 export default router;

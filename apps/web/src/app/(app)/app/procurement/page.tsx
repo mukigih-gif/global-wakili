@@ -83,6 +83,26 @@ export default function ProcurementPage() {
   const [loading, setLoading]       = useState(false);
   const [query, setQuery]           = useState('');
   const [statusFilter, setStatus]   = useState('');
+  const [actioning, setActioning]   = useState<string | null>(null);
+
+  const actOnRequest = async (id: string, action: 'approve' | 'reject') => {
+    setActioning(id + action);
+    try {
+      await api.post(`/procurement/requests/${action}`, { id });
+      setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: action === 'approve' ? 'AWARDED' : 'CANCELLED' } : r));
+    } catch { /* reload */ }
+    finally { setActioning(null); }
+  };
+
+  const actOnBill = async (id: string, action: 'approve' | 'reject' | 'pay') => {
+    setActioning(id + action);
+    try {
+      await api.post(`/procurement/bills/${id}/${action}`, {});
+      const statusMap: Record<string, string> = { approve: 'APPROVED', reject: 'REJECTED', pay: 'PAID' };
+      setBills((prev) => prev.map((b) => b.id === id ? { ...b, status: statusMap[action] } : b));
+    } catch { /* reload */ }
+    finally { setActioning(null); }
+  };
 
   useEffect(() => {
     if (tab === 'dashboard') {
@@ -123,7 +143,7 @@ export default function ProcurementPage() {
     }
   }, [tab, query, statusFilter]);
 
-  const pendingRequests  = requests.filter((r) => r.status === 'PENDING_APPROVAL').length;
+  const pendingRequests  = requests.filter((r) => r.status === 'OPEN').length;
   const totalSpend       = bills.filter((b) => b.status === 'PAID').reduce((s, b) => s + b.amount, 0);
   const overdueCount     = bills.filter((b) => b.status === 'OVERDUE').length;
 
@@ -244,10 +264,10 @@ export default function ProcurementPage() {
           </div>
           <select value={statusFilter} onChange={(e) => setStatus(e.target.value)} className="form-select w-40">
             <option value="">All Statuses</option>
-            {tab === 'requests'  && <><option value="DRAFT">Draft</option><option value="PENDING_APPROVAL">Pending</option><option value="APPROVED">Approved</option><option value="REJECTED">Rejected</option><option value="ORDERED">Ordered</option></>}
+            {tab === 'requests'  && <><option value="OPEN">Open</option><option value="AWARDED">Awarded</option><option value="CLOSED">Closed</option><option value="CANCELLED">Cancelled</option></>}
             {tab === 'orders'    && <><option value="DRAFT">Draft</option><option value="ISSUED">Issued</option><option value="DELIVERED">Delivered</option><option value="CANCELLED">Cancelled</option></>}
             {tab === 'vendors'   && <><option value="ACTIVE">Active</option><option value="INACTIVE">Inactive</option><option value="BLACKLISTED">Blacklisted</option></>}
-            {tab === 'bills'     && <><option value="PENDING">Pending</option><option value="APPROVED">Approved</option><option value="PAID">Paid</option><option value="OVERDUE">Overdue</option><option value="REJECTED">Rejected</option></>}
+            {tab === 'bills'     && <><option value="SUBMITTED">Submitted</option><option value="APPROVED">Approved</option><option value="PAID">Paid</option><option value="PARTIALLY_PAID">Partially Paid</option><option value="REJECTED">Rejected</option></>}
           </select>
         </div>
       )}
@@ -272,10 +292,14 @@ export default function ProcurementPage() {
                  <Td><StatusBadge status={r.status} /></Td>
                  <Td className="text-xs text-gray-500">{formatDate(r.createdAt)}</Td>
                  <Td>
-                   {r.status === 'PENDING_APPROVAL' && (
+                   {r.status === 'OPEN' && (
                      <div className="flex gap-2">
-                       <button className="text-xs text-green-600 hover:underline flex items-center gap-0.5"><CheckCircle className="h-3 w-3" /> Approve</button>
-                       <button className="text-xs text-red-500 hover:underline">Reject</button>
+                       <button disabled={!!actioning} onClick={() => actOnRequest(r.id, 'approve')} className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-40 flex items-center gap-0.5">
+                         <CheckCircle className="h-3 w-3" /> {actioning === r.id + 'approve' ? '…' : 'Approve'}
+                       </button>
+                       <button disabled={!!actioning} onClick={() => actOnRequest(r.id, 'reject')} className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-40">
+                         {actioning === r.id + 'reject' ? '…' : 'Reject'}
+                       </button>
                      </div>
                    )}
                  </Td>
@@ -353,11 +377,19 @@ export default function ProcurementPage() {
                  </Td>
                  <Td className="text-xs text-gray-500">{formatDate(b.createdAt)}</Td>
                  <Td>
-                   {b.status === 'APPROVED' && <button className="text-xs text-green-600 hover:underline">Pay</button>}
-                   {b.status === 'PENDING' && (
+                   {b.status === 'APPROVED' && (
+                     <button disabled={!!actioning} onClick={() => actOnBill(b.id, 'pay')} className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-40">
+                       {actioning === b.id + 'pay' ? '…' : 'Pay'}
+                     </button>
+                   )}
+                   {b.status === 'SUBMITTED' && (
                      <div className="flex gap-2">
-                       <button className="text-xs text-green-600 hover:underline">Approve</button>
-                       <button className="text-xs text-red-500 hover:underline">Reject</button>
+                       <button disabled={!!actioning} onClick={() => actOnBill(b.id, 'approve')} className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-40">
+                         {actioning === b.id + 'approve' ? '…' : 'Approve'}
+                       </button>
+                       <button disabled={!!actioning} onClick={() => actOnBill(b.id, 'reject')} className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-40">
+                         {actioning === b.id + 'reject' ? '…' : 'Reject'}
+                       </button>
                      </div>
                    )}
                  </Td>

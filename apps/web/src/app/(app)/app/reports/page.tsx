@@ -91,12 +91,29 @@ export default function ReportsPage() {
   const runReport = async (key: string, name: string) => {
     setRunning(key);
     try {
-      const run = await api.post<ReportRun>('/reporting/runs', { reportKey: key });
+      const run = await api.post<ReportRun>('/reporting/runs', { reportKey: key, reportName: name });
       setRuns((prev) => [run, ...prev]);
+      setTab('runs');
     } catch {
-      // silent — user sees no change
+      /* silent */
     } finally {
       setRunning(null);
+    }
+  };
+
+  const downloadReport = async (key: string) => {
+    // Map report keys to finance export endpoints where available
+    const EXPORT_ENDPOINTS: Record<string, string> = {
+      trial_balance:        '/finance/export?reportType=trial-balance&format=csv',
+      billing_summary:      '/billing/invoices?limit=500',
+      trust_reconciliation: '/trust/overview',
+    };
+    const ep = EXPORT_ENDPOINTS[key];
+    if (ep) {
+      window.open(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1'}${ep}`, '_blank');
+    } else {
+      // Fall back to run + switch to runs tab
+      runReport(key, key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()));
     }
   };
 
@@ -155,7 +172,7 @@ export default function ReportsPage() {
                       >
                         <Play className="h-3 w-3" /> Run
                       </Button>
-                      <Button size="sm" variant="ghost" title="Download last run">
+                      <Button size="sm" variant="ghost" title="Download / Export" onClick={() => downloadReport(r.key)}>
                         <Download className="h-3.5 w-3.5" />
                       </Button>
                     </div>
