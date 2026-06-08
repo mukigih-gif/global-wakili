@@ -54,7 +54,7 @@ const PROGRESS_STAGES = [
   { value: 'CLOSING', label: 'Closing' },
 ];
 
-type Tab = 'overview' | 'invoices' | 'disbursements' | 'expenses' | 'tasks' | 'hearings' | 'calendar' | 'documents';
+type Tab = 'overview' | 'invoices' | 'disbursements' | 'expenses' | 'time' | 'tasks' | 'hearings' | 'calendar' | 'documents';
 
 export function MatterDetailClient({ id }: { id: string }) {
   const [matter, setMatter] = useState<Matter | null>(null);
@@ -63,6 +63,7 @@ export function MatterDetailClient({ id }: { id: string }) {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const [showRaiseInvoice, setShowRaiseInvoice] = useState(false);
   const [editForm, setEditForm] = useState({
     status: '', progressPercent: 0, progressStage: '', description: '',
   });
@@ -164,6 +165,9 @@ export function MatterDetailClient({ id }: { id: string }) {
           </div>
         </div>
         <div className="flex gap-2 flex-shrink-0">
+          <Button size="sm" variant="secondary" onClick={() => setShowRaiseInvoice(true)}>
+            <FileText className="h-3.5 w-3.5" /> Raise Invoice
+          </Button>
           {!editing ? (
             <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
               <Edit2 className="h-3.5 w-3.5" /> Edit
@@ -183,6 +187,15 @@ export function MatterDetailClient({ id }: { id: string }) {
 
       {error && (
         <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+
+      {showRaiseInvoice && (
+        <RaiseInvoiceModal
+          matterId={id}
+          currency={matter.currency}
+          onClose={() => setShowRaiseInvoice(false)}
+          onCreated={() => { setShowRaiseInvoice(false); setTab('invoices'); loadMatter(); }}
+        />
       )}
 
       {/* Progress Bar */}
@@ -302,6 +315,7 @@ export function MatterDetailClient({ id }: { id: string }) {
           { key: 'invoices',      label: `Invoices${matter.invoiceCount ? ` (${matter.invoiceCount})` : ''}`,               icon: <FileText className="h-3.5 w-3.5" /> },
           { key: 'disbursements', label: 'Disbursements',                                                                   icon: <DollarSign className="h-3.5 w-3.5" /> },
           { key: 'expenses',      label: `Expenses${matter.expenseCount ? ` (${matter.expenseCount})` : ''}`,               icon: <Clock className="h-3.5 w-3.5" /> },
+          { key: 'time',          label: 'Time',                                                                              icon: <Clock className="h-3.5 w-3.5" /> },
           { key: 'tasks',         label: `Tasks${matter.taskCount ? ` (${matter.taskCount})` : ''}`,                        icon: <CheckCircle className="h-3.5 w-3.5" /> },
           { key: 'hearings',   label: `Court${matter.courtHearingCount ? ` (${matter.courtHearingCount})` : ''}`, icon: <Scale className="h-3.5 w-3.5" /> },
           { key: 'calendar',   label: 'Calendar',                                                                    icon: <CalendarDays className="h-3.5 w-3.5" /> },
@@ -320,6 +334,7 @@ export function MatterDetailClient({ id }: { id: string }) {
       {tab === 'invoices'      && <MatterInvoicesTab matterId={id} />}
       {tab === 'disbursements' && <MatterDisbursementsTab matterId={id} />}
       {tab === 'expenses'      && <MatterExpensesTab matterId={id} currency={matter.currency} />}
+      {tab === 'time'          && <MatterTimeTab matterId={id} currency={matter.currency} />}
       {tab === 'tasks'         && <MatterTasksTab matterId={id} />}
       {tab === 'hearings'      && <MatterHearingsTab matterId={id} />}
       {tab === 'calendar'      && <MatterCalendarTab matterId={id} matterTitle={matter.title} />}
@@ -942,6 +957,216 @@ function MatterDocumentsTab({ matterId }: { matterId: string }) {
            ))}
         </tbody>
       </Table>
+    </div>
+  );
+}
+
+// ─── Time Entries tab ─────────────────────────────────────────────────────────
+
+function MatterTimeTab({ matterId, currency }: { matterId: string; currency: string }) {
+  const [entries, setEntries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get<{ data: any[] }>(`/matters/${matterId}/time-entries`)
+      .then((r) => setEntries(r.data ?? []))
+      .catch(() => setEntries([]))
+      .finally(() => setLoading(false));
+  }, [matterId]);
+
+  const unbilled = entries.filter((e) => !e.isInvoiced);
+  const billed   = entries.filter((e) =>  e.isInvoiced);
+  const totalUnbilled = unbilled.reduce((s, e) => s + parseFloat(String(e.billableAmount ?? 0)), 0);
+  const totalBilled   = billed.reduce((s, e)   => s + parseFloat(String(e.billableAmount ?? 0)), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-2">
+          <p className="text-xs text-amber-600">Unbilled Time</p>
+          <p className="text-lg font-bold text-amber-800">{formatCurrency(totalUnbilled, currency)}</p>
+          <p className="text-xs text-amber-500">{unbilled.length} entries</p>
+        </div>
+        <div className="rounded-xl border border-green-100 bg-green-50 px-4 py-2">
+          <p className="text-xs text-green-600">Billed Time</p>
+          <p className="text-lg font-bold text-green-800">{formatCurrency(totalBilled, currency)}</p>
+          <p className="text-xs text-green-500">{billed.length} entries</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white px-4 py-2">
+          <p className="text-xs text-gray-500">Total Time Value</p>
+          <p className="text-lg font-bold text-gray-900">{formatCurrency(totalUnbilled + totalBilled, currency)}</p>
+        </div>
+      </div>
+      <Table>
+        <thead><tr><Th>Date</Th><Th>Description</Th><Th>Advocate</Th><Th>Hours</Th><Th>Rate</Th><Th>Amount</Th><Th>Status</Th></tr></thead>
+        <tbody>
+          {loading ? <LoadingRow colSpan={7} /> :
+           !entries.length ? <EmptyRow colSpan={7} message="No time entries for this matter. Record time via Time Capture." /> :
+           entries.map((e) => {
+             const hrs = parseFloat(String(e.durationHours ?? 0)) + parseFloat(String(e.durationMinutes ?? 0)) / 60;
+             return (
+               <tr key={e.id}>
+                 <Td className="text-xs text-gray-500">{formatDate(e.entryDate ?? e.createdAt)}</Td>
+                 <Td className="text-sm text-gray-900">{e.description ?? '—'}</Td>
+                 <Td className="text-xs text-gray-500">{e.advocate?.name ?? '—'}</Td>
+                 <Td className="text-xs text-gray-600">{hrs.toFixed(2)}h</Td>
+                 <Td className="text-xs text-gray-600">{formatCurrency(e.appliedRate ?? 0, currency)}/hr</Td>
+                 <Td className="font-medium text-gray-900">{formatCurrency(e.billableAmount ?? 0, currency)}</Td>
+                 <Td>{e.isInvoiced ? <span className="badge-green text-xs">Billed</span> : <span className="badge-yellow text-xs">Unbilled</span>}</Td>
+               </tr>
+             );
+           })}
+        </tbody>
+      </Table>
+    </div>
+  );
+}
+
+// ─── Raise Invoice Modal ──────────────────────────────────────────────────────
+
+function RaiseInvoiceModal({
+  matterId, currency, onClose, onCreated,
+}: { matterId: string; currency: string; onClose: () => void; onCreated: () => void }) {
+  const [timeEntries, setTimeEntries] = useState<any[]>([]);
+  const [expenses, setExpenses]       = useState<any[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [selectedTime, setSelectedTime] = useState<Set<string>>(new Set());
+  const [selectedExp,  setSelectedExp]  = useState<Set<string>>(new Set());
+  const [dueDate, setDueDate] = useState('');
+  const [notes,   setNotes]   = useState('');
+  const [saving,  setSaving]  = useState(false);
+  const [error,   setError]   = useState('');
+
+  useEffect(() => {
+    Promise.all([
+      api.get<{ data: any[] }>(`/matters/${matterId}/time-entries`).then((r) => r.data ?? []),
+      api.get<{ data: any[] }>(`/matters/${matterId}/expenses`).then((r) => r.data ?? []),
+    ]).then(([te, exp]) => {
+      const unbilledTime = te.filter((e: any) => !e.isInvoiced && e.isBillable !== false);
+      const unbilledExp  = exp.filter((e: any) => !e.isInvoiced);
+      setTimeEntries(unbilledTime);
+      setExpenses(unbilledExp);
+      setSelectedTime(new Set(unbilledTime.map((e: any) => e.id)));
+      setSelectedExp(new Set(unbilledExp.map((e: any) => e.id)));
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [matterId]);
+
+  const toggleTime = (id: string) => setSelectedTime((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleExp  = (id: string) => setSelectedExp((s)  => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+
+  const selTime = timeEntries.filter((e) => selectedTime.has(e.id));
+  const selExp  = expenses.filter((e) => selectedExp.has(e.id));
+  const timeTotal  = selTime.reduce((s, e) => s + parseFloat(String(e.billableAmount ?? 0)), 0);
+  const expTotal   = selExp.reduce((s, e)  => s + parseFloat(String(e.amount ?? 0)), 0);
+  const grandTotal = timeTotal + expTotal;
+
+  const handleCreate = async () => {
+    if (!selectedTime.size && !selectedExp.size) { setError('Select at least one item to bill'); return; }
+    setSaving(true); setError('');
+    try {
+      await api.post(`/matters/${matterId}/raise-invoice`, {
+        timeEntryIds: [...selectedTime],
+        expenseIds:   [...selectedExp],
+        dueDate: dueDate || undefined,
+        notes:   notes   || undefined,
+      });
+      onCreated();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to create invoice');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+          <div>
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary-600" /> Raise Invoice
+            </h2>
+            <p className="text-xs text-gray-500 mt-0.5">All unbilled items pre-selected. Uncheck to exclude.</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+          {loading ? (
+            <p className="text-center text-sm text-gray-400 py-8">Loading billable items…</p>
+          ) : (
+            <>
+              {error && <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                    <Clock className="h-3.5 w-3.5 text-primary-500" /> Unbilled Time ({timeEntries.length})
+                  </h3>
+                  <span className="text-xs font-medium text-gray-600">{formatCurrency(timeTotal, currency)}</span>
+                </div>
+                {!timeEntries.length ? <p className="text-xs text-gray-400 italic px-1">No unbilled time entries</p>
+                 : timeEntries.map((e) => {
+                   const hrs = parseFloat(String(e.durationHours ?? 0)) + parseFloat(String(e.durationMinutes ?? 0)) / 60;
+                   return (
+                     <label key={e.id} className={`flex items-start gap-3 p-3 rounded-lg border mb-1.5 cursor-pointer ${selectedTime.has(e.id) ? 'border-primary-200 bg-primary-50/40' : 'border-gray-100 bg-gray-50'}`}>
+                       <input type="checkbox" checked={selectedTime.has(e.id)} onChange={() => toggleTime(e.id)} className="mt-0.5 accent-primary-600" />
+                       <div className="flex-1 min-w-0">
+                         <p className="text-sm text-gray-900 truncate">{e.description ?? 'Time Entry'}</p>
+                         <p className="text-xs text-gray-500">{formatDate(e.entryDate)} · {hrs.toFixed(2)}h · {e.advocate?.name ?? '—'}</p>
+                       </div>
+                       <span className="text-sm font-medium whitespace-nowrap">{formatCurrency(e.billableAmount ?? 0, currency)}</span>
+                     </label>
+                   );
+                })}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+                    <DollarSign className="h-3.5 w-3.5 text-amber-500" /> Unbilled Expenses ({expenses.length})
+                  </h3>
+                  <span className="text-xs font-medium text-gray-600">{formatCurrency(expTotal, currency)}</span>
+                </div>
+                {!expenses.length ? <p className="text-xs text-gray-400 italic px-1">No unbilled expenses</p>
+                 : expenses.map((e) => (
+                   <label key={e.id} className={`flex items-start gap-3 p-3 rounded-lg border mb-1.5 cursor-pointer ${selectedExp.has(e.id) ? 'border-amber-200 bg-amber-50/40' : 'border-gray-100 bg-gray-50'}`}>
+                     <input type="checkbox" checked={selectedExp.has(e.id)} onChange={() => toggleExp(e.id)} className="mt-0.5 accent-amber-600" />
+                     <div className="flex-1 min-w-0">
+                       <p className="text-sm text-gray-900 truncate">{e.description ?? 'Expense'}</p>
+                       <p className="text-xs text-gray-500">{formatDate(e.expenseDate ?? e.createdAt)} · {e.user?.name ?? '—'}</p>
+                     </div>
+                     <span className="text-sm font-medium whitespace-nowrap">{formatCurrency(e.amount ?? 0, e.currency ?? currency)}</span>
+                   </label>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pt-3 border-t border-gray-100">
+                <div>
+                  <label className="form-label">Due Date</label>
+                  <input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="form-input w-full" />
+                </div>
+                <div className="col-span-2">
+                  <label className="form-label">Notes</label>
+                  <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className="form-input w-full resize-none" placeholder="Optional invoice notes…" />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50 rounded-b-2xl">
+          <div>
+            <p className="text-xs text-gray-500">Invoice total</p>
+            <p className="text-xl font-bold text-gray-900">{formatCurrency(grandTotal, currency)}</p>
+            <p className="text-xs text-gray-400">{selectedTime.size} time · {selectedExp.size} expense items</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="ghost" onClick={onClose}>Cancel</Button>
+            <Button loading={saving} disabled={!selectedTime.size && !selectedExp.size} onClick={handleCreate}>
+              <FileText className="h-4 w-4" /> Create Invoice
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
