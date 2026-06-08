@@ -87,6 +87,110 @@ import type { Request, Response } from 'express';
 import { requirePermissions } from '../middleware/rbac';
 import { PERMISSIONS } from '../config/permissions';
 
+// ── Users (listing for dropdowns + self-update) ──────────────────────────────
+
+router.get('/users', async (req: Request, res: Response) => {
+  try {
+    const limit = Math.min(parseInt(String(req.query.limit ?? 100)) || 100, 200);
+    const users = await req.db.user.findMany({
+      where: { tenantId: req.tenantId, deletedAt: null },
+      select: { id: true, name: true, email: true, tenantRole: true, systemRole: true, status: true },
+      orderBy: { name: 'asc' },
+      take: limit,
+    });
+    res.json({ success: true, data: users.map((u) => ({ ...u, role: u.tenantRole ?? u.systemRole })) });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+router.patch('/users/me', async (req: Request, res: Response) => {
+  try {
+    const { name, phone } = req.body;
+    const userId = req.user?.sub;
+    if (!userId) { res.status(401).json({ error: 'Not authenticated' }); return; }
+    const updated = await req.db.user.update({
+      where: { id: userId },
+      data: {
+        ...(name  ? { name:  name.trim()  } : {}),
+        ...(phone ? { phone: phone.trim() } : {}),
+      },
+      select: { id: true, name: true, email: true, phone: true },
+    });
+    res.json({ success: true, data: updated });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// ── Time Capture / WIP Entries ────────────────────────────────────────────────
+
+router.get('/time-capture/wip', requirePermissions(PERMISSIONS.matter.createTimeEntry), async (req: Request, res: Response) => {
+  try {
+    const { status, source, limit = '30', skip = '0' } = req.query as Record<string, string>;
+    const events = await req.db.passiveCaptureEvent.findMany({
+      where: {
+        tenantId: req.tenantId,
+        userId:   req.user?.sub,
+        ...(status ? { status: status === 'PENDING_APPROVAL' ? 'PENDING_REVIEW' : status } : {}),
+        ...(source ? { activityType: source } : {}),
+      },
+      include: {
+        matter: { select: { id: true, title: true, matterCode: true } },
+        user:   { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(parseInt(limit) || 30, 100),
+      skip: parseInt(skip) || 0,
+    });
+    const shaped = events.map((e: any) => ({
+      ...e,
+      description: e.suggestedDescription ?? e.activityType,
+      source:      e.activityType,
+      status:      e.status === 'PENDING_REVIEW' ? 'PENDING_APPROVAL' : e.status,
+      capturedAt:  e.activityAt,
+      approvedBy:  null,
+    }));
+    res.json({ success: true, data: shaped });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+router.post('/time-capture/wip', requirePermissions(PERMISSIONS.matter.createTimeEntry), async (req: Request, res: Response) => {
+  try {
+    const { source = 'MANUAL', description, durationMinutes, matterId } = req.body;
+    const event = await req.db.passiveCaptureEvent.create({
+      data: {
+        tenantId:            req.tenantId!,
+        userId:              req.user?.sub!,
+        matterId:            matterId || null,
+        activityType:        source,
+        activitySource:      `manual:${Date.now()}`,
+        activityAt:          new Date(),
+        durationMinutes:     parseInt(durationMinutes) || 0,
+        suggestedDescription: description,
+        status:              'PENDING_REVIEW',
+      },
+    });
+    res.status(201).json({ success: true, data: event });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+router.patch('/time-capture/wip/:id/approve', requirePermissions(PERMISSIONS.matter.approveTimeEntry), async (req: Request, res: Response) => {
+  try {
+    await req.db.passiveCaptureEvent.updateMany({
+      where: { tenantId: req.tenantId, id: req.params.id, status: 'PENDING_REVIEW' },
+      data:  { status: 'APPROVED' },
+    });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+router.patch('/time-capture/wip/:id/reject', requirePermissions(PERMISSIONS.matter.approveTimeEntry), async (req: Request, res: Response) => {
+  try {
+    await req.db.passiveCaptureEvent.updateMany({
+      where: { tenantId: req.tenantId, id: req.params.id, status: 'PENDING_REVIEW' },
+      data:  { status: 'DISCARDED' },
+    });
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 type LabelDefinition = { id: string; name: string; color: string; module: string };
 
 const LABEL_MODULES = ['TASK', 'MATTER', 'CLIENT', 'DOCUMENT', 'COURT'] as const;

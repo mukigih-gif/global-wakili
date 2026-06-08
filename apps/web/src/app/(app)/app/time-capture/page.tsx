@@ -41,8 +41,13 @@ export default function TimeCapturePage() {
   const [loading, setLoading]     = useState(true);
   const [status, setStatus]       = useState('');
   const [source, setSource]       = useState('');
+  const [actioning, setActioning] = useState<string | null>(null);
+  const [showManual, setShowManual] = useState(false);
+  const [manualForm, setManualForm] = useState({ description: '', durationMinutes: '', matterId: '' });
+  const [matters, setMatters]     = useState<{ id: string; title: string; matterCode: string }[]>([]);
+  const [manualSaving, setManualSaving] = useState(false);
 
-  useEffect(() => {
+  const loadEntries = () => {
     setLoading(true);
     const params = new URLSearchParams();
     if (status) params.set('status', status);
@@ -51,7 +56,40 @@ export default function TimeCapturePage() {
       .then((r) => setEntries(r.data ?? []))
       .catch(() => setEntries([]))
       .finally(() => setLoading(false));
-  }, [status, source]);
+  };
+
+  useEffect(() => { loadEntries(); }, [status, source]);
+  useEffect(() => {
+    api.get<{ data: { id: string; title: string; matterCode: string }[] }>('/matters?limit=100').then((r) => setMatters(r.data ?? [])).catch(() => {});
+  }, []);
+
+  const actOnEntry = async (id: string, action: 'approve' | 'reject') => {
+    setActioning(id + action);
+    try {
+      await api.patch(`/time-capture/wip/${id}/${action}`, {});
+      loadEntries();
+    } catch { loadEntries(); }
+    finally { setActioning(null); }
+  };
+
+  const submitManual = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!manualForm.description || !manualForm.durationMinutes) return;
+    setManualSaving(true);
+    try {
+      await api.post('/time-capture/wip', {
+        source: 'MANUAL',
+        description: manualForm.description,
+        durationMinutes: parseInt(manualForm.durationMinutes),
+        matterId: manualForm.matterId || null,
+        status: 'PENDING_APPROVAL',
+      });
+      setManualForm({ description: '', durationMinutes: '', matterId: '' });
+      setShowManual(false);
+      loadEntries();
+    } catch { /* ignore */ }
+    finally { setManualSaving(false); }
+  };
 
   const pendingCount   = entries.filter((e) => e.status === 'PENDING_APPROVAL').length;
   const totalMinutes   = entries.reduce((sum, e) => sum + (e.durationMinutes ?? 0), 0);
@@ -93,7 +131,7 @@ export default function TimeCapturePage() {
           <h1 className="text-2xl font-bold text-gray-900">Time Capture</h1>
           <p className="text-sm text-gray-500">Live timer + passive background activity engine — WIP entries for billing</p>
         </div>
-        <Button size="sm"><Plus className="h-4 w-4" /> Manual Entry</Button>
+        <Button size="sm" onClick={() => setShowManual(true)}><Plus className="h-4 w-4" /> Manual Entry</Button>
       </div>
 
       {/* Live Timer Widget */}
@@ -204,8 +242,16 @@ export default function TimeCapturePage() {
                  <Td>
                    {e.status === 'PENDING_APPROVAL' && (
                      <div className="flex gap-2">
-                       <button className="text-xs text-green-600 hover:underline">Approve</button>
-                       <button className="text-xs text-red-500 hover:underline">Reject</button>
+                       <button
+                         disabled={!!actioning}
+                         onClick={() => actOnEntry(e.id, 'approve')}
+                         className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-40"
+                       >{actioning === e.id + 'approve' ? '…' : 'Approve'}</button>
+                       <button
+                         disabled={!!actioning}
+                         onClick={() => actOnEntry(e.id, 'reject')}
+                         className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-40"
+                       >{actioning === e.id + 'reject' ? '…' : 'Reject'}</button>
                      </div>
                    )}
                  </Td>
@@ -214,6 +260,38 @@ export default function TimeCapturePage() {
           </tbody>
         </Table>
       </div>
+      {/* Manual Entry Modal */}
+      {showManual && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowManual(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2"><Clock className="h-5 w-5 text-primary-600" /> Manual Time Entry</h3>
+              <button onClick={() => setShowManual(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <form onSubmit={submitManual} className="space-y-3">
+              <div>
+                <label className="form-label">Description *</label>
+                <input required value={manualForm.description} onChange={(e) => setManualForm((f) => ({ ...f, description: e.target.value }))} className="form-input w-full" placeholder="e.g. Drafted sale agreement for matter" />
+              </div>
+              <div>
+                <label className="form-label">Duration (minutes) *</label>
+                <input required type="number" min="1" value={manualForm.durationMinutes} onChange={(e) => setManualForm((f) => ({ ...f, durationMinutes: e.target.value }))} className="form-input w-full" placeholder="e.g. 90" />
+              </div>
+              <div>
+                <label className="form-label">Link to Matter</label>
+                <select value={manualForm.matterId} onChange={(e) => setManualForm((f) => ({ ...f, matterId: e.target.value }))} className="form-select w-full">
+                  <option value="">None</option>
+                  {matters.map((m) => <option key={m.id} value={m.id}>{m.matterCode} — {m.title}</option>)}
+                </select>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button type="submit" loading={manualSaving}>Save Entry</Button>
+                <Button type="button" variant="secondary" onClick={() => setShowManual(false)}>Cancel</Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
