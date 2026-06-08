@@ -38,6 +38,12 @@ type LoginUserWithRelations = Prisma.UserGetPayload<{
         subscriptionStatus: true;
       };
     };
+    branch: {
+      select: {
+        id: true;
+        name: true;
+      };
+    };
   };
 }>;
 
@@ -59,6 +65,8 @@ type LoginIdentityResponse = {
     slug: string;
     name: string;
   } | null;
+  branchId: string | null;
+  branchName: string | null;
   systemRole: string;
   tenantRole: string;
   role: string | null;
@@ -214,6 +222,8 @@ function buildLoginIdentityResponse(
           name: user.tenant.name,
         }
       : null,
+    branchId: user.branchId ?? null,
+    branchName: user.branch?.name ?? null,
     systemRole: user.systemRole,
     tenantRole: user.tenantRole,
     role: roleClaims.role,
@@ -273,6 +283,12 @@ async function findLoginUserById(userId: string): Promise<LoginUserWithRelations
           slug: true,
           name: true,
           subscriptionStatus: true,
+        },
+      },
+      branch: {
+        select: {
+          id: true,
+          name: true,
         },
       },
     },

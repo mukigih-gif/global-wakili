@@ -12,6 +12,8 @@ type User = {
   tenantRole?: string;
   tenantId: string;
   tenantName?: string;
+  branchId?: string | null;
+  branchName?: string | null;
   isSuperAdmin: boolean;
 };
 

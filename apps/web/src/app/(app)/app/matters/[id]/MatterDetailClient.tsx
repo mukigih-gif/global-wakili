@@ -54,7 +54,7 @@ const PROGRESS_STAGES = [
   { value: 'CLOSING', label: 'Closing' },
 ];
 
-type Tab = 'overview' | 'invoices' | 'disbursements' | 'expenses' | 'tasks' | 'hearings' | 'calendar';
+type Tab = 'overview' | 'invoices' | 'disbursements' | 'expenses' | 'tasks' | 'hearings' | 'calendar' | 'documents';
 
 export function MatterDetailClient({ id }: { id: string }) {
   const [matter, setMatter] = useState<Matter | null>(null);
@@ -303,8 +303,9 @@ export function MatterDetailClient({ id }: { id: string }) {
           { key: 'disbursements', label: 'Disbursements',                                                                   icon: <DollarSign className="h-3.5 w-3.5" /> },
           { key: 'expenses',      label: `Expenses${matter.expenseCount ? ` (${matter.expenseCount})` : ''}`,               icon: <Clock className="h-3.5 w-3.5" /> },
           { key: 'tasks',         label: `Tasks${matter.taskCount ? ` (${matter.taskCount})` : ''}`,                        icon: <CheckCircle className="h-3.5 w-3.5" /> },
-          { key: 'hearings',  label: `Court${matter.courtHearingCount ? ` (${matter.courtHearingCount})` : ''}`, icon: <Scale className="h-3.5 w-3.5" /> },
-          { key: 'calendar',  label: 'Calendar',                                                                    icon: <CalendarDays className="h-3.5 w-3.5" /> },
+          { key: 'hearings',   label: `Court${matter.courtHearingCount ? ` (${matter.courtHearingCount})` : ''}`, icon: <Scale className="h-3.5 w-3.5" /> },
+          { key: 'calendar',   label: 'Calendar',                                                                    icon: <CalendarDays className="h-3.5 w-3.5" /> },
+          { key: 'documents',  label: 'Documents',                                                                   icon: <File className="h-3.5 w-3.5" /> },
         ] as const).map((t) => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
@@ -322,6 +323,7 @@ export function MatterDetailClient({ id }: { id: string }) {
       {tab === 'tasks'         && <MatterTasksTab matterId={id} />}
       {tab === 'hearings'      && <MatterHearingsTab matterId={id} />}
       {tab === 'calendar'      && <MatterCalendarTab matterId={id} matterTitle={matter.title} />}
+      {tab === 'documents'     && <MatterDocumentsTab matterId={id} />}
     </div>
   );
 }
@@ -897,5 +899,49 @@ function MatterHearingsTab({ matterId }: { matterId: string }) {
          ))}
       </tbody>
     </Table>
+  );
+}
+
+// ─── Documents ────────────────────────────────────────────────────────────────
+
+function MatterDocumentsTab({ matterId }: { matterId: string }) {
+  const [docs, setDocs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get<{ data: any[] }>(`/documents/matter/${matterId}?limit=50`)
+      .then((r) => setDocs(r.data ?? []))
+      .catch(() => setDocs([]))
+      .finally(() => setLoading(false));
+  }, [matterId]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-500">{docs.length} document{docs.length !== 1 ? 's' : ''} linked to this matter</p>
+        <Link href="/app/documents">
+          <Button size="sm" variant="secondary"><Plus className="h-3.5 w-3.5" /> Upload Document</Button>
+        </Link>
+      </div>
+      <Table>
+        <thead><tr><Th>Title</Th><Th>Type</Th><Th>Status</Th><Th>Version</Th><Th>Created</Th><Th></Th></tr></thead>
+        <tbody>
+          {loading ? <LoadingRow colSpan={6} /> :
+           !docs.length ? <EmptyRow colSpan={6} message="No documents linked to this matter" /> :
+           docs.map((d) => (
+             <tr key={d.id}>
+               <Td className="font-medium text-gray-900 text-sm">{d.title ?? d.name ?? 'Untitled'}</Td>
+               <Td className="text-xs text-gray-500">{d.contractType?.replace(/_/g, ' ') ?? d.type?.replace(/_/g, ' ') ?? '—'}</Td>
+               <Td><StatusBadge status={d.status ?? 'DRAFT'} /></Td>
+               <Td className="text-xs text-gray-500">{d.currentVersion ?? d.versionCount ?? '1'}</Td>
+               <Td className="text-xs text-gray-500">{formatDate(d.createdAt)}</Td>
+               <Td>
+                 <Link href={`/app/documents?id=${d.id}`} className="text-xs text-primary-600 hover:underline">View</Link>
+               </Td>
+             </tr>
+           ))}
+        </tbody>
+      </Table>
+    </div>
   );
 }

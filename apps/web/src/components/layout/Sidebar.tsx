@@ -121,11 +121,21 @@ export function Sidebar() {
         <Logo variant="full" size="sm" href="/app/dashboard" darkBg />
       </div>
 
-      {/* Tenant context */}
+      {/* Tenant + Branch context */}
       {!isSuperAdmin && user?.tenantName && (
-        <div className="border-b border-gray-100 px-4 py-2">
-          <p className="text-xs text-gray-500">Firm</p>
-          <p className="text-sm font-medium text-gray-800 truncate">{user.tenantName}</p>
+        <div className="border-b border-gray-100 px-4 py-2 space-y-1">
+          <div>
+            <p className="text-xs text-gray-500">Firm</p>
+            <p className="text-sm font-medium text-gray-800 truncate">{user.tenantName}</p>
+          </div>
+          {user?.branchName ? (
+            <div>
+              <p className="text-xs text-gray-500">Branch</p>
+              <p className="text-xs font-medium text-primary-700 truncate">{user.branchName}</p>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-400 italic">All Branches</p>
+          )}
         </div>
       )}
       {isSuperAdmin && (
