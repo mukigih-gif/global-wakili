@@ -624,7 +624,7 @@ router.get(
         orderBy: { createdAt: 'desc' },
         take: 50,
       }).catch(() => []);
-      res.json({ success: true, data: runs });
+      res.json({ data: runs });
     } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
   }
 );

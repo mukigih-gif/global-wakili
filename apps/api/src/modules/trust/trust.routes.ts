@@ -195,7 +195,7 @@ router.get(
         where: { tenantId: req.tenantId },
         orderBy: { createdAt: 'asc' },
       });
-      res.json({ success: true, data: accounts });
+      res.json({ data: accounts });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   }
 );

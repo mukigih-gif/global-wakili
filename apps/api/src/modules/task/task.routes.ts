@@ -188,7 +188,7 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const labels = await getTaskLabels(req.db, req.tenantId!, req.params.taskId);
-      res.json({ success: true, data: labels });
+      res.json({ data: labels });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   }
 );
@@ -200,7 +200,7 @@ router.patch(
     try {
       const labels: string[] = Array.isArray(req.body.labels) ? req.body.labels : [];
       await setTaskLabels(req.db, req.tenantId!, req.params.taskId, labels);
-      res.json({ success: true, data: labels });
+      res.json({ data: labels });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   }
 );

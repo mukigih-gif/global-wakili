@@ -146,7 +146,7 @@ router.get(
         take: Math.min(parseInt(limit) || 50, 200),
         skip: parseInt(skip) || 0,
       });
-      res.json({ success: true, data: filings });
+      res.json({ data: filings });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   }
 );
@@ -211,7 +211,7 @@ router.get(
         orderBy: { hearingDate: 'desc' },
         take: Math.min(parseInt(limit) || 50, 200),
       });
-      res.json({ success: true, data: hearings });
+      res.json({ data: hearings });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   }
 );
