@@ -1,6 +1,6 @@
 // apps/api/src/modules/procurement/procurement.routes.ts
 
-import { Router, type Request, type Response } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
 import { z } from 'zod';
 
 import { validate } from '../../middleware/validate';
@@ -143,7 +143,7 @@ router.use((req: Request, res: Response) => {
 // ── Frontend-compatible aliases ────────────────────────────────────────────────
 // The frontend uses /procurement/requests, /orders, /bills, /vendors
 
-router.get('/requests', requirePermissions(PERMISSIONS.procurement.viewBill), async (req: Request, res: Response) => {
+router.get('/requests', requirePermissions(PERMISSIONS.procurement.viewBill), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { status, search, limit = '50' } = req.query as Record<string, string>;
     const rfqs = await req.db.requestForQuotation.findMany({
@@ -165,26 +165,30 @@ router.get('/requests', requirePermissions(PERMISSIONS.procurement.viewBill), as
       priority: r.priority ?? 'NORMAL',
     }));
     res.json({ success: true, data: shaped });
-  } catch (e) { res.status(500).json({ error: String(e) }); }
+  } catch (e) { next(e); }
 });
 
-router.post('/requests/approve', requirePermissions(PERMISSIONS.procurement.approveBill), async (req: Request, res: Response) => {
+router.post('/requests/approve', requirePermissions(PERMISSIONS.procurement.approveBill), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.body;
-    await req.db.requestForQuotation.updateMany({ where: { tenantId: req.tenantId, id }, data: { status: 'AWARDED' as any } });
+    if (!id) return res.status(400).json({ error: 'Request id is required', code: 'PROCUREMENT_REQUEST_ID_REQUIRED', requestId: req.id });
+    const result = await req.db.requestForQuotation.updateMany({ where: { tenantId: req.tenantId, id }, data: { status: 'AWARDED' as any } });
+    if (result.count === 0) return res.status(404).json({ error: 'Purchase request not found', code: 'PROCUREMENT_REQUEST_NOT_FOUND', requestId: req.id });
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: String(e) }); }
+  } catch (e) { next(e); }
 });
 
-router.post('/requests/reject', requirePermissions(PERMISSIONS.procurement.rejectBill), async (req: Request, res: Response) => {
+router.post('/requests/reject', requirePermissions(PERMISSIONS.procurement.rejectBill), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.body;
-    await req.db.requestForQuotation.updateMany({ where: { tenantId: req.tenantId, id }, data: { status: 'CANCELLED' as any } });
+    if (!id) return res.status(400).json({ error: 'Request id is required', code: 'PROCUREMENT_REQUEST_ID_REQUIRED', requestId: req.id });
+    const result = await req.db.requestForQuotation.updateMany({ where: { tenantId: req.tenantId, id }, data: { status: 'CANCELLED' as any } });
+    if (result.count === 0) return res.status(404).json({ error: 'Purchase request not found', code: 'PROCUREMENT_REQUEST_NOT_FOUND', requestId: req.id });
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: String(e) }); }
+  } catch (e) { next(e); }
 });
 
-router.get('/orders', requirePermissions(PERMISSIONS.procurement.viewBill), async (req: Request, res: Response) => {
+router.get('/orders', requirePermissions(PERMISSIONS.procurement.viewBill), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { status, limit = '50' } = req.query as Record<string, string>;
     const orders = await req.db.purchaseOrder.findMany({
@@ -200,10 +204,10 @@ router.get('/orders', requirePermissions(PERMISSIONS.procurement.viewBill), asyn
       totalAmount: parseFloat(String(o.totalAmount ?? o.total ?? 0)),
     }));
     res.json({ success: true, data: shaped });
-  } catch (e) { res.status(500).json({ error: String(e) }); }
+  } catch (e) { next(e); }
 });
 
-router.get('/bills', requirePermissions(PERMISSIONS.procurement.viewBill), async (req: Request, res: Response) => {
+router.get('/bills', requirePermissions(PERMISSIONS.procurement.viewBill), async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { status, limit = '50' } = req.query as Record<string, string>;
     const bills = await req.db.vendorBill.findMany({
@@ -219,28 +223,31 @@ router.get('/bills', requirePermissions(PERMISSIONS.procurement.viewBill), async
       amount: parseFloat(String(b.total ?? 0)),
     }));
     res.json({ success: true, data: shaped });
-  } catch (e) { res.status(500).json({ error: String(e) }); }
+  } catch (e) { next(e); }
 });
 
-router.post('/bills/:billId/approve', requirePermissions(PERMISSIONS.procurement.approveBill), async (req: Request, res: Response) => {
+router.post('/bills/:billId/approve', requirePermissions(PERMISSIONS.procurement.approveBill), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    await req.db.vendorBill.updateMany({ where: { tenantId: req.tenantId, id: req.params.billId }, data: { status: 'APPROVED' as any } });
+    const result = await req.db.vendorBill.updateMany({ where: { tenantId: req.tenantId, id: req.params.billId }, data: { status: 'APPROVED' as any } });
+    if (result.count === 0) return res.status(404).json({ error: 'Vendor bill not found', code: 'PROCUREMENT_BILL_NOT_FOUND', requestId: req.id });
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: String(e) }); }
+  } catch (e) { next(e); }
 });
 
-router.post('/bills/:billId/reject', requirePermissions(PERMISSIONS.procurement.rejectBill), async (req: Request, res: Response) => {
+router.post('/bills/:billId/reject', requirePermissions(PERMISSIONS.procurement.rejectBill), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    await req.db.vendorBill.updateMany({ where: { tenantId: req.tenantId, id: req.params.billId }, data: { status: 'REJECTED' as any } });
+    const result = await req.db.vendorBill.updateMany({ where: { tenantId: req.tenantId, id: req.params.billId }, data: { status: 'REJECTED' as any } });
+    if (result.count === 0) return res.status(404).json({ error: 'Vendor bill not found', code: 'PROCUREMENT_BILL_NOT_FOUND', requestId: req.id });
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: String(e) }); }
+  } catch (e) { next(e); }
 });
 
-router.post('/bills/:billId/pay', requirePermissions(PERMISSIONS.procurement.payBill), async (req: Request, res: Response) => {
+router.post('/bills/:billId/pay', requirePermissions(PERMISSIONS.procurement.payBill), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    await req.db.vendorBill.updateMany({ where: { tenantId: req.tenantId, id: req.params.billId }, data: { status: 'PAID' as any, paidAt: new Date() } });
+    const result = await req.db.vendorBill.updateMany({ where: { tenantId: req.tenantId, id: req.params.billId }, data: { status: 'PAID' as any, paidAt: new Date() } });
+    if (result.count === 0) return res.status(404).json({ error: 'Vendor bill not found', code: 'PROCUREMENT_BILL_NOT_FOUND', requestId: req.id });
     res.json({ success: true });
-  } catch (e) { res.status(500).json({ error: String(e) }); }
+  } catch (e) { next(e); }
 });
 
 export default router;
