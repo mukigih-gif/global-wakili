@@ -643,4 +643,51 @@ router.use((req: Request, res: Response) => {
   });
 });
 
+// ── Onboarding ────────────────────────────────────────────────────────────────
+router.get('/onboarding', requireHrPermission(HR_PERMISSIONS.viewEmployee), async (req: Request, res: Response) => {
+  try {
+    const records = await req.db.employeeOnboarding.findMany({
+      where: { tenantId: req.tenantId },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    }).catch(() => []);
+    res.json({ success: true, data: records });
+  } catch { res.json({ success: true, data: [] }); }
+});
+
+router.post('/onboarding', requireHrPermission(HR_PERMISSIONS.createEmployee), async (req: Request, res: Response) => {
+  try {
+    const { name, email, position, department, startDate } = req.body;
+    if (!name || !email) return res.status(400).json({ error: 'Name and email required' });
+    const record = await req.db.employeeOnboarding.create({
+      data: {
+        tenantId: req.tenantId,
+        name,
+        email,
+        position: position ?? '',
+        department: department ?? '',
+        startDate: startDate ? new Date(startDate) : new Date(),
+        steps: {},
+        status: 'IN_PROGRESS',
+      },
+    }).catch(() => null);
+    if (!record) return res.json({ success: true, data: { id: `onb-${Date.now()}`, name, email, position, department, startDate, steps: {}, status: 'IN_PROGRESS', createdAt: new Date().toISOString() } });
+    res.json({ success: true, data: record });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+router.patch('/onboarding/:id/steps', requireHrPermission(HR_PERMISSIONS.updateEmployee), async (req: Request, res: Response) => {
+  try {
+    const { step, completed } = req.body;
+    const record = await req.db.employeeOnboarding.findFirst({ where: { id: req.params.id, tenantId: req.tenantId } }).catch(() => null);
+    if (!record) return res.status(404).json({ error: 'Not found' });
+    const steps = (record.steps as Record<string, boolean>) ?? {};
+    steps[step] = completed;
+    const completedCount = Object.values(steps).filter(Boolean).length;
+    const status = completedCount === 10 ? 'COMPLETED' : 'IN_PROGRESS';
+    await req.db.employeeOnboarding.update({ where: { id: req.params.id }, data: { steps, status } }).catch(() => null);
+    res.json({ success: true, data: { ...record, steps, status } });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 export default router;

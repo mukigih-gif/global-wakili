@@ -143,6 +143,7 @@ model Tenant {
   clientProspects              ClientProspect[]
   courtFilings                 CourtFiling[]
   matterUpdates                MatterUpdate[]
+  employeeOnboardings          EmployeeOnboarding[]
   tenderRecords                TenderRecord[]
   tenderActivities             TenderActivity[]
   tenderDocuments              TenderDocument[]
@@ -3263,6 +3264,25 @@ model JobTitle {
   @@unique([tenantId, code])
   @@index([tenantId])
   @@index([isActive])
+}
+
+model EmployeeOnboarding {
+  id         String   @id @default(cuid())
+  tenantId   String
+  name       String
+  email      String
+  position   String   @default("")
+  department String   @default("")
+  startDate  DateTime @default(now())
+  steps      Json     @default("{}")
+  status     String   @default("IN_PROGRESS")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([status])
 }
 
 model EmployeeProfile {
