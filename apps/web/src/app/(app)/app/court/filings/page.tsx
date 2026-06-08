@@ -1,7 +1,8 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { StatusBadge, Badge } from '@/components/ui/Badge';
@@ -47,17 +48,19 @@ const FILING_TYPE_LABELS: Record<string, string> = {
   OTHER: 'Other',
 };
 
-export default function CourtFilingsPage() {
+function CourtFilingsInner() {
+  const searchParams = useSearchParams();
+  const presetMatter = searchParams.get('matterId') ?? '';
   const [filings, setFilings]   = useState<CourtFiling[]>([]);
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [loading, setLoading]   = useState(true);
   const [status, setStatus]     = useState('');
   const [type, setType]         = useState('');
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(Boolean(presetMatter));
   const [saving, setSaving]     = useState(false);
   const [formError, setFormError] = useState('');
   const [matters, setMatters]   = useState<{ id: string; title: string; matterCode: string }[]>([]);
-  const [form, setForm] = useState({ title: '', filingType: 'PLEADING', matterId: '', dueDate: '', courtRef: '', notes: '' });
+  const [form, setForm] = useState({ title: '', filingType: 'PLEADING', matterId: presetMatter, dueDate: '', courtRef: '', notes: '' });
 
   useEffect(() => {
     api.get<any>('/court/filings/dashboard').then((r) => setDashboard(r?.data ?? r)).catch(() => null);
@@ -132,10 +135,11 @@ export default function CourtFilingsPage() {
             </div>
             <div>
               <label className="form-label">Matter *</label>
-              <select required value={form.matterId} onChange={(e) => setForm((f) => ({ ...f, matterId: e.target.value }))} className="form-select w-full">
+              <select required value={form.matterId} onChange={(e) => setForm((f) => ({ ...f, matterId: e.target.value }))} disabled={Boolean(presetMatter)} className="form-select w-full disabled:bg-gray-50 disabled:text-gray-500">
                 <option value="">Select matter…</option>
                 {matters.map((m) => <option key={m.id} value={m.id}>{m.matterCode} — {m.title}</option>)}
               </select>
+              {presetMatter && <p className="text-xs text-gray-400 mt-0.5">Filing for the current matter</p>}
             </div>
             <div>
               <label className="form-label">Due Date</label>
@@ -218,5 +222,13 @@ export default function CourtFilingsPage() {
         </tbody>
       </Table>
     </div>
+  );
+}
+
+export default function CourtFilingsPage() {
+  return (
+    <Suspense>
+      <CourtFilingsInner />
+    </Suspense>
   );
 }

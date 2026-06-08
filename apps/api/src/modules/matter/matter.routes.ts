@@ -385,6 +385,53 @@ router.get(
   }
 );
 
+// Record a time entry directly on a matter (manual capture).
+router.post(
+  '/:matterId/time-entries',
+  requirePermissions(PERMISSIONS.matter.createTimeEntry),
+  async (req, res) => {
+    try {
+      const { matterId } = req.params;
+      const { description, entryDate, durationHours, durationMinutes, appliedRate, isBillable = true } = req.body as {
+        description?: string; entryDate?: string; durationHours?: number | string;
+        durationMinutes?: number | string; appliedRate?: number | string; isBillable?: boolean;
+      };
+
+      const hours = parseFloat(String(durationHours ?? 0));
+      const mins = parseInt(String(durationMinutes ?? 0)) || 0;
+      const totalHours = hours + mins / 60;
+      const rate = parseFloat(String(appliedRate ?? 0));
+      if (totalHours <= 0) return res.status(400).json({ error: 'Duration must be greater than zero' });
+
+      const matter = await req.db.matter.findFirst({
+        where: { id: matterId, tenantId: req.tenantId },
+        select: { branchId: true },
+      });
+      if (!matter) return res.status(404).json({ error: 'Matter not found' });
+
+      const actorId = (req as any).user?.id ?? (req as any).user?.sub;
+      const entry = await req.db.timeEntry.create({
+        data: {
+          tenantId: req.tenantId,
+          matterId,
+          advocateId: actorId,
+          branchId: matter.branchId ?? null,
+          description: description?.trim() || null,
+          entryDate: entryDate ? new Date(entryDate) : new Date(),
+          durationHours: hours,
+          durationMinutes: mins,
+          appliedRate: rate,
+          billableAmount: Math.round(totalHours * rate * 100) / 100,
+          isBillable,
+          status: 'DRAFT' as any,
+        },
+        include: { advocate: { select: { id: true, name: true } } },
+      });
+      res.json({ data: entry });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
+);
+
 // ── Raise Invoice from billable items ────────────────────────────────────────
 router.post(
   '/:matterId/raise-invoice',

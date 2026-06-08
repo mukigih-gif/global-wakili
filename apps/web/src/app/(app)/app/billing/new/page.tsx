@@ -1,8 +1,8 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -15,13 +15,19 @@ type Matter = { id: string; title: string; matterCode: string };
 type LineItemKind = 'FEES' | 'DISBURSEMENT' | 'EXPENSE' | 'OTHER';
 type LineItem = { description: string; quantity: number; unitPrice: number; vatRate: number; sourceType: LineItemKind };
 
-export default function NewInvoicePage() {
+function NewInvoiceForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const presetMatterId = searchParams.get('matterId') ?? '';
+  const presetClientId = searchParams.get('clientId') ?? '';
+  // When opened from a matter, client + matter are fixed and shown read-only.
+  const lockedToMatter = Boolean(presetMatterId);
+
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
   const [clients, setClients] = useState<Client[]>([]);
   const [matters, setMatters] = useState<Matter[]>([]);
-  const [form, setForm] = useState({ clientId: '', matterId: '', currency: 'KES', dueDate: '', notes: '' });
+  const [form, setForm] = useState({ clientId: presetClientId, matterId: presetMatterId, currency: 'KES', dueDate: '', notes: '' });
   const [lines, setLines] = useState<LineItem[]>([{ description: '', quantity: 1, unitPrice: 0, vatRate: 16, sourceType: 'FEES' }]);
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -29,7 +35,17 @@ export default function NewInvoicePage() {
   useEffect(() => {
     api.get<{ data: Client[] }>('/clients?limit=100').then((r) => setClients(r.data ?? [])).catch(() => {});
     api.get<{ data: Matter[] }>('/matters?limit=100').then((r) => setMatters(r.data ?? [])).catch(() => {});
-  }, []);
+    // Opened from a matter → resolve its client so both align automatically.
+    if (presetMatterId) {
+      api.get<any>(`/matters/${presetMatterId}/overview`)
+        .then((r) => {
+          const m = r?.data ?? r;
+          const clientId = m?.client?.id ?? m?.clientId;
+          if (clientId) setForm((f) => ({ ...f, clientId, matterId: presetMatterId }));
+        })
+        .catch(() => {});
+    }
+  }, [presetMatterId]);
 
   const addLine = () => setLines((l) => [...l, { description: '', quantity: 1, unitPrice: 0, vatRate: 16, sourceType: 'FEES' }]);
   const removeLine = (i: number) => setLines((l) => l.filter((_, idx) => idx !== i));
@@ -80,17 +96,19 @@ export default function NewInvoicePage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="form-label">Client *</label>
-              <select required value={form.clientId} onChange={(e) => set('clientId', e.target.value)} className="form-select w-full">
+              <select required value={form.clientId} onChange={(e) => set('clientId', e.target.value)} disabled={lockedToMatter} className="form-select w-full disabled:bg-gray-50 disabled:text-gray-500">
                 <option value="">Select client…</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
+              {lockedToMatter && <p className="text-xs text-gray-400 mt-0.5">Auto-set from the matter</p>}
             </div>
             <div>
               <label className="form-label">Matter</label>
-              <select value={form.matterId} onChange={(e) => set('matterId', e.target.value)} className="form-select w-full">
+              <select value={form.matterId} onChange={(e) => set('matterId', e.target.value)} disabled={lockedToMatter} className="form-select w-full disabled:bg-gray-50 disabled:text-gray-500">
                 <option value="">None</option>
                 {matters.map((m) => <option key={m.id} value={m.id}>{m.matterCode} — {m.title}</option>)}
               </select>
+              {lockedToMatter && <p className="text-xs text-gray-400 mt-0.5">Invoicing this matter</p>}
             </div>
             <div>
               <label className="form-label">Currency</label>
@@ -168,5 +186,13 @@ export default function NewInvoicePage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function NewInvoicePage() {
+  return (
+    <Suspense>
+      <NewInvoiceForm />
+    </Suspense>
   );
 }

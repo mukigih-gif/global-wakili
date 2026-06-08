@@ -15,9 +15,9 @@ type Client = {
   name: string;
   clientCode: string;
   email?: string | null;
-  phone?: string | null;
+  phoneNumber?: string | null;
   status: string;
-  riskLevel?: string | null;
+  riskBand?: string | null;
   createdAt: string;
 };
 
@@ -99,8 +99,8 @@ export default function ClientsPage() {
                <Td><span className="font-mono text-xs text-gray-600">{c.clientCode}</span></Td>
                <Td><Link href={`/app/clients/${c.id}`} className="font-medium text-primary-700 hover:underline">{c.name}</Link></Td>
                <Td className="text-gray-600 text-sm">{c.email ?? '—'}</Td>
-               <Td className="text-gray-600 text-sm">{c.phone ?? '—'}</Td>
-               <Td>{c.riskLevel ? <StatusBadge status={c.riskLevel} /> : <span className="text-gray-400 text-xs">—</span>}</Td>
+               <Td className="text-gray-600 text-sm">{c.phoneNumber ?? '—'}</Td>
+               <Td>{c.riskBand ? <StatusBadge status={c.riskBand} /> : <span className="text-gray-400 text-xs">—</span>}</Td>
                <Td><StatusBadge status={c.status} /></Td>
                <Td className="text-gray-500 text-xs">{formatDate(c.createdAt)}</Td>
                <Td>

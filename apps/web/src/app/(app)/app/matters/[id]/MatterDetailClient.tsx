@@ -360,7 +360,7 @@ function MatterOverviewTab({ matter, matterId }: { matter: Matter; matterId: str
         {[
           { label: 'Invoices',       count: matter.invoiceCount ?? 0,          href: '#invoices',                                         icon: <FileText className="h-5 w-5" /> },
           { label: 'Tasks',          count: matter.taskCount ?? 0,             href: `/app/tasks/new?matterId=${matterId}`,                icon: <CheckCircle className="h-5 w-5" /> },
-          { label: 'Documents',      count: matter.documentCount ?? 0,         href: `/app/documents`,                                    icon: <File className="h-5 w-5" /> },
+          { label: 'Documents',      count: matter.documentCount ?? 0,         href: `/app/documents/new?matterId=${matterId}`,           icon: <File className="h-5 w-5" /> },
           { label: 'Expenses',       count: matter.expenseCount ?? 0,          href: '#expenses',                                         icon: <Clock className="h-5 w-5" /> },
           { label: 'Court Hearings', count: matter.courtHearingCount ?? 0,     href: `/app/court/filings?matterId=${matterId}`,            icon: <Scale className="h-5 w-5" /> },
           { label: 'New Event',      count: 0,                                 href: `/app/calendar/new?matterId=${matterId}`,             icon: <CalendarDays className="h-5 w-5" /> },
@@ -936,7 +936,7 @@ function MatterDocumentsTab({ matterId }: { matterId: string }) {
     <div className="space-y-3">
       <div className="flex items-center justify-between">
         <p className="text-xs text-gray-500">{docs.length} document{docs.length !== 1 ? 's' : ''} linked to this matter</p>
-        <Link href="/app/documents">
+        <Link href={`/app/documents/new?matterId=${matterId}`}>
           <Button size="sm" variant="secondary"><Plus className="h-3.5 w-3.5" /> Upload Document</Button>
         </Link>
       </div>
@@ -968,13 +968,43 @@ function MatterDocumentsTab({ matterId }: { matterId: string }) {
 function MatterTimeTab({ matterId, currency }: { matterId: string; currency: string }) {
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState('');
+  const [form, setForm] = useState({
+    description: '', entryDate: new Date().toISOString().slice(0, 10),
+    durationHours: '', appliedRate: '', isBillable: true,
+  });
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
     api.get<{ data: any[] }>(`/matters/${matterId}/time-entries`)
       .then((r) => setEntries(r.data ?? []))
       .catch(() => setEntries([]))
       .finally(() => setLoading(false));
-  }, [matterId]);
+  };
+
+  useEffect(() => { load(); }, [matterId]);
+
+  const recordTime = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.durationHours || parseFloat(form.durationHours) <= 0) { setError('Enter hours worked'); return; }
+    setSaving(true); setError('');
+    try {
+      await api.post(`/matters/${matterId}/time-entries`, {
+        description: form.description,
+        entryDate: form.entryDate,
+        durationHours: parseFloat(form.durationHours),
+        appliedRate: parseFloat(form.appliedRate) || 0,
+        isBillable: form.isBillable,
+      });
+      setForm({ description: '', entryDate: new Date().toISOString().slice(0, 10), durationHours: '', appliedRate: '', isBillable: true });
+      setShowForm(false);
+      load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err) ? String((err as any).message) : 'Failed to record time');
+    } finally { setSaving(false); }
+  };
 
   const unbilled = entries.filter((e) => !e.isInvoiced);
   const billed   = entries.filter((e) =>  e.isInvoiced);
@@ -999,6 +1029,45 @@ function MatterTimeTab({ matterId, currency }: { matterId: string; currency: str
           <p className="text-lg font-bold text-gray-900">{formatCurrency(totalUnbilled + totalBilled, currency)}</p>
         </div>
       </div>
+
+      <div className="flex items-center justify-end gap-2">
+        <Link href={`/app/time-capture?matterId=${matterId}`}>
+          <Button size="sm" variant="secondary"><Clock className="h-3.5 w-3.5" /> From Time Capture</Button>
+        </Link>
+        <Button size="sm" onClick={() => setShowForm((v) => !v)}><Plus className="h-3.5 w-3.5" /> Record Time</Button>
+      </div>
+
+      {showForm && (
+        <form onSubmit={recordTime} className="card p-4 border-primary-200 space-y-3">
+          {error && <div className="rounded bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <div className="sm:col-span-2">
+              <label className="form-label">Description</label>
+              <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="form-input w-full" placeholder="e.g. Drafting submissions" />
+            </div>
+            <div>
+              <label className="form-label">Date</label>
+              <input type="date" value={form.entryDate} onChange={(e) => setForm((f) => ({ ...f, entryDate: e.target.value }))} className="form-input w-full" />
+            </div>
+            <div>
+              <label className="form-label">Hours *</label>
+              <input type="number" min="0" step="0.25" required value={form.durationHours} onChange={(e) => setForm((f) => ({ ...f, durationHours: e.target.value }))} className="form-input w-full" placeholder="1.5" />
+            </div>
+            <div>
+              <label className="form-label">Rate /hr ({currency})</label>
+              <input type="number" min="0" step="50" value={form.appliedRate} onChange={(e) => setForm((f) => ({ ...f, appliedRate: e.target.value }))} className="form-input w-full" placeholder="0" />
+            </div>
+            <label className="flex items-center gap-2 text-sm mt-6">
+              <input type="checkbox" checked={form.isBillable} onChange={(e) => setForm((f) => ({ ...f, isBillable: e.target.checked }))} className="accent-primary-600" />
+              <span className="text-gray-700">Billable</span>
+            </label>
+          </div>
+          <div className="flex justify-end">
+            <Button type="submit" loading={saving} size="sm">Save Time Entry</Button>
+          </div>
+        </form>
+      )}
+
       <Table>
         <thead><tr><Th>Date</Th><Th>Description</Th><Th>Advocate</Th><Th>Hours</Th><Th>Rate</Th><Th>Amount</Th><Th>Status</Th></tr></thead>
         <tbody>

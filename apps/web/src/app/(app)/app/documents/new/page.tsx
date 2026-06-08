@@ -1,8 +1,8 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useRef, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -11,14 +11,16 @@ import Link from 'next/link';
 
 type Matter = { id: string; title: string; matterCode: string };
 
-export default function NewDocumentPage() {
+function NewDocumentForm() {
   const router  = useRouter();
+  const searchParams = useSearchParams();
+  const presetMatter = searchParams.get('matterId') ?? '';
   const fileRef = useRef<HTMLInputElement>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
   const [matters, setMatters] = useState<Matter[]>([]);
   const [file, setFile]       = useState<File | null>(null);
-  const [form, setForm] = useState({ title: '', documentType: 'OTHER', matterId: '', description: '', tags: '' });
+  const [form, setForm] = useState({ title: '', documentType: 'OTHER', matterId: presetMatter, description: '', tags: '' });
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -118,10 +120,11 @@ export default function NewDocumentPage() {
 
         <div>
           <label className="form-label">Link to Matter</label>
-          <select value={form.matterId} onChange={(e) => set('matterId', e.target.value)} className="form-select w-full">
+          <select value={form.matterId} onChange={(e) => set('matterId', e.target.value)} disabled={Boolean(presetMatter)} className="form-select w-full disabled:bg-gray-50 disabled:text-gray-500">
             <option value="">None</option>
             {matters.map((m) => <option key={m.id} value={m.id}>{m.matterCode} — {m.title}</option>)}
           </select>
+          {presetMatter && <p className="text-xs text-gray-400 mt-0.5">Attaching to the current matter</p>}
         </div>
 
         <div>
@@ -137,5 +140,13 @@ export default function NewDocumentPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function NewDocumentPage() {
+  return (
+    <Suspense>
+      <NewDocumentForm />
+    </Suspense>
   );
 }
