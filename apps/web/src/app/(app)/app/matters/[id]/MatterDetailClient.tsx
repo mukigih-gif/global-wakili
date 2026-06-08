@@ -1217,7 +1217,11 @@ function MatterUpdatesTab({ matterId }: { matterId: string }) {
       setShowForm(false);
       load();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to post update');
+      // Surface the real API error (the client throws a plain { message, code } object)
+      const msg = err instanceof Error ? err.message
+        : (err && typeof err === 'object' && 'message' in err) ? String((err as any).message)
+        : 'Failed to post update';
+      setError(msg);
     } finally { setSaving(false); }
   };
 
