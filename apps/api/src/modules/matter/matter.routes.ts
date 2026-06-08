@@ -27,6 +27,10 @@ const matterListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   search: z.string().trim().max(200).optional(),
+  // clientId + status are consumed by listOpenMatters; without them here the
+  // validate() Zod .parse() strips them from req.query before the controller runs.
+  clientId: z.string().trim().min(1).optional(),
+  status: z.string().trim().max(50).optional(),
 });
 
 const workflowQuerySchema = z.object({
