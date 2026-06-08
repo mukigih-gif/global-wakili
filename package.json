@@ -4,7 +4,7 @@
   "private": true,
   "description": "Global Wakili Enterprise Legal Matter Management Root",
   "workspaces": [
-    "apps/*",
+    "apps/api",
     "packages/*"
   ],
   "scripts": {
