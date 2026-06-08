@@ -1,8 +1,8 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -12,15 +12,19 @@ import Link from 'next/link';
 type Matter = { id: string; title: string; matterCode: string };
 type User   = { id: string; name: string };
 
-export default function NewTaskPage() {
-  const router = useRouter();
+function NewTaskForm() {
+  const router       = useRouter();
+  const searchParams = useSearchParams();
+  const presetMatter = searchParams.get('matterId') ?? '';
+  const presetClient = searchParams.get('clientId') ?? '';
+
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
   const [matters, setMatters] = useState<Matter[]>([]);
   const [users, setUsers]     = useState<User[]>([]);
   const [form, setForm] = useState({
     title: '', description: '', priority: 'MEDIUM',
-    dueDate: '', matterId: '', assignedToId: '',
+    dueDate: '', matterId: presetMatter, assignedToId: '',
   });
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -105,9 +109,19 @@ export default function NewTaskPage() {
 
         <div className="flex gap-3 pt-2 border-t border-gray-100">
           <Button type="submit" loading={loading}>Create Task</Button>
-          <Link href="/app/tasks"><Button type="button" variant="secondary">Cancel</Button></Link>
+          <Link href={presetMatter ? `/app/matters/${presetMatter}` : '/app/tasks'}>
+            <Button type="button" variant="secondary">Cancel</Button>
+          </Link>
         </div>
       </form>
     </div>
+  );
+}
+
+export default function NewTaskPage() {
+  return (
+    <Suspense>
+      <NewTaskForm />
+    </Suspense>
   );
 }

@@ -54,7 +54,7 @@ const PROGRESS_STAGES = [
   { value: 'CLOSING', label: 'Closing' },
 ];
 
-type Tab = 'overview' | 'invoices' | 'disbursements' | 'expenses' | 'time' | 'tasks' | 'hearings' | 'calendar' | 'documents';
+type Tab = 'overview' | 'updates' | 'invoices' | 'disbursements' | 'expenses' | 'time' | 'tasks' | 'hearings' | 'calendar' | 'documents';
 
 export function MatterDetailClient({ id }: { id: string }) {
   const [matter, setMatter] = useState<Matter | null>(null);
@@ -312,6 +312,7 @@ export function MatterDetailClient({ id }: { id: string }) {
       <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
         {([
           { key: 'overview',      label: 'Overview',                                                                        icon: <Scale className="h-3.5 w-3.5" /> },
+          { key: 'updates',       label: 'Updates',                                                                         icon: <TrendingUp className="h-3.5 w-3.5" /> },
           { key: 'invoices',      label: `Invoices${matter.invoiceCount ? ` (${matter.invoiceCount})` : ''}`,               icon: <FileText className="h-3.5 w-3.5" /> },
           { key: 'disbursements', label: 'Disbursements',                                                                   icon: <DollarSign className="h-3.5 w-3.5" /> },
           { key: 'expenses',      label: `Expenses${matter.expenseCount ? ` (${matter.expenseCount})` : ''}`,               icon: <Clock className="h-3.5 w-3.5" /> },
@@ -331,6 +332,7 @@ export function MatterDetailClient({ id }: { id: string }) {
       </div>
 
       {tab === 'overview'      && <MatterOverviewTab matter={matter} matterId={id} />}
+      {tab === 'updates'       && <MatterUpdatesTab matterId={id} />}
       {tab === 'invoices'      && <MatterInvoicesTab matterId={id} />}
       {tab === 'disbursements' && <MatterDisbursementsTab matterId={id} />}
       {tab === 'expenses'      && <MatterExpensesTab matterId={id} currency={matter.currency} />}
@@ -356,12 +358,12 @@ function MatterOverviewTab({ matter, matterId }: { matter: Matter; matterId: str
       )}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
         {[
-          { label: 'Invoices',       count: matter.invoiceCount ?? 0,          href: '#',                               icon: <FileText className="h-5 w-5" /> },
-          { label: 'Tasks',          count: matter.taskCount ?? 0,             href: `/app/tasks?matterId=${matterId}`, icon: <CheckCircle className="h-5 w-5" /> },
-          { label: 'Documents',      count: matter.documentCount ?? 0,         href: `/app/documents`,                  icon: <File className="h-5 w-5" /> },
-          { label: 'Expenses',       count: matter.expenseCount ?? 0,          href: '#',                               icon: <Clock className="h-5 w-5" /> },
-          { label: 'Trust Txns',     count: matter.trustTransactionCount ?? 0, href: `/app/trust`,                      icon: <DollarSign className="h-5 w-5" /> },
-          { label: 'Court Hearings', count: matter.courtHearingCount ?? 0,     href: `/app/court/filings`,              icon: <Scale className="h-5 w-5" /> },
+          { label: 'Invoices',       count: matter.invoiceCount ?? 0,          href: '#invoices',                                         icon: <FileText className="h-5 w-5" /> },
+          { label: 'Tasks',          count: matter.taskCount ?? 0,             href: `/app/tasks/new?matterId=${matterId}`,                icon: <CheckCircle className="h-5 w-5" /> },
+          { label: 'Documents',      count: matter.documentCount ?? 0,         href: `/app/documents`,                                    icon: <File className="h-5 w-5" /> },
+          { label: 'Expenses',       count: matter.expenseCount ?? 0,          href: '#expenses',                                         icon: <Clock className="h-5 w-5" /> },
+          { label: 'Court Hearings', count: matter.courtHearingCount ?? 0,     href: `/app/court/filings?matterId=${matterId}`,            icon: <Scale className="h-5 w-5" /> },
+          { label: 'New Event',      count: 0,                                 href: `/app/calendar/new?matterId=${matterId}`,             icon: <CalendarDays className="h-5 w-5" /> },
         ].map((item) => (
           <Link key={item.label} href={item.href}
             className="rounded-xl border border-gray-200 bg-white p-4 hover:border-primary-200 hover:bg-primary-50/30 transition-colors group">
@@ -1167,6 +1169,143 @@ function RaiseInvoiceModal({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+
+// ─── Matter Updates / Timeline ────────────────────────────────────────────────
+
+const UPDATE_TYPE_LABELS: Record<string, string> = {
+  GENERAL: 'General Update',
+  STATUS_CHANGE: 'Status Change',
+  HEARING_UPDATE: 'Hearing Update',
+  FILING_UPDATE: 'Filing Update',
+  CLIENT_COMMUNICATION: 'Client Communication',
+  SETTLEMENT: 'Settlement',
+  JUDGMENT: 'Judgment',
+  INSTRUCTION: 'New Instruction',
+};
+
+function MatterUpdatesTab({ matterId }: { matterId: string }) {
+  const [updates, setUpdates]   = useState<any[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving]     = useState(false);
+  const [error, setError]       = useState('');
+  const [form, setForm] = useState({
+    content: '', updateType: 'GENERAL', isClientVisible: false, notifyClient: false,
+  });
+
+  const load = () => {
+    setLoading(true);
+    api.get<{ data: any[] }>(`/matters/${matterId}/updates`)
+      .then((r) => setUpdates(r.data ?? []))
+      .catch(() => setUpdates([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, [matterId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.content.trim()) return;
+    setSaving(true); setError('');
+    try {
+      await api.post(`/matters/${matterId}/updates`, form);
+      setForm({ content: '', updateType: 'GENERAL', isClientVisible: false, notifyClient: false });
+      setShowForm(false);
+      load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to post update');
+    } finally { setSaving(false); }
+  };
+
+  const toggleVisibility = async (updateId: string, current: boolean) => {
+    await api.patch(`/matters/${matterId}/updates/${updateId}`, { isClientVisible: !current }).catch(() => {});
+    setUpdates((prev) => prev.map((u) => u.id === updateId ? { ...u, isClientVisible: !current } : u));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-500">
+          {updates.length} update{updates.length !== 1 ? 's' : ''} &mdash; {updates.filter((u) => u.isClientVisible).length} visible to client
+        </p>
+        <Button size="sm" onClick={() => setShowForm(true)}><Plus className="h-3.5 w-3.5" /> Post Update</Button>
+      </div>
+
+      {showForm && (
+        <div className="card p-5 border-primary-200 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900">Post Matter Update</h3>
+            <button onClick={() => { setShowForm(false); setError(''); }} className="text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>
+          </div>
+          {error && <div className="rounded bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div>
+              <label className="form-label">Update Type</label>
+              <select value={form.updateType} onChange={(e) => setForm((f) => ({ ...f, updateType: e.target.value }))} className="form-select w-full">
+                {Object.entries(UPDATE_TYPE_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Update *</label>
+              <textarea required value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} rows={4} className="form-input w-full resize-none" placeholder="Describe what happened, decisions made, next steps…" />
+            </div>
+            <div className="flex gap-6 text-sm">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.isClientVisible} onChange={(e) => setForm((f) => ({ ...f, isClientVisible: e.target.checked }))} className="accent-primary-600" />
+                <span className="text-gray-700">Visible to client on portal</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.notifyClient} onChange={(e) => setForm((f) => ({ ...f, notifyClient: e.target.checked }))} className="accent-primary-600" />
+                <span className="text-gray-700">Notify client by system</span>
+              </label>
+            </div>
+            <div className="flex justify-end">
+              <Button type="submit" loading={saving}>Post Update</Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-center text-sm text-gray-400 py-8">Loading…</div>
+      ) : !updates.length ? (
+        <div className="text-center text-sm text-gray-400 py-12">No updates yet. Post the first update above.</div>
+      ) : (
+        <div className="relative">
+          <div className="absolute left-4 top-0 bottom-0 w-px bg-gray-200" />
+          <div className="space-y-4">
+            {updates.map((u) => (
+              <div key={u.id} className="relative pl-10">
+                <div className="absolute left-3 top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-primary-400 shadow" />
+                <div className={`rounded-xl border p-4 space-y-2 ${u.isClientVisible ? 'border-primary-100 bg-primary-50/30' : 'border-gray-200 bg-white'}`}>
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-semibold text-gray-900">{u.author?.name ?? '—'}</span>
+                      <span className="text-xs text-gray-400">·</span>
+                      <span className="text-xs text-gray-500">{formatDate(u.createdAt)}</span>
+                      <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">{UPDATE_TYPE_LABELS[u.updateType] ?? u.updateType}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {u.isClientVisible && <span className="text-xs text-primary-600 bg-primary-50 border border-primary-200 px-1.5 py-0.5 rounded">Client Visible</span>}
+                      <button
+                        onClick={() => toggleVisibility(u.id, u.isClientVisible)}
+                        className={`text-xs px-2 py-0.5 rounded border transition-colors ${u.isClientVisible ? 'border-gray-200 text-gray-500 hover:border-red-200 hover:text-red-600' : 'border-gray-200 text-gray-400 hover:border-primary-200 hover:text-primary-600'}`}
+                      >
+                        {u.isClientVisible ? 'Hide from client' : 'Show to client'}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{u.content}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

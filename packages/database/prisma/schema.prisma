@@ -142,6 +142,7 @@ model Tenant {
   prospectActivities           ProspectActivity[]
   clientProspects              ClientProspect[]
   courtFilings                 CourtFiling[]
+  matterUpdates                MatterUpdate[]
   tenderRecords                TenderRecord[]
   tenderActivities             TenderActivity[]
   tenderDocuments              TenderDocument[]
@@ -444,6 +445,7 @@ model User {
   leaveRequests                       LeaveRequest[]
   approvedLeaves                      LeaveRequest[]                @relation("LeaveApprovedBy")
   matters                             Matter[]                      @relation("LeadAdvocate")
+  matterUpdates                       MatterUpdate[]                @relation("MatterUpdateAuthor")
   originatorMatters                   MatterOriginator[]            @relation("OriginatorUser")
   taskAssignments                     MatterTask[]                  @relation("AssignedTo")
   mfaSecret                           MfaSecret?
@@ -1170,6 +1172,7 @@ model Matter {
   passiveCaptureEvents       PassiveCaptureEvent[]
   clientIssues               ClientIssue[]
   withholdingTaxCertificates WithholdingTaxCertificate[]
+  updates                    MatterUpdate[]
 
   @@index([tenantId])
   @@index([tenantId, status])
@@ -1179,6 +1182,27 @@ model Matter {
   @@index([tenantId, clientId])
   @@index([branchId])
   @@index([leadAdvocateId])
+}
+
+model MatterUpdate {
+  id              String   @id @default(cuid())
+  tenantId        String
+  matterId        String
+  userId          String
+  content         String
+  updateType      String   @default("GENERAL")
+  isClientVisible Boolean  @default(false)
+  notifyClient    Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  matter  Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  author  User   @relation("MatterUpdateAuthor", fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([matterId])
+  @@index([createdAt])
 }
 
 model MatterOriginator {

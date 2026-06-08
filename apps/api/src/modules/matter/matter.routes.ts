@@ -276,6 +276,65 @@ router.get(
   }
 );
 
+// ── Matter Updates (Timeline) ────────────────────────────────────────────────
+router.get(
+  '/:matterId/updates',
+  requirePermissions(PERMISSIONS.matter.viewMatter),
+  async (req, res) => {
+    try {
+      const updates = await req.db.matterUpdate.findMany({
+        where: { tenantId: req.tenantId, matterId: req.params.matterId },
+        include: { author: { select: { id: true, name: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      });
+      res.json({ success: true, data: updates });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
+);
+
+router.post(
+  '/:matterId/updates',
+  requirePermissions(PERMISSIONS.matter.updateMatter),
+  async (req, res) => {
+    try {
+      const { content, updateType = 'GENERAL', isClientVisible = false, notifyClient = false } = req.body as {
+        content: string; updateType?: string; isClientVisible?: boolean; notifyClient?: boolean;
+      };
+      if (!content?.trim()) return res.status(400).json({ error: 'Content is required' });
+
+      const update = await req.db.matterUpdate.create({
+        data: {
+          tenantId: req.tenantId,
+          matterId: req.params.matterId,
+          userId: (req as any).user?.id ?? (req as any).user?.sub,
+          content: content.trim(),
+          updateType,
+          isClientVisible,
+          notifyClient,
+        },
+        include: { author: { select: { id: true, name: true } } },
+      });
+      res.json({ success: true, data: update });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
+);
+
+router.patch(
+  '/:matterId/updates/:updateId',
+  requirePermissions(PERMISSIONS.matter.updateMatter),
+  async (req, res) => {
+    try {
+      const { isClientVisible } = req.body as { isClientVisible: boolean };
+      const update = await req.db.matterUpdate.updateMany({
+        where: { id: req.params.updateId, matterId: req.params.matterId, tenantId: req.tenantId },
+        data: { isClientVisible },
+      });
+      res.json({ success: true, data: update });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
+);
+
 // ── Time Entries ─────────────────────────────────────────────────────────────
 router.get(
   '/:matterId/time-entries',
