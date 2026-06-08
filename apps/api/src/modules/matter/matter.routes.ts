@@ -20,6 +20,7 @@ import {
   getOriginatorPortfolioPayout,
 } from './matter.dashboard.controller';
 import { matterInputSchema } from './matter.validators';
+import { CalendarService } from '../calendar/CalendarService';
 
 const router = Router();
 
@@ -302,16 +303,18 @@ router.post(
   requirePermissions(PERMISSIONS.matter.updateMatter),
   async (req, res) => {
     try {
-      const { content, updateType = 'GENERAL', isClientVisible = false, notifyClient = false } = req.body as {
-        content: string; updateType?: string; isClientVisible?: boolean; notifyClient?: boolean;
+      const { content, updateType = 'GENERAL', isClientVisible = false, notifyClient = false, bringUpDate } = req.body as {
+        content: string; updateType?: string; isClientVisible?: boolean; notifyClient?: boolean; bringUpDate?: string;
       };
       if (!content?.trim()) return res.status(400).json({ error: 'Content is required' });
+
+      const actorId = (req as any).user?.id ?? (req as any).user?.sub;
 
       const update = await req.db.matterUpdate.create({
         data: {
           tenantId: req.tenantId,
           matterId: req.params.matterId,
-          userId: (req as any).user?.id ?? (req as any).user?.sub,
+          userId: actorId,
           content: content.trim(),
           updateType,
           isClientVisible,
@@ -319,7 +322,31 @@ router.post(
         },
         include: { author: { select: { id: true, name: true } } },
       });
-      res.json({ success: true, data: update });
+
+      // Bring-Up date → create a calendar event on the matter so it follows the
+      // calendar's reminder rules. GENERAL type, 09:00–10:00 on the chosen day.
+      let calendarEvent: any = null;
+      const bu = bringUpDate ? new Date(bringUpDate) : null;
+      if (bu && !isNaN(bu.getTime())) {
+        const startTime = new Date(bu); startTime.setHours(9, 0, 0, 0);
+        const endTime = new Date(bu); endTime.setHours(10, 0, 0, 0);
+        calendarEvent = await CalendarService.createEvent(req.db, {
+          tenantId: req.tenantId,
+          creatorId: actorId,
+          title: `Bring-Up: ${updateType.replace(/_/g, ' ')}`,
+          description: content.trim(),
+          startTime,
+          endTime,
+          type: 'GENERAL',
+          matterId: req.params.matterId,
+        } as any).catch((err: unknown) => {
+          // Don't lose the posted update if event creation fails; surface a flag.
+          console.error('BRING_UP_EVENT_FAILED', { matterId: req.params.matterId, error: String(err) });
+          return null;
+        });
+      }
+
+      res.json({ success: true, data: update, calendarEvent, bringUpScheduled: Boolean(calendarEvent) });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   }
 );

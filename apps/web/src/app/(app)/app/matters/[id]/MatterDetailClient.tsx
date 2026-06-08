@@ -1194,7 +1194,7 @@ function MatterUpdatesTab({ matterId }: { matterId: string }) {
   const [saving, setSaving]     = useState(false);
   const [error, setError]       = useState('');
   const [form, setForm] = useState({
-    content: '', updateType: 'GENERAL', isClientVisible: false, notifyClient: false,
+    content: '', updateType: 'GENERAL', isClientVisible: false, notifyClient: false, bringUpDate: '',
   });
 
   const load = () => {
@@ -1212,8 +1212,8 @@ function MatterUpdatesTab({ matterId }: { matterId: string }) {
     if (!form.content.trim()) return;
     setSaving(true); setError('');
     try {
-      await api.post(`/matters/${matterId}/updates`, form);
-      setForm({ content: '', updateType: 'GENERAL', isClientVisible: false, notifyClient: false });
+      await api.post(`/matters/${matterId}/updates`, { ...form, bringUpDate: form.bringUpDate || undefined });
+      setForm({ content: '', updateType: 'GENERAL', isClientVisible: false, notifyClient: false, bringUpDate: '' });
       setShowForm(false);
       load();
     } catch (err: unknown) {
@@ -1252,6 +1252,10 @@ function MatterUpdatesTab({ matterId }: { matterId: string }) {
             <div>
               <label className="form-label">Update *</label>
               <textarea required value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} rows={4} className="form-input w-full resize-none" placeholder="Describe what happened, decisions made, next steps…" />
+            </div>
+            <div>
+              <label className="form-label">Next Bring-Up Date <span className="font-normal text-gray-400">(optional — adds a reminder to the calendar)</span></label>
+              <input type="date" value={form.bringUpDate} onChange={(e) => setForm((f) => ({ ...f, bringUpDate: e.target.value }))} className="form-input w-full sm:w-56" />
             </div>
             <div className="flex gap-6 text-sm">
               <label className="flex items-center gap-2 cursor-pointer">
