@@ -83,11 +83,29 @@ export default function ClientDetailPage() {
   const handleSave = async () => {
     setSaving(true); setEditError('');
     try {
-      await api.patch(`/clients/${id}`, editForm);
+      // Convert empty strings to undefined — the API's optional fields validate
+      // email() / kraPin regex and REJECT '' (only undefined/null are allowed).
+      // city/country/riskBand aren't first-class columns, so persist via metadata.
+      const payload = {
+        name: editForm.name.trim(),
+        email: editForm.email.trim() || undefined,
+        phoneNumber: editForm.phoneNumber.trim() || undefined,
+        kraPin: editForm.kraPin.trim() ? editForm.kraPin.trim().toUpperCase() : undefined,
+        address: editForm.address.trim() || undefined,
+        metadata: {
+          city: editForm.city.trim() || undefined,
+          country: editForm.country.trim() || undefined,
+          riskBand: editForm.riskBand || undefined,
+        },
+      };
+      await api.patch(`/clients/${id}`, payload);
       setEditing(false);
       loadData();
     } catch (err: unknown) {
-      setEditError(err instanceof Error ? err.message : 'Failed to save');
+      const msg = err instanceof Error ? err.message
+        : (err && typeof err === 'object' && 'message' in err) ? String((err as any).message)
+        : 'Failed to save';
+      setEditError(msg);
     } finally { setSaving(false); }
   };
 
