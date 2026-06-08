@@ -177,4 +177,65 @@ router.post(
   syncExternalCalendar,
 );
 
+// ── Event Notifications (internal staff + client invites) ─────────────────────
+router.post(
+  '/:eventId/notify',
+  requirePermissions(PERMISSIONS.calendar.createEvent),
+  async (req, res) => {
+    try {
+      const { type, attendeeIds = [], clientId } = req.body;
+      const eventId = req.params.eventId;
+
+      const event = await req.db.calendarEvent.findFirst({
+        where: { id: eventId, tenantId: req.tenantId },
+        select: { id: true, title: true, startTime: true, endTime: true, type: true, description: true },
+      });
+      if (!event) { res.status(404).json({ error: 'Event not found' }); return; }
+
+      const dateStr = new Date(event.startTime).toLocaleString('en-KE', { dateStyle: 'full', timeStyle: 'short' });
+
+      if (type === 'INTERNAL' && attendeeIds.length > 0) {
+        const staffUsers = await req.db.user.findMany({
+          where: { tenantId: req.tenantId, id: { in: attendeeIds } },
+          select: { id: true, name: true, email: true },
+        });
+        for (const u of staffUsers) {
+          await req.db.notification.create({
+            data: {
+              tenantId:      req.tenantId!,
+              userId:        u.id,
+              channel:       'SYSTEM_ALERT',
+              systemTitle:   `Event Invite: ${event.title}`,
+              systemMessage: `You have been added to "${event.title}" on ${dateStr}.`,
+              status:        'PENDING',
+            },
+          });
+        }
+      }
+
+      if (type === 'CLIENT' && clientId) {
+        const client = await req.db.client.findFirst({
+          where: { tenantId: req.tenantId, id: clientId },
+          select: { id: true, name: true, email: true },
+        });
+        if (client?.email) {
+          await req.db.notification.create({
+            data: {
+              tenantId:       req.tenantId!,
+              recipientEmail: client.email,
+              recipientName:  client.name,
+              channel:        'EMAIL',
+              emailSubject:   `[Global Wakili] Meeting Invitation: ${event.title}`,
+              emailBody:      `<p>Dear ${client.name},</p><p>You are invited to the following meeting:</p><table style="border-collapse:collapse;max-width:480px;width:100%"><tr><td style="padding:8px;color:#6b7280;font-weight:600">Event</td><td style="padding:8px">${event.title}</td></tr><tr style="background:#f9fafb"><td style="padding:8px;color:#6b7280;font-weight:600">Date & Time</td><td style="padding:8px">${dateStr}</td></tr>${event.description ? `<tr><td style="padding:8px;color:#6b7280;font-weight:600">Details</td><td style="padding:8px">${event.description}</td></tr>` : ''}</table><p>Please confirm your attendance or contact us if you have any questions.</p><p style="color:#9ca3af;font-size:12px">Global Wakili Legal Enterprise</p>`,
+              status:         'PENDING',
+            },
+          });
+        }
+      }
+
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
+);
+
 export default router;

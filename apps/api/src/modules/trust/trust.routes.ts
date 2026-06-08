@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
 import { z } from 'zod';
 import { validate } from '../../middleware/validate';
 import { requirePermissions } from '../../middleware/rbac';
@@ -182,6 +182,63 @@ router.get(
   '/violations',
   requirePermissions(['trust.view_violations']),
   getTrustViolations,
+);
+
+// ── Trust Account Management ──────────────────────────────────────────────────
+
+router.get(
+  '/accounts',
+  requirePermissions(['trust.view_dashboard']),
+  async (req: Request, res: Response) => {
+    try {
+      const accounts = await req.db.trustAccount.findMany({
+        where: { tenantId: req.tenantId },
+        orderBy: { createdAt: 'asc' },
+      });
+      res.json({ success: true, data: accounts });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
+);
+
+router.post(
+  '/accounts',
+  requirePermissions(['trust.create_transaction']),
+  async (req: Request, res: Response) => {
+    try {
+      const { accountName, accountNumber, bankName, currency = 'KES', custodian } = req.body;
+      if (!accountName || !accountNumber || !bankName) {
+        res.status(400).json({ error: 'accountName, accountNumber, and bankName are required' }); return;
+      }
+      const account = await req.db.trustAccount.create({
+        data: {
+          tenantId:              req.tenantId!,
+          accountName,
+          accountNumber,
+          bankName,
+          currency,
+          custodian:             custodian ?? null,
+          currentBalance:        0,
+          reconciliationBalance: 0,
+          isActive:              true,
+        },
+      });
+      res.status(201).json({ success: true, data: account });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
+);
+
+router.patch(
+  '/accounts/:accountId/archive',
+  requirePermissions(['trust.create_transaction']),
+  async (req: Request, res: Response) => {
+    try {
+      await req.db.trustAccount.updateMany({
+        where: { tenantId: req.tenantId, id: req.params.accountId },
+        data: { isActive: false },
+      });
+      res.json({ success: true });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
 );
 
 export default router;

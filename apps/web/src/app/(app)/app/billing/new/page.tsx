@@ -12,7 +12,8 @@ import Link from 'next/link';
 type Client = { id: string; name: string; clientCode: string };
 type Matter = { id: string; title: string; matterCode: string };
 
-type LineItem = { description: string; quantity: number; unitPrice: number; vatRate: number };
+type LineItemKind = 'FEES' | 'DISBURSEMENT' | 'EXPENSE' | 'OTHER';
+type LineItem = { description: string; quantity: number; unitPrice: number; vatRate: number; sourceType: LineItemKind };
 
 export default function NewInvoicePage() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function NewInvoicePage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [matters, setMatters] = useState<Matter[]>([]);
   const [form, setForm] = useState({ clientId: '', matterId: '', currency: 'KES', dueDate: '', notes: '' });
-  const [lines, setLines] = useState<LineItem[]>([{ description: '', quantity: 1, unitPrice: 0, vatRate: 16 }]);
+  const [lines, setLines] = useState<LineItem[]>([{ description: '', quantity: 1, unitPrice: 0, vatRate: 16, sourceType: 'FEES' }]);
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -30,7 +31,7 @@ export default function NewInvoicePage() {
     api.get<{ data: Matter[] }>('/matters?limit=100').then((r) => setMatters(r.data ?? [])).catch(() => {});
   }, []);
 
-  const addLine = () => setLines((l) => [...l, { description: '', quantity: 1, unitPrice: 0, vatRate: 16 }]);
+  const addLine = () => setLines((l) => [...l, { description: '', quantity: 1, unitPrice: 0, vatRate: 16, sourceType: 'FEES' }]);
   const removeLine = (i: number) => setLines((l) => l.filter((_, idx) => idx !== i));
   const setLine = (i: number, k: keyof LineItem, v: string | number) =>
     setLines((l) => l.map((line, idx) => idx === i ? { ...line, [k]: v } : line));
@@ -112,16 +113,23 @@ export default function NewInvoicePage() {
           </div>
           <div className="space-y-3">
             <div className="grid grid-cols-12 gap-2 text-xs font-medium text-gray-500 px-1">
-              <span className="col-span-5">Description</span>
-              <span className="col-span-2 text-right">Qty</span>
+              <span className="col-span-2">Type</span>
+              <span className="col-span-4">Description</span>
+              <span className="col-span-1 text-right">Qty</span>
               <span className="col-span-2 text-right">Unit Price</span>
               <span className="col-span-2 text-right">VAT %</span>
               <span className="col-span-1"></span>
             </div>
             {lines.map((line, i) => (
               <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                <input className="form-input col-span-5" value={line.description} onChange={(e) => setLine(i, 'description', e.target.value)} placeholder="Professional fees…" required />
-                <input className="form-input col-span-2 text-right" type="number" min="1" value={line.quantity} onChange={(e) => setLine(i, 'quantity', parseFloat(e.target.value) || 1)} />
+                <select className="form-select col-span-2 text-xs" value={line.sourceType} onChange={(e) => setLine(i, 'sourceType', e.target.value as LineItemKind)}>
+                  <option value="FEES">Professional Fees</option>
+                  <option value="DISBURSEMENT">Disbursement</option>
+                  <option value="EXPENSE">Expense</option>
+                  <option value="OTHER">Other</option>
+                </select>
+                <input className="form-input col-span-4" value={line.description} onChange={(e) => setLine(i, 'description', e.target.value)} placeholder="Description…" required />
+                <input className="form-input col-span-1 text-right" type="number" min="1" value={line.quantity} onChange={(e) => setLine(i, 'quantity', parseFloat(e.target.value) || 1)} />
                 <input className="form-input col-span-2 text-right" type="number" min="0" step="0.01" value={line.unitPrice} onChange={(e) => setLine(i, 'unitPrice', parseFloat(e.target.value) || 0)} />
                 <input className="form-input col-span-2 text-right" type="number" min="0" max="100" value={line.vatRate} onChange={(e) => setLine(i, 'vatRate', parseFloat(e.target.value) || 0)} />
                 <button type="button" onClick={() => removeLine(i)} disabled={lines.length === 1} className="col-span-1 text-gray-300 hover:text-red-500 disabled:opacity-30 flex justify-center">

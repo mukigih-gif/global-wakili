@@ -5,15 +5,16 @@ import { useAuth } from '@/context/AuthContext';
 import { Card, CardHeader, CardBody } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { Settings, Bell, Shield, Globe, CreditCard, Users } from 'lucide-react';
+import { Settings, Bell, Shield, Globe, CreditCard, Users, Tag } from 'lucide-react';
 
 const SETTINGS_SECTIONS = [
-  { icon: <Users className="h-5 w-5" />, title: 'Users & Roles', desc: 'Manage staff access and permissions', href: '/app/settings/users' },
-  { icon: <Bell className="h-5 w-5" />, title: 'Notifications', desc: 'Configure notification channels and preferences', href: '/app/settings/notifications' },
-  { icon: <Shield className="h-5 w-5" />, title: 'Security', desc: 'Password policy, MFA, session management', href: '/app/settings/security' },
-  { icon: <Globe className="h-5 w-5" />, title: 'Integrations', desc: 'eTIMS, M-PESA, QuickBooks, Zoho, Calendar', href: '/app/settings/integrations' },
-  { icon: <CreditCard className="h-5 w-5" />, title: 'Billing & Subscription', desc: 'Plan details, usage, invoices', href: '/app/settings/billing' },
-  { icon: <Settings className="h-5 w-5" />, title: 'Firm Settings', desc: 'Name, logo, KRA PIN, eTIMS ID', href: '/app/settings/firm' },
+  { icon: <Users className="h-5 w-5" />, title: 'Users & Roles',         desc: 'Manage staff access and permissions',              href: '/app/settings/users' },
+  { icon: <Bell className="h-5 w-5" />,  title: 'Notifications',         desc: 'Configure notification channels and preferences',  href: '/app/settings/notifications' },
+  { icon: <Shield className="h-5 w-5" />, title: 'Security',             desc: 'Password policy, MFA, session management',         href: '/app/settings/security' },
+  { icon: <Globe className="h-5 w-5" />, title: 'Integrations',          desc: 'eTIMS, M-PESA, QuickBooks, Zoho, Calendar',        href: '/app/settings/integrations' },
+  { icon: <CreditCard className="h-5 w-5" />, title: 'Billing & Subscription', desc: 'Plan details, usage, invoices',             href: '/app/settings/billing' },
+  { icon: <Settings className="h-5 w-5" />, title: 'Firm Settings',      desc: 'Name, logo, KRA PIN, eTIMS ID',                    href: '/app/settings/firm' },
+  { icon: <Tag className="h-5 w-5" />,   title: 'Custom Labels',         desc: 'Define per-module labels for Tasks, Matters, Clients, Documents', href: '/app/settings/labels' },
 ];
 
 export default function SettingsPage() {

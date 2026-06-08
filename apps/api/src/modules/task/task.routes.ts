@@ -146,4 +146,63 @@ router.post(
   requestTaskCalendarLink,
 );
 
+// ── Labels (stored in PlatformGlobalSetting per tenant) ──────────────────────
+
+async function getTaskLabels(db: any, tenantId: string, taskId: string): Promise<string[]> {
+  const setting = await db.platformGlobalSetting.findFirst({
+    where: { key: `labels:assignments:task`, targetTenantId: tenantId },
+    select: { currentValue: true },
+  });
+  const assignments = (setting?.currentValue as Record<string, string[]>) ?? {};
+  return assignments[taskId] ?? [];
+}
+
+async function setTaskLabels(db: any, tenantId: string, taskId: string, labels: string[]): Promise<void> {
+  const existing = await db.platformGlobalSetting.findFirst({
+    where: { key: `labels:assignments:task`, targetTenantId: tenantId },
+    select: { id: true, currentValue: true },
+  });
+  const assignments = (existing?.currentValue as Record<string, string[]>) ?? {};
+  assignments[taskId] = labels;
+  if (existing?.id) {
+    await db.platformGlobalSetting.update({
+      where: { id: existing.id },
+      data: { currentValue: assignments, updatedAt: new Date() },
+    });
+  } else {
+    await db.platformGlobalSetting.create({
+      data: {
+        key: `labels:assignments:task`,
+        name: 'Task Label Assignments',
+        scope: 'TENANT',
+        targetTenantId: tenantId,
+        currentValue: assignments,
+      },
+    });
+  }
+}
+
+router.get(
+  '/:taskId/labels',
+  requirePermissions(PERMISSIONS.task.viewTask),
+  async (req: Request, res: Response) => {
+    try {
+      const labels = await getTaskLabels(req.db, req.tenantId!, req.params.taskId);
+      res.json({ success: true, data: labels });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
+);
+
+router.patch(
+  '/:taskId/labels',
+  requirePermissions(PERMISSIONS.task.updateTask),
+  async (req: Request, res: Response) => {
+    try {
+      const labels: string[] = Array.isArray(req.body.labels) ? req.body.labels : [];
+      await setTaskLabels(req.db, req.tenantId!, req.params.taskId, labels);
+      res.json({ success: true, data: labels });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
+);
+
 export default router;

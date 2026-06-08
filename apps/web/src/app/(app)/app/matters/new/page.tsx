@@ -33,7 +33,7 @@ export default function NewMatterPage() {
     title: '', matterType: 'GENERAL', category: 'CIVIL',
     clientId: '', assignedLawyerId: '', originatorId: '', description: '',
     estimatedValue: '', currency: 'KES',
-    commissionRate: '',
+    commissionRate: '', caseNumber: '',
     openedDate: new Date().toISOString().slice(0, 10),
   });
 
@@ -108,6 +108,11 @@ export default function NewMatterPage() {
             <div className="sm:col-span-2">
               <Input label="Matter Title *" required value={form.title}
                 onChange={(e) => set('title', e.target.value)} placeholder="e.g. Doe v Smith — Land Dispute" />
+            </div>
+            <div>
+              <Input label="Case Number" value={form.caseNumber}
+                onChange={(e) => set('caseNumber', e.target.value)} placeholder="e.g. Civil Case No. 123/2024" />
+              <p className="text-xs text-gray-400 mt-0.5">Court-assigned case number if already filed</p>
             </div>
             <div>
               <label className="form-label">Client *</label>

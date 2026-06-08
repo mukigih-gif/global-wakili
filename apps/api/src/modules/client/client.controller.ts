@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/async-handler';
 import { ClientService } from './ClientService';
+import { getBranchFilter } from '../../utils/branch-filter';
 
 export const createClient = asyncHandler(async (req: Request, res: Response) => {
   const created = await ClientService.create(req.db, req.tenantId!, req.body);
@@ -21,11 +22,13 @@ export const listActiveClients = asyncHandler(async (req: Request, res: Response
   const page = req.query.page ? Number(req.query.page) : undefined;
   const limit = req.query.limit ? Number(req.query.limit) : undefined;
   const search = req.query.search ? String(req.query.search) : undefined;
+  const branchFilter = getBranchFilter(req.user ?? {});
 
   const result = await ClientService.listActive(req.db, req.tenantId!, {
     page,
     limit,
     search,
+    branchId: branchFilter.branchId,
   });
 
   res.status(200).json(result);

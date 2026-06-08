@@ -500,33 +500,25 @@ function validateDateOrder(input: {
   return issues;
 }
 
-function buildMatterSearchWhere(tenantId: string, search: string): Prisma.MatterWhereInput {
+function buildMatterSearchWhere(
+  tenantId: string,
+  search: string,
+  branchId?: string | null,
+): Prisma.MatterWhereInput {
   return {
     tenantId,
+    ...(branchId ? { branchId } : {}),
     status: {
       in: ['ACTIVE', 'ON_HOLD'],
     },
     ...(search
       ? {
           OR: [
-            {
-              title: {
-                contains: search,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-            {
-              matterCode: {
-                contains: search,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
-            {
-              caseNumber: {
-                contains: search,
-                mode: Prisma.QueryMode.insensitive,
-              },
-            },
+            { title:      { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { matterCode: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { caseNumber: { contains: search, mode: Prisma.QueryMode.insensitive } },
+            { client: { name: { contains: search, mode: Prisma.QueryMode.insensitive } } },
+            { client: { clientCode: { contains: search, mode: Prisma.QueryMode.insensitive } } },
           ],
         }
       : {}),
@@ -1096,6 +1088,8 @@ export class MatterService {
       page?: number;
       limit?: number;
       search?: string;
+      status?: string;
+      branchId?: string | null;
     },
   ) {
     const page = params?.page && params.page > 0 ? params.page : 1;
@@ -1103,7 +1097,12 @@ export class MatterService {
     const skip = (page - 1) * limit;
     const search = params?.search?.trim() ?? '';
 
-    const where = buildMatterSearchWhere(tenantId, search);
+    let where = buildMatterSearchWhere(tenantId, search, params?.branchId);
+
+    // Allow overriding status filter (e.g. 'CLOSED', 'PENDING')
+    if (params?.status && params.status !== 'ALL') {
+      where = { ...where, status: params.status as any };
+    }
 
     const [data, total] = await Promise.all([
       db.matter.findMany({

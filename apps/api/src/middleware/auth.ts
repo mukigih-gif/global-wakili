@@ -9,6 +9,7 @@ export type AuthenticatedRequestUser = {
   userId: string;
   email?: string;
   tenantId?: string | null;
+  branchId?: string | null;
   systemRole?: string | null;
   tenantRole?: string | null;
   role?: string | null;
@@ -153,6 +154,7 @@ export async function loadAuthenticatedUser(
     userId: user.id,
     email: user.email ?? undefined,
     tenantId: user.tenantId,
+    branchId: user.branchId ?? null,
     systemRole: user.systemRole,
     tenantRole: user.tenantRole,
     role: primaryRole,

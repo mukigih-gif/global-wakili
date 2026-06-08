@@ -9,6 +9,7 @@ type ClientListQuery = {
   page?: number;
   limit?: number;
   search?: string;
+  branchId?: string | null;
 };
 
 type ClientListDbClient = TenantClientDbClient & {
@@ -388,6 +389,7 @@ export class ClientService {
     const where = {
       tenantId,
       status: 'ACTIVE',
+      ...(query.branchId ? { branchId: query.branchId } : {}),
       ...buildSearchWhere(query.search),
     };
 

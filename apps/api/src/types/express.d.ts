@@ -39,6 +39,8 @@ declare global {
       roleIds?: string[];
       permissions?: string[];
 
+      branchId?: string | null;
+
       isSuperAdmin: boolean;
       isSystemAdmin?: boolean;
       systemRole?: string | null;

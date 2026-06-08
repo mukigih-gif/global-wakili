@@ -3,116 +3,899 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api';
-import { formatDate, formatCurrency } from '@/lib/utils';
-import { Card, CardHeader, CardBody } from '@/components/ui/Card';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/Badge';
-import { Table, Th, Td, EmptyRow } from '@/components/ui/Table';
-import { ArrowLeft, Calendar, DollarSign, Clock, FileText } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
+import {
+  ArrowLeft, Edit2, CheckCircle, FileText, Clock, DollarSign,
+  Users, Scale, Briefcase, TrendingUp, X, Save, AlertCircle,
+  File, Plus, CalendarDays, MapPin,
+} from 'lucide-react';
 
-type MatterDetail = {
-  id: string; title: string; matterCode?: string | null; status: string;
-  category: string; description?: string; createdAt: string;
-  openedDate?: string; estimatedValue?: string | null; currency?: string;
-  riskLevel?: string;
-  client?: { id: string; name: string; email?: string } | null;
-  leadAdvocate?: { id: string; name: string; role?: string } | null;
-  originator?: { advocate?: { id: string; name: string } } | null;
-  assignedLawyer?: { name: string } | null;
-  tasks?: Array<{ id: string; title: string; status: string; dueDate?: string; assignee?: { name: string } }>;
-  timeEntries?: Array<{ id: string; description: string; durationHours: string; billableAmount: string; status: string; entryDate: string }>;
-  invoices?: Array<{ id: string; invoiceNumber: string; total: string; status: string; dueDate?: string }>;
-  hearings?: Array<{ id: string; caseNumber?: string; hearingDate?: string; court?: string; status: string }>;
-  wipValue?: string; trustBalance?: string;
+type Matter = {
+  id: string;
+  title: string;
+  matterCode?: string | null;
+  caseNumber?: string | null;
+  status: string;
+  category: string;
+  riskLevel: string;
+  description?: string | null;
+  openedDate: string;
+  closedDate?: string | null;
+  currency: string;
+  estimatedValue?: string | number | null;
+  progressPercent: number;
+  progressStage?: string | null;
+  client?: { id: string; name: string; clientCode: string; email?: string; phoneNumber?: string } | null;
+  leadAdvocate?: { id: string; name: string; email: string } | null;
+  invoiceCount?: number;
+  taskCount?: number;
+  documentCount?: number;
+  expenseCount?: number;
+  trustTransactionCount?: number;
+  courtHearingCount?: number;
+  recentInvoices?: { id: string; invoiceNumber: string; total?: number; paidAmount?: number; status: string }[];
 };
 
+const PROGRESS_STAGES = [
+  { value: 'INSTRUCTION_RECEIVED', label: 'Instruction Received' },
+  { value: 'INITIAL_REVIEW', label: 'Initial Review' },
+  { value: 'RESEARCH', label: 'Research & Analysis' },
+  { value: 'DRAFTING', label: 'Drafting' },
+  { value: 'NEGOTIATION', label: 'Negotiation' },
+  { value: 'COURT_PROCEEDINGS', label: 'Court Proceedings' },
+  { value: 'AWAITING_JUDGMENT', label: 'Awaiting Judgment' },
+  { value: 'JUDGMENT_RECEIVED', label: 'Judgment Received' },
+  { value: 'POST_JUDGMENT', label: 'Post-Judgment' },
+  { value: 'ENFORCEMENT', label: 'Enforcement' },
+  { value: 'SETTLEMENT', label: 'Settlement' },
+  { value: 'CLOSING', label: 'Closing' },
+];
+
+type Tab = 'overview' | 'invoices' | 'disbursements' | 'expenses' | 'tasks' | 'hearings' | 'calendar';
+
 export function MatterDetailClient({ id }: { id: string }) {
-  const [matter, setMatter] = useState<MatterDetail | null>(null);
+  const [matter, setMatter] = useState<Matter | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>('overview');
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [editForm, setEditForm] = useState({
+    status: '', progressPercent: 0, progressStage: '', description: '',
+  });
 
-  useEffect(() => {
-    api.get<any>(`/matters/${id}`)
-      .then((r) => {
-        // API can return { matter: {...} } or flat { id, title, ... }
-        const m = r?.id ? r : (r?.matter ?? r?.data ?? r);
-        setMatter(m?.id ? m : null);
+  const loadMatter = () => {
+    setLoading(true);
+    api.get<any>(`/matters/${id}/overview`)
+      .then((m) => {
+        const data = m?.id ? m : (m?.matter ?? m?.data ?? m);
+        setMatter(data);
+        setEditForm({
+          status: data?.status ?? '',
+          progressPercent: data?.progressPercent ?? 0,
+          progressStage: data?.progressStage ?? '',
+          description: data?.description ?? '',
+        });
       })
-      .catch(() => setMatter(null))
+      .catch(() => {})
       .finally(() => setLoading(false));
-  }, [id]);
+  };
 
-  if (loading) return <div className="flex items-center justify-center h-64"><div className="h-8 w-8 animate-spin rounded-full border-4 border-primary-600 border-t-transparent" /></div>;
-  if (!matter) return <div className="text-center text-gray-500 py-16">Matter not found.</div>;
+  useEffect(() => { loadMatter(); }, [id]);
+
+  const handleSave = async () => {
+    setSaving(true); setError('');
+    try {
+      await api.patch(`/matters/${id}`, {
+        status: editForm.status,
+        progressPercent: editForm.progressPercent,
+        progressStage: editForm.progressStage || null,
+        description: editForm.description || null,
+      });
+      setEditing(false);
+      loadMatter();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save changes');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4 animate-pulse">
+        <div className="h-8 bg-gray-200 rounded w-1/2" />
+        <div className="h-4 bg-gray-100 rounded w-1/4" />
+        <div className="h-48 bg-gray-100 rounded-xl" />
+      </div>
+    );
+  }
+
+  if (!matter) {
+    return (
+      <div className="text-center py-16">
+        <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-3" />
+        <p className="text-gray-500">Matter not found</p>
+        <Link href="/app/matters" className="text-primary-600 text-sm hover:underline mt-2 inline-block">
+          ← Back to Matters
+        </Link>
+      </div>
+    );
+  }
+
+  const progressPct = editing ? editForm.progressPercent : (matter.progressPercent ?? 0);
+  const progressColor =
+    progressPct < 25 ? 'bg-red-400' :
+    progressPct < 50 ? 'bg-amber-400' :
+    progressPct < 75 ? 'bg-blue-400' : 'bg-green-500';
+  const stageLabel = PROGRESS_STAGES.find((s) => s.value === matter.progressStage)?.label;
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center gap-3">
-        <Link href="/app/matters" className="text-gray-400 hover:text-gray-600"><ArrowLeft className="h-5 w-5" /></Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900">{matter.title}</h1>
-            <StatusBadge status={matter.status} />
+      {/* Header */}
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-3">
+          <Link href="/app/matters" className="mt-1 text-gray-400 hover:text-gray-600 flex-shrink-0">
+            <ArrowLeft className="h-5 w-5" />
+          </Link>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl font-bold text-gray-900">{matter.title}</h1>
+              <StatusBadge status={matter.status} />
+              {matter.riskLevel && matter.riskLevel !== 'LOW' && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                  matter.riskLevel === 'HIGH'   ? 'bg-red-100 text-red-700' :
+                  matter.riskLevel === 'MEDIUM' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-600'
+                }`}>{matter.riskLevel} RISK</span>
+              )}
+            </div>
+            <div className="flex items-center gap-3 mt-1 text-sm text-gray-500 flex-wrap">
+              <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-xs">
+                {matter.matterCode ?? `MTR-${id.slice(-6).toUpperCase()}`}
+              </span>
+              {matter.caseNumber && <span className="text-xs">Case: {matter.caseNumber}</span>}
+              <span className="text-xs">{matter.category?.replace(/_/g, ' ')}</span>
+              <span className="text-xs">Opened {formatDate(matter.openedDate)}</span>
+              {matter.closedDate && <span className="text-xs text-red-500">Closed {formatDate(matter.closedDate)}</span>}
+            </div>
           </div>
-          <p className="text-sm text-gray-500 mt-0.5 flex items-center flex-wrap gap-2">
-            <span className="font-mono text-gray-700 bg-gray-100 rounded px-1.5 py-0.5 text-xs">
-              {matter.matterCode ?? `MTR-${matter.id.slice(-6).toUpperCase()}`}
-            </span>
-            {matter.client && (
-              <Link href={`/app/clients/${matter.client.id}`} className="text-primary-600 hover:underline text-xs">
-                {matter.client.name}
-              </Link>
+        </div>
+        <div className="flex gap-2 flex-shrink-0">
+          {!editing ? (
+            <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
+              <Edit2 className="h-3.5 w-3.5" /> Edit
+            </Button>
+          ) : (
+            <>
+              <Button size="sm" variant="ghost" onClick={() => { setEditing(false); setError(''); }}>
+                <X className="h-3.5 w-3.5" /> Cancel
+              </Button>
+              <Button size="sm" loading={saving} onClick={handleSave}>
+                <Save className="h-3.5 w-3.5" /> Save
+              </Button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
+      )}
+
+      {/* Progress Bar */}
+      <div className="card p-5 space-y-3">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-primary-600" />
+            <span className="text-sm font-semibold text-gray-800">Matter Progress</span>
+          </div>
+          <div className="flex items-center gap-3 flex-wrap">
+            {editing ? (
+              <select
+                value={editForm.progressStage}
+                onChange={(e) => setEditForm((f) => ({ ...f, progressStage: e.target.value }))}
+                className="form-select text-xs w-52"
+              >
+                <option value="">— Select Stage —</option>
+                {PROGRESS_STAGES.map((s) => (
+                  <option key={s.value} value={s.value}>{s.label}</option>
+                ))}
+              </select>
+            ) : stageLabel ? (
+              <span className="text-xs bg-primary-50 text-primary-700 px-2.5 py-1 rounded-full font-medium">
+                {stageLabel}
+              </span>
+            ) : (
+              <span className="text-xs text-gray-400 italic">No stage set — click Edit to update</span>
             )}
-            {matter.category && <span className="text-xs text-gray-400">{matter.category.replace(/_/g, ' ')}</span>}
+            {editing ? (
+              <div className="flex items-center gap-2">
+                <input
+                  type="range" min="0" max="100" step="5"
+                  value={editForm.progressPercent}
+                  onChange={(e) => setEditForm((f) => ({ ...f, progressPercent: parseInt(e.target.value) }))}
+                  className="w-28 accent-primary-600"
+                />
+                <span className="text-sm font-bold text-gray-700 w-10 text-right">{editForm.progressPercent}%</span>
+              </div>
+            ) : (
+              <span className="text-lg font-bold text-gray-900">{progressPct}%</span>
+            )}
+          </div>
+        </div>
+        <div className="w-full bg-gray-100 rounded-full h-3">
+          <div
+            className={`h-3 rounded-full transition-all duration-300 ${progressColor}`}
+            style={{ width: `${progressPct}%` }}
+          />
+        </div>
+        <div className="flex justify-between text-[10px] text-gray-400 px-0.5">
+          {[0, 25, 50, 75, 100].map((v) => <span key={v}>{v}%</span>)}
+        </div>
+
+        {editing && (
+          <div className="grid grid-cols-1 gap-4 pt-3 border-t border-gray-100 sm:grid-cols-2">
+            <div>
+              <label className="form-label">Status</label>
+              <select value={editForm.status} onChange={(e) => setEditForm((f) => ({ ...f, status: e.target.value }))} className="form-select w-full">
+                <option value="ACTIVE">Active</option>
+                <option value="PENDING">Pending</option>
+                <option value="ON_HOLD">On Hold</option>
+                <option value="CLOSED">Closed</option>
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Description</label>
+              <textarea value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))}
+                rows={2} className="form-input w-full resize-none text-sm" placeholder="Brief description of the matter…" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Info Cards */}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><Users className="h-3.5 w-3.5" /> Client</p>
+          {matter.client ? (
+            <Link href={`/app/clients/${matter.client.id}`} className="text-sm font-semibold text-primary-700 hover:underline block">
+              {matter.client.name}
+            </Link>
+          ) : <span className="text-sm text-gray-400">—</span>}
+          {matter.client?.clientCode && (
+            <p className="text-xs text-gray-400 mt-0.5 font-mono">{matter.client.clientCode}</p>
+          )}
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><Briefcase className="h-3.5 w-3.5" /> Lead Advocate</p>
+          <p className="text-sm font-semibold text-gray-800">{matter.leadAdvocate?.name ?? '—'}</p>
+          {matter.leadAdvocate?.email && (
+            <p className="text-xs text-gray-400 mt-0.5 truncate">{matter.leadAdvocate.email}</p>
+          )}
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs text-gray-500 mb-1 flex items-center gap-1"><DollarSign className="h-3.5 w-3.5" /> Est. Value</p>
+          <p className="text-sm font-semibold text-gray-800">
+            {matter.estimatedValue
+              ? formatCurrency(matter.estimatedValue, matter.currency)
+              : <span className="text-gray-400">Not set</span>}
           </p>
-          {/* Advocate info */}
-          <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 flex-wrap">
-            {matter.leadAdvocate && (
-              <span className="flex items-center gap-1">
-                <span className="font-medium text-gray-700">Lead:</span> {matter.leadAdvocate.name}
-              </span>
-            )}
-            {matter.originator?.advocate && matter.originator.advocate.id !== matter.leadAdvocate?.id && (
-              <span className="flex items-center gap-1">
-                <span className="font-medium text-gray-700">Originator:</span> {matter.originator.advocate.name}
-              </span>
-            )}
-            {matter.estimatedValue && (
-              <span className="flex items-center gap-1">
-                <span className="font-medium text-gray-700">Est. Value:</span>
-                {matter.currency ?? 'KES'} {Number(matter.estimatedValue).toLocaleString()}
-              </span>
-            )}
-            {matter.wipValue && Number(matter.wipValue) > 0 && (
-              <span className="flex items-center gap-1">
-                <span className="font-medium text-gray-700">WIP:</span>
-                {matter.currency ?? 'KES'} {Number(matter.wipValue).toLocaleString()}
-              </span>
-            )}
+          <p className="text-xs text-gray-400 mt-0.5">{matter.currency}</p>
+        </div>
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs text-gray-500 mb-2 flex items-center gap-1"><Scale className="h-3.5 w-3.5" /> Activity</p>
+          <div className="grid grid-cols-3 gap-1 text-center">
+            <div><p className="text-sm font-bold text-gray-800">{matter.invoiceCount ?? 0}</p><p className="text-[10px] text-gray-400">Inv</p></div>
+            <div><p className="text-sm font-bold text-gray-800">{matter.taskCount ?? 0}</p><p className="text-[10px] text-gray-400">Tasks</p></div>
+            <div><p className="text-sm font-bold text-gray-800">{matter.documentCount ?? 0}</p><p className="text-[10px] text-gray-400">Docs</p></div>
           </div>
         </div>
       </div>
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader><h2 className="font-semibold">Matter Details</h2></CardHeader>
-          <CardBody className="grid grid-cols-2 gap-4 text-sm">
-            <div><span className="text-gray-500">Client</span><p className="font-medium">{matter.client?.name ?? '—'}</p></div>
-            <div><span className="text-gray-500">Assigned Lawyer</span><p className="font-medium">{matter.assignedLawyer?.name ?? '—'}</p></div>
-            <div><span className="text-gray-500">Category</span><p className="font-medium">{matter.category?.replace(/_/g, ' ') ?? '—'}</p></div>
-            <div><span className="text-gray-500">Opened</span><p className="font-medium">{formatDate(matter.createdAt)}</p></div>
-          </CardBody>
-        </Card>
-        <div className="space-y-3">
-          <Card className="p-4"><div className="flex items-center gap-2 text-sm text-gray-500"><Clock className="h-4 w-4" /> Time Entries</div><p className="text-xl font-bold mt-1">{matter.timeEntries?.length ?? 0}</p></Card>
-          <Card className="p-4"><div className="flex items-center gap-2 text-sm text-gray-500"><DollarSign className="h-4 w-4" /> Invoices</div><p className="text-xl font-bold mt-1">{matter.invoices?.length ?? 0}</p></Card>
-          <Card className="p-4"><div className="flex items-center gap-2 text-sm text-gray-500"><Calendar className="h-4 w-4" /> Hearings</div><p className="text-xl font-bold mt-1">{matter.hearings?.length ?? 0}</p></Card>
-        </div>
+
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-gray-200 overflow-x-auto">
+        {([
+          { key: 'overview',      label: 'Overview',                                                                        icon: <Scale className="h-3.5 w-3.5" /> },
+          { key: 'invoices',      label: `Invoices${matter.invoiceCount ? ` (${matter.invoiceCount})` : ''}`,               icon: <FileText className="h-3.5 w-3.5" /> },
+          { key: 'disbursements', label: 'Disbursements',                                                                   icon: <DollarSign className="h-3.5 w-3.5" /> },
+          { key: 'expenses',      label: `Expenses${matter.expenseCount ? ` (${matter.expenseCount})` : ''}`,               icon: <Clock className="h-3.5 w-3.5" /> },
+          { key: 'tasks',         label: `Tasks${matter.taskCount ? ` (${matter.taskCount})` : ''}`,                        icon: <CheckCircle className="h-3.5 w-3.5" /> },
+          { key: 'hearings',  label: `Court${matter.courtHearingCount ? ` (${matter.courtHearingCount})` : ''}`, icon: <Scale className="h-3.5 w-3.5" /> },
+          { key: 'calendar',  label: 'Calendar',                                                                    icon: <CalendarDays className="h-3.5 w-3.5" /> },
+        ] as const).map((t) => (
+          <button key={t.key} onClick={() => setTab(t.key)}
+            className={`flex items-center gap-1.5 px-3 py-2.5 text-xs font-medium border-b-2 whitespace-nowrap transition-colors ${
+              tab === t.key ? 'border-primary-600 text-primary-700' : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}>
+            {t.icon}{t.label}
+          </button>
+        ))}
       </div>
-      {!!matter.hearings?.length && (
-        <Card>
-          <CardHeader><h2 className="font-semibold">Court Hearings</h2></CardHeader>
-          <Table><thead><tr><Th>Case No.</Th><Th>Court</Th><Th>Date</Th><Th>Status</Th></tr></thead>
-          <tbody>{matter.hearings.map((h) => (<tr key={h.id}><Td className="font-mono text-xs">{h.caseNumber}</Td><Td>{h.court}</Td><Td>{formatDate(h.hearingDate)}</Td><Td><StatusBadge status={h.status} /></Td></tr>))}</tbody></Table>
-        </Card>
+
+      {tab === 'overview'      && <MatterOverviewTab matter={matter} matterId={id} />}
+      {tab === 'invoices'      && <MatterInvoicesTab matterId={id} />}
+      {tab === 'disbursements' && <MatterDisbursementsTab matterId={id} />}
+      {tab === 'expenses'      && <MatterExpensesTab matterId={id} currency={matter.currency} />}
+      {tab === 'tasks'         && <MatterTasksTab matterId={id} />}
+      {tab === 'hearings'      && <MatterHearingsTab matterId={id} />}
+      {tab === 'calendar'      && <MatterCalendarTab matterId={id} matterTitle={matter.title} />}
+    </div>
+  );
+}
+
+// ─── Overview ────────────────────────────────────────────────────────────────
+
+function MatterOverviewTab({ matter, matterId }: { matter: Matter; matterId: string }) {
+  return (
+    <div className="space-y-4">
+      {matter.description && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Description</p>
+          <p className="text-sm text-gray-700 leading-relaxed">{matter.description}</p>
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+        {[
+          { label: 'Invoices',       count: matter.invoiceCount ?? 0,          href: '#',                               icon: <FileText className="h-5 w-5" /> },
+          { label: 'Tasks',          count: matter.taskCount ?? 0,             href: `/app/tasks?matterId=${matterId}`, icon: <CheckCircle className="h-5 w-5" /> },
+          { label: 'Documents',      count: matter.documentCount ?? 0,         href: `/app/documents`,                  icon: <File className="h-5 w-5" /> },
+          { label: 'Expenses',       count: matter.expenseCount ?? 0,          href: '#',                               icon: <Clock className="h-5 w-5" /> },
+          { label: 'Trust Txns',     count: matter.trustTransactionCount ?? 0, href: `/app/trust`,                      icon: <DollarSign className="h-5 w-5" /> },
+          { label: 'Court Hearings', count: matter.courtHearingCount ?? 0,     href: `/app/court/filings`,              icon: <Scale className="h-5 w-5" /> },
+        ].map((item) => (
+          <Link key={item.label} href={item.href}
+            className="rounded-xl border border-gray-200 bg-white p-4 hover:border-primary-200 hover:bg-primary-50/30 transition-colors group">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-xs text-gray-500">{item.label}</span>
+              <span className="text-gray-300 group-hover:text-primary-400 transition-colors">{item.icon}</span>
+            </div>
+            <p className="text-2xl font-bold text-gray-900">{item.count}</p>
+          </Link>
+        ))}
+      </div>
+
+      {matter.recentInvoices && matter.recentInvoices.length > 0 && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <p className="text-xs font-semibold text-gray-500 mb-3 uppercase tracking-wide">Recent Invoices</p>
+          <div className="divide-y divide-gray-50">
+            {matter.recentInvoices.map((inv) => (
+              <div key={inv.id} className="flex items-center justify-between py-2">
+                <span className="font-mono text-xs text-gray-600">{inv.invoiceNumber}</span>
+                <StatusBadge status={inv.status} />
+                {inv.total != null && (
+                  <span className="text-gray-700 font-medium text-xs">{formatCurrency(inv.total)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
+  );
+}
+
+// ─── Invoices ────────────────────────────────────────────────────────────────
+
+function MatterInvoicesTab({ matterId }: { matterId: string }) {
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get<{ data: any[] }>(`/billing/invoices?matterId=${matterId}&take=50`)
+      .then((r) => setInvoices(r.data ?? []))
+      .catch(() => setInvoices([]))
+      .finally(() => setLoading(false));
+  }, [matterId]);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Link href={`/app/billing/new?matterId=${matterId}`}>
+          <Button size="sm"><Plus className="h-3.5 w-3.5" /> New Invoice</Button>
+        </Link>
+      </div>
+      <Table>
+        <thead><tr><Th>Invoice No.</Th><Th>Total</Th><Th>Paid</Th><Th>Balance</Th><Th>Status</Th><Th>Issued</Th></tr></thead>
+        <tbody>
+          {loading ? <LoadingRow colSpan={6} /> :
+           !invoices.length ? <EmptyRow colSpan={6} message="No invoices for this matter" /> :
+           invoices.map((inv) => {
+             const total = parseFloat(inv.total ?? inv.totalAmount ?? 0);
+             const paid  = parseFloat(inv.paidAmount ?? 0);
+             return (
+               <tr key={inv.id}>
+                 <Td><span className="font-mono text-xs">{inv.invoiceNumber}</span></Td>
+                 <Td className="font-medium text-gray-900">{formatCurrency(total)}</Td>
+                 <Td className="font-medium text-green-700">{formatCurrency(paid)}</Td>
+                 <Td className={`font-medium ${total - paid > 0 ? 'text-amber-700' : 'text-gray-400'}`}>{formatCurrency(total - paid)}</Td>
+                 <Td><StatusBadge status={inv.status} /></Td>
+                 <Td className="text-xs text-gray-500">
+                   {inv.issuedAt ? formatDate(inv.issuedAt) : inv.issuedDate ? formatDate(inv.issuedDate) : '—'}
+                 </Td>
+               </tr>
+             );
+           })}
+        </tbody>
+      </Table>
+    </div>
+  );
+}
+
+// ─── Disbursements (inline with approve/reject/mark-paid) ─────────────────────
+
+function MatterDisbursementsTab({ matterId }: { matterId: string }) {
+  const [disbursements, setDisbursements] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actioning, setActioning] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({
+    disbursementType: 'COURT_FEES', description: '', amount: '',
+    currency: 'KES', requestNote: '', notes: '',
+  });
+
+  const load = () => {
+    setLoading(true);
+    api.get<{ data: any[] }>(`/matters/${matterId}/disbursements`)
+      .then((r) => setDisbursements(r.data ?? []))
+      .catch(() => setDisbursements([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, [matterId]);
+
+  const act = async (disbId: string, action: 'approve' | 'reject' | 'mark-paid') => {
+    setActioning(disbId + action);
+    try {
+      await api.patch(`/matters/${matterId}/disbursements/${disbId}/${action}`, {});
+      load();
+    } catch { load(); }
+    finally { setActioning(null); }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.amount || parseFloat(form.amount) <= 0) { setError('Amount must be > 0'); return; }
+    setSaving(true); setError('');
+    try {
+      await api.post(`/matters/${matterId}/disbursements`, { ...form, amount: parseFloat(form.amount), matterId });
+      setForm({ disbursementType: 'COURT_FEES', description: '', amount: '', currency: 'KES', requestNote: '', notes: '' });
+      setShowForm(false);
+      load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to submit disbursement');
+    } finally { setSaving(false); }
+  };
+
+  const totalPaid    = disbursements.filter((d) => d.status === 'SETTLED').reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
+  const totalPending = disbursements.filter((d) => ['DRAFT', 'APPROVED'].includes(d.status)).reduce((s, d) => s + (parseFloat(d.amount) || 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex gap-4">
+          <div className="rounded-xl border border-gray-200 bg-white px-4 py-2">
+            <p className="text-xs text-gray-500">Disbursed</p>
+            <p className="text-base font-bold text-gray-900">{formatCurrency(totalPaid)}</p>
+          </div>
+          <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-2">
+            <p className="text-xs text-amber-600">Pending</p>
+            <p className="text-base font-bold text-amber-800">{formatCurrency(totalPending)}</p>
+          </div>
+        </div>
+        <Button size="sm" onClick={() => setShowForm(true)}><Plus className="h-3.5 w-3.5" /> Request Disbursement</Button>
+      </div>
+
+      {showForm && (
+        <div className="card p-5 border-primary-200 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900">Disbursement Request</h3>
+            <button onClick={() => { setShowForm(false); setError(''); }} className="text-gray-400 hover:text-gray-600 text-sm">Cancel</button>
+          </div>
+          {error && <div className="rounded bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
+          <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="form-label">Type *</label>
+              <select required value={form.disbursementType} onChange={(e) => setForm((f) => ({ ...f, disbursementType: e.target.value }))} className="form-select w-full">
+                <option value="COURT_FEES">Court Filing Fees</option>
+                <option value="STAMP_DUTY">Stamp Duty</option>
+                <option value="VALUATION">Valuation Fees</option>
+                <option value="SEARCH_FEES">Search / Registry Fees</option>
+                <option value="TRAVEL">Travel & Accommodation</option>
+                <option value="PRINTING">Printing & Photocopying</option>
+                <option value="PROCESS_SERVER">Process Server</option>
+                <option value="EXPERT_WITNESS">Expert Witness</option>
+                <option value="ADVOCATE_FEES">Advocate Fees</option>
+                <option value="OTHER">Other</option>
+              </select>
+            </div>
+            <div>
+              <label className="form-label">Description *</label>
+              <input required value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="form-input w-full" placeholder="Brief description" />
+            </div>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="form-label">Amount *</label>
+                <input required type="number" min="0.01" step="0.01" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} className="form-input w-full" placeholder="0.00" />
+              </div>
+              <div className="w-24">
+                <label className="form-label">Currency</label>
+                <select value={form.currency} onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))} className="form-select w-full">
+                  <option>KES</option><option>USD</option><option>GBP</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="form-label">Justification *</label>
+              <textarea required value={form.requestNote} onChange={(e) => setForm((f) => ({ ...f, requestNote: e.target.value }))} rows={2} className="form-input w-full resize-none" placeholder="Purpose and necessity of this expense…" />
+            </div>
+            <div className="col-span-2 flex justify-end">
+              <Button type="submit" loading={saving}>Submit Request</Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <Table>
+        <thead><tr><Th>Ref</Th><Th>Type</Th><Th>Description</Th><Th>Amount</Th><Th>Requested By</Th><Th>Status</Th><Th>Date</Th><Th>Actions</Th></tr></thead>
+        <tbody>
+          {loading ? <LoadingRow colSpan={8} /> :
+           !disbursements.length ? <EmptyRow colSpan={8} message="No disbursements requested for this matter" /> :
+           disbursements.map((d) => (
+             <tr key={d.id}>
+               <Td><span className="font-mono text-xs text-gray-600">{d.reference ?? '—'}</span></Td>
+               <Td className="text-xs text-gray-600">{d.disbursementType?.replace(/_/g, ' ') ?? '—'}</Td>
+               <Td className="text-sm text-gray-900">{d.description}</Td>
+               <Td className="font-medium text-gray-900">{formatCurrency(d.amount, d.currency)}</Td>
+               <Td className="text-xs text-gray-600">{d.requestedBy?.name ?? '—'}</Td>
+               <Td><StatusBadge status={d.status} /></Td>
+               <Td className="text-xs text-gray-500">{formatDate(d.createdAt)}</Td>
+               <Td>
+                 {d.status === 'DRAFT' && (
+                   <div className="flex gap-2">
+                     <button disabled={!!actioning} onClick={() => act(d.id, 'approve')}
+                       className="text-xs text-green-600 hover:text-green-800 font-medium disabled:opacity-40">
+                       {actioning === d.id + 'approve' ? '…' : 'Approve'}
+                     </button>
+                     <button disabled={!!actioning} onClick={() => act(d.id, 'reject')}
+                       className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-40">
+                       {actioning === d.id + 'reject' ? '…' : 'Reject'}
+                     </button>
+                   </div>
+                 )}
+                 {d.status === 'APPROVED' && (
+                   <button disabled={!!actioning} onClick={() => act(d.id, 'mark-paid')}
+                     className="text-xs text-primary-600 hover:text-primary-800 font-medium disabled:opacity-40">
+                     {actioning === d.id + 'mark-paid' ? '…' : 'Mark Settled'}
+                   </button>
+                 )}
+                 {d.status === 'REJECTED' && <span className="text-xs text-red-400 italic">Rejected</span>}
+                 {d.status === 'SETTLED' && (
+                   <span className="text-xs text-green-500 flex items-center gap-1">
+                     <CheckCircle className="h-3 w-3" /> Settled
+                   </span>
+                 )}
+               </Td>
+             </tr>
+           ))}
+        </tbody>
+      </Table>
+    </div>
+  );
+}
+
+// ─── Expenses ────────────────────────────────────────────────────────────────
+
+function MatterExpensesTab({ matterId, currency }: { matterId: string; currency: string }) {
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [form, setForm] = useState({
+    description: '', amount: '', currency,
+    expenseDate: new Date().toISOString().slice(0, 10), notes: '',
+  });
+
+  const load = () => {
+    setLoading(true);
+    api.get<{ data: any[] }>(`/matters/${matterId}/expenses`)
+      .then((r) => setExpenses(r.data ?? []))
+      .catch(() => setExpenses([]))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(() => { load(); }, [matterId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!form.amount || parseFloat(form.amount) <= 0) { setError('Amount must be > 0'); return; }
+    setSaving(true); setError('');
+    try {
+      await api.post(`/billing/expenses`, { matterId, ...form, amount: parseFloat(form.amount) });
+      setForm({ description: '', amount: '', currency, expenseDate: new Date().toISOString().slice(0, 10), notes: '' });
+      setShowForm(false);
+      load();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to record expense');
+    } finally { setSaving(false); }
+  };
+
+  const totalAmt = expenses.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-2">
+          <p className="text-xs text-amber-600">Total Expenses</p>
+          <p className="text-lg font-bold text-amber-800">{formatCurrency(totalAmt, currency)}</p>
+        </div>
+        <Button size="sm" onClick={() => setShowForm(true)}><Plus className="h-3.5 w-3.5" /> Record Expense</Button>
+      </div>
+
+      {showForm && (
+        <div className="card p-5 border-primary-200 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-gray-900">Record Expense</h3>
+            <button onClick={() => { setShowForm(false); setError(''); }} className="text-gray-400 hover:text-gray-600 text-sm">Cancel</button>
+          </div>
+          {error && <div className="rounded bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{error}</div>}
+          <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
+            <div className="col-span-2">
+              <label className="form-label">Description *</label>
+              <input required value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} className="form-input w-full" placeholder="e.g. Travel to Mombasa for hearing" />
+            </div>
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="form-label">Amount *</label>
+                <input required type="number" min="0.01" step="0.01" value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} className="form-input w-full" placeholder="0.00" />
+              </div>
+              <div className="w-24">
+                <label className="form-label">Currency</label>
+                <select value={form.currency} onChange={(e) => setForm((f) => ({ ...f, currency: e.target.value }))} className="form-select w-full">
+                  <option>KES</option><option>USD</option><option>GBP</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="form-label">Date</label>
+              <input type="date" value={form.expenseDate} onChange={(e) => setForm((f) => ({ ...f, expenseDate: e.target.value }))} className="form-input w-full" />
+            </div>
+            <div className="col-span-2">
+              <label className="form-label">Notes</label>
+              <textarea value={form.notes} onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))} rows={2} className="form-input w-full resize-none" placeholder="Optional notes" />
+            </div>
+            <div className="col-span-2 flex justify-end">
+              <Button type="submit" loading={saving}>Save Expense</Button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <Table>
+        <thead><tr><Th>Date</Th><Th>Description</Th><Th>Amount</Th><Th>Recorded By</Th><Th>Status</Th></tr></thead>
+        <tbody>
+          {loading ? <LoadingRow colSpan={5} /> :
+           !expenses.length ? <EmptyRow colSpan={5} message="No expenses recorded for this matter" /> :
+           expenses.map((exp) => (
+             <tr key={exp.id}>
+               <Td className="text-xs text-gray-500">{formatDate(exp.expenseDate ?? exp.createdAt)}</Td>
+               <Td className="text-sm text-gray-900">{exp.description ?? '—'}</Td>
+               <Td className="font-medium text-gray-900">{formatCurrency(exp.amount, exp.currency)}</Td>
+               <Td className="text-xs text-gray-500">{exp.user?.name ?? '—'}</Td>
+               <Td><StatusBadge status={exp.status ?? 'DRAFT'} /></Td>
+             </tr>
+           ))}
+        </tbody>
+      </Table>
+    </div>
+  );
+}
+
+// ─── Tasks ───────────────────────────────────────────────────────────────────
+
+function MatterTasksTab({ matterId }: { matterId: string }) {
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get<{ data: any[] }>(`/tasks/search?matterId=${matterId}&limit=50`)
+      .then((r) => setTasks(r.data ?? []))
+      .catch(() => setTasks([]))
+      .finally(() => setLoading(false));
+  }, [matterId]);
+
+  const now = new Date();
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <Link href={`/app/tasks/new?matterId=${matterId}`}>
+          <Button size="sm"><Plus className="h-3.5 w-3.5" /> New Task</Button>
+        </Link>
+      </div>
+      <Table>
+        <thead><tr><Th>Title</Th><Th>Priority</Th><Th>Assigned To</Th><Th>Due</Th><Th>Status</Th></tr></thead>
+        <tbody>
+          {loading ? <LoadingRow colSpan={5} /> :
+           !tasks.length ? <EmptyRow colSpan={5} message="No tasks for this matter" /> :
+           tasks.map((t) => {
+             const isOverdue = t.dueDate && new Date(t.dueDate) < now && t.status !== 'DONE';
+             return (
+               <tr key={t.id}>
+                 <Td>
+                   <Link href={`/app/tasks/${t.id}`} className="text-primary-700 hover:underline text-sm font-medium">{t.title}</Link>
+                 </Td>
+                 <Td>
+                   <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${
+                     t.priority === 'URGENT' ? 'bg-red-100 text-red-700' :
+                     t.priority === 'HIGH'   ? 'bg-amber-100 text-amber-700' :
+                     t.priority === 'MEDIUM' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'
+                   }`}>{t.priority}</span>
+                 </Td>
+                 <Td className="text-xs text-gray-600">{t.assignee?.name ?? '—'}</Td>
+                 <Td className={`text-xs ${isOverdue ? 'text-red-600 font-medium' : 'text-gray-500'}`}>
+                   {t.dueDate ? formatDate(t.dueDate) : '—'}
+                   {isOverdue && <span className="ml-1">(overdue)</span>}
+                 </Td>
+                 <Td><StatusBadge status={t.status} /></Td>
+               </tr>
+             );
+           })}
+        </tbody>
+      </Table>
+    </div>
+  );
+}
+
+// ─── Matter Calendar (Bring-Ups, Hearings, Deadlines) ────────────────────────
+
+function MatterCalendarTab({ matterId, matterTitle }: { matterId: string; matterTitle: string }) {
+  const [events, setEvents] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const from = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
+    const to   = new Date(Date.now() + 730 * 24 * 60 * 60 * 1000).toISOString();
+    api.get<{ data: any[] }>(`/calendar/events?matterId=${matterId}&startDate=${from}&endDate=${to}&limit=100`)
+      .then((r) => setEvents(r.data ?? []))
+      .catch(() => setEvents([]))
+      .finally(() => setLoading(false));
+  }, [matterId]);
+
+  const now = new Date();
+  const upcoming = events.filter((e) => new Date(e.startTime ?? e.start) >= now);
+  const past     = events.filter((e) => new Date(e.startTime ?? e.start) < now);
+
+  const TYPE_COLORS: Record<string, string> = {
+    COURT_HEARING:    'bg-red-100 text-red-700',
+    DEADLINE:         'bg-orange-100 text-orange-700',
+    BRING_UP:         'bg-amber-100 text-amber-700',
+    COMPLIANCE_DATE:  'bg-purple-100 text-purple-700',
+    CLIENT_MEETING:   'bg-blue-100 text-blue-700',
+    INTERNAL_MEETING: 'bg-gray-100 text-gray-700',
+    REMINDER:         'bg-green-100 text-green-700',
+  };
+
+  const EventRow = ({ ev }: { ev: any }) => {
+    const start = new Date(ev.startTime ?? ev.start);
+    const isPast = start < now;
+    return (
+      <div className={`flex items-start gap-3 p-3 rounded-lg border ${isPast ? 'bg-gray-50 border-gray-100' : 'bg-white border-gray-200'}`}>
+        <div className="flex-shrink-0 text-center min-w-[48px]">
+          <p className={`text-xs font-bold ${isPast ? 'text-gray-400' : 'text-primary-700'}`}>
+            {start.toLocaleDateString('en-KE', { day: '2-digit', month: 'short' })}
+          </p>
+          <p className={`text-xs ${isPast ? 'text-gray-400' : 'text-gray-500'}`}>
+            {ev.startTime ? start.toLocaleTimeString('en-KE', { hour: '2-digit', minute: '2-digit' }) : 'All day'}
+          </p>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${TYPE_COLORS[ev.type ?? ev.eventType] ?? 'bg-gray-100 text-gray-600'}`}>
+              {(ev.type ?? ev.eventType ?? 'EVENT').replace(/_/g, ' ')}
+            </span>
+            {isPast && <span className="text-xs text-gray-400 italic">past</span>}
+          </div>
+          <p className={`text-sm font-medium mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>{ev.title}</p>
+          {ev.location && (
+            <p className="text-xs text-gray-400 flex items-center gap-1 mt-0.5">
+              <MapPin className="h-3 w-3" />{ev.location}
+            </p>
+          )}
+          {ev.description && <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">{ev.description}</p>}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex gap-4 text-sm">
+          <span className="text-gray-500">{upcoming.length} upcoming</span>
+          <span className="text-gray-400">{past.length} past</span>
+        </div>
+        <Link href={`/app/calendar/new?matterId=${matterId}&matter=${encodeURIComponent(matterTitle)}`}>
+          <button className="flex items-center gap-1.5 text-xs bg-primary-600 hover:bg-primary-700 text-white px-3 py-1.5 rounded-lg font-medium transition-colors">
+            <Plus className="h-3.5 w-3.5" /> Schedule Event
+          </button>
+        </Link>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => <div key={i} className="h-16 bg-gray-100 rounded-lg animate-pulse" />)}
+        </div>
+      ) : events.length === 0 ? (
+        <div className="text-center py-10 rounded-xl border-2 border-dashed border-gray-200">
+          <CalendarDays className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">No events scheduled for this matter</p>
+          <p className="text-xs text-gray-400 mt-1">Add bring-ups, hearings, deadlines and meetings</p>
+          <Link href={`/app/calendar/new?matterId=${matterId}`} className="mt-3 inline-block">
+            <button className="text-xs text-primary-600 hover:text-primary-800 font-medium">+ Schedule first event</button>
+          </Link>
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {upcoming.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Upcoming</p>
+              <div className="space-y-2">
+                {upcoming.sort((a, b) => new Date(a.startTime ?? a.start).getTime() - new Date(b.startTime ?? b.start).getTime())
+                  .map((ev) => <EventRow key={ev.id} ev={ev} />)}
+              </div>
+            </div>
+          )}
+          {past.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Past</p>
+              <div className="space-y-2">
+                {past.sort((a, b) => new Date(b.startTime ?? b.start).getTime() - new Date(a.startTime ?? a.start).getTime())
+                  .slice(0, 10)
+                  .map((ev) => <EventRow key={ev.id} ev={ev} />)}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Court Hearings ───────────────────────────────────────────────────────────
+
+function MatterHearingsTab({ matterId }: { matterId: string }) {
+  const [hearings, setHearings] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.get<{ data: any[] }>(`/court/hearings?matterId=${matterId}&limit=50`)
+      .then((r) => setHearings(r.data ?? []))
+      .catch(() => setHearings([]))
+      .finally(() => setLoading(false));
+  }, [matterId]);
+
+  return (
+    <Table>
+      <thead><tr><Th>Date</Th><Th>Court</Th><Th>Judge</Th><Th>Purpose</Th><Th>Status</Th></tr></thead>
+      <tbody>
+        {loading ? <LoadingRow colSpan={5} /> :
+         !hearings.length ? <EmptyRow colSpan={5} message="No court hearings recorded for this matter" /> :
+         hearings.map((h) => (
+           <tr key={h.id}>
+             <Td className="text-xs text-gray-500">{formatDate(h.hearingDate ?? h.scheduledDate ?? h.date)}</Td>
+             <Td className="text-sm text-gray-900">{h.courtName ?? h.court ?? '—'}</Td>
+             <Td className="text-xs text-gray-600">{h.judgeName ?? h.judge ?? '—'}</Td>
+             <Td className="text-xs text-gray-600">{h.purpose ?? h.type ?? '—'}</Td>
+             <Td><StatusBadge status={h.status ?? 'SCHEDULED'} /></Td>
+           </tr>
+         ))}
+      </tbody>
+    </Table>
   );
 }

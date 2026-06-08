@@ -11,7 +11,8 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 
 type Matter = { id: string; title: string; matterCode: string };
-type User   = { id: string; name: string };
+type User   = { id: string; name: string; email?: string };
+type Client = { id: string; name: string; email?: string | null; clientCode: string };
 
 function NewEventForm() {
   const router  = useRouter();
@@ -20,33 +21,66 @@ function NewEventForm() {
   const [error, setError]     = useState('');
   const [matters, setMatters] = useState<Matter[]>([]);
   const [users, setUsers]     = useState<User[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [selectedAttendees, setAttendees] = useState<string[]>([]);
+  const [inviteClientId, setInviteClientId] = useState('');
+  const [notifyInternal, setNotifyInternal] = useState(true);
+  const [notifyClient, setNotifyClient]     = useState(false);
 
-  const defaultDate = params.get('date') || new Date().toISOString().slice(0, 10);
+  const defaultDate  = params.get('date') || new Date().toISOString().slice(0, 10);
+  const presetMatter = params.get('matterId') || '';
+
   const [form, setForm] = useState({
-    title: '', type: 'CLIENT_MEETING', startTime: `${defaultDate}T09:00`,  // API expects 'type' not 'eventType'
+    title: '', type: 'CLIENT_MEETING', startTime: `${defaultDate}T09:00`,
     endTime: `${defaultDate}T10:00`, location: '', description: '',
-    matterId: '', attendeeIds: [] as string[], isAllDay: false,
-    reminderMinutes: 30,  // default 30-min reminder
+    matterId: presetMatter, isAllDay: false, reminderMinutes: 30,
   });
 
   const set = (k: string, v: string | boolean) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    api.get<{ data: Matter[] }>('/matters?limit=100&status=ACTIVE').then((r) => setMatters(r.data ?? [])).catch(() => {});
+    api.get<{ data: Matter[] }>('/matters?limit=100').then((r) => setMatters(r.data ?? [])).catch(() => {});
     api.get<{ data: User[] }>('/users?limit=100').then((r) => setUsers(r.data ?? [])).catch(() => {});
+    api.get<{ data: Client[] }>('/clients?limit=100').then((r) => setClients(r.data ?? [])).catch(() => {});
   }, []);
+
+  const toggleAttendee = (userId: string) => {
+    setAttendees((prev) => prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
     try {
-      await api.post('/calendar/events', {
-        ...form,
-        matterId:        form.matterId        || null,
-        endTime:         form.isAllDay ? null : (form.endTime || null),
-        reminderMinutes: form.reminderMinutes  || 0,
+      const event = await api.post<{ id: string }>('/calendar/events', {
+        title:           form.title,
+        type:            form.type,
+        startTime:       form.isAllDay ? `${form.startTime.slice(0,10)}T00:00:00.000Z` : new Date(form.startTime).toISOString(),
+        endTime:         form.isAllDay ? null : (form.endTime ? new Date(form.endTime).toISOString() : null),
+        location:        form.location || null,
+        description:     form.description || null,
+        matterId:        form.matterId || null,
+        attendeeIds:     selectedAttendees,
+        reminderMinutes: form.reminderMinutes || 0,
       });
+
+      // Send internal notifications to attendees
+      if (notifyInternal && selectedAttendees.length > 0) {
+        await api.post('/calendar/events/' + (event as any).id + '/notify', {
+          type: 'INTERNAL',
+          attendeeIds: selectedAttendees,
+        }).catch(() => {}); // non-fatal
+      }
+
+      // Send client invite/notification
+      if (notifyClient && inviteClientId) {
+        await api.post('/calendar/events/' + (event as any).id + '/notify', {
+          type: 'CLIENT',
+          clientId: inviteClientId,
+        }).catch(() => {}); // non-fatal
+      }
+
       router.push('/app/calendar');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create event');
@@ -130,7 +164,57 @@ function NewEventForm() {
 
         <div>
           <label className="form-label">Description</label>
-          <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={2} className="form-input w-full" placeholder="Additional notes…" />
+          <textarea value={form.description} onChange={(e) => set('description', e.target.value)} rows={2} className="form-input w-full" placeholder="Additional notes, agenda, case details…" />
+        </div>
+
+        {/* Attendees */}
+        <div>
+          <label className="form-label">Internal Attendees (Staff)</label>
+          <div className="flex flex-wrap gap-1.5 mt-1 mb-2 min-h-[28px]">
+            {selectedAttendees.map((id) => {
+              const u = users.find((u) => u.id === id);
+              return (
+                <span key={id} className="inline-flex items-center gap-1 text-xs bg-primary-100 text-primary-700 px-2 py-0.5 rounded-full">
+                  {u?.name}
+                  <button type="button" onClick={() => toggleAttendee(id)} className="hover:text-primary-900">×</button>
+                </span>
+              );
+            })}
+          </div>
+          <select className="form-select w-full" value="" onChange={(e) => { if (e.target.value) toggleAttendee(e.target.value); }}>
+            <option value="">Add attendee…</option>
+            {users.filter((u) => !selectedAttendees.includes(u.id)).map((u) => (
+              <option key={u.id} value={u.id}>{u.name}</option>
+            ))}
+          </select>
+        </div>
+
+        {/* Client invite */}
+        <div>
+          <label className="form-label">Client Invite (Optional)</label>
+          <select className="form-select w-full" value={inviteClientId} onChange={(e) => setInviteClientId(e.target.value)}>
+            <option value="">No client invite</option>
+            {clients.map((c) => (
+              <option key={c.id} value={c.id}>{c.name} ({c.clientCode}){c.email ? ` — ${c.email}` : ''}</option>
+            ))}
+          </select>
+          {inviteClientId && (
+            <p className="text-xs text-gray-500 mt-0.5">An email notification will be sent to this client with the event details.</p>
+          )}
+        </div>
+
+        {/* Notification settings */}
+        <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-2">
+          <p className="text-xs font-semibold text-gray-700">Notifications</p>
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+            <input type="checkbox" checked={notifyInternal} onChange={(e) => setNotifyInternal(e.target.checked)} className="rounded border-gray-300 text-primary-600" />
+            Notify internal attendees (in-app + email)
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer text-sm text-gray-700">
+            <input type="checkbox" checked={notifyClient} onChange={(e) => setNotifyClient(e.target.checked)} disabled={!inviteClientId} className="rounded border-gray-300 text-primary-600 disabled:opacity-40" />
+            Send calendar invite to client
+            {!inviteClientId && <span className="text-xs text-gray-400">(select client above)</span>}
+          </label>
         </div>
 
         <div className="flex gap-3 pt-2 border-t border-gray-100">

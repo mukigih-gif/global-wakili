@@ -9,7 +9,7 @@ import { formatCurrency, formatDate } from '@/lib/utils';
 import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { Plus, Search, FileText, ArrowRight, DollarSign, Clock, CheckCircle } from 'lucide-react';
+import { Plus, Search, FileText, ArrowRight, DollarSign, Clock, CheckCircle, Receipt } from 'lucide-react';
 
 type Quotation = {
   id: string;
@@ -37,7 +37,18 @@ type Invoice = {
   createdAt: string;
 };
 
-type Tab = 'quotations' | 'invoices';
+type Expense = {
+  id: string;
+  amount: number;
+  currency: string;
+  description?: string | null;
+  expenseDate: string;
+  status: string;
+  user?: { name: string } | null;
+  matter?: { id: string; title: string; matterCode: string } | null;
+};
+
+type Tab = 'quotations' | 'invoices' | 'expenses';
 
 const fmt = (amount: number | string, currency = 'KES') => formatCurrency(amount, currency);
 
@@ -46,6 +57,7 @@ export default function BillingPage() {
   const [tab, setTab]             = useState<Tab>('quotations');
   const [quotations, setQuotes]   = useState<Quotation[]>([]);
   const [invoices, setInvoices]   = useState<Invoice[]>([]);
+  const [expenses, setExpenses]   = useState<Expense[]>([]);
   const [loading, setLoading]     = useState(true);
   const [query, setQuery]         = useState('');
   const [statusFilter, setStatus] = useState('');
@@ -61,9 +73,13 @@ export default function BillingPage() {
       api.get<{ data: Quotation[] }>(`/billing/quotations?${params}`)
         .then((r) => setQuotes(r.data ?? [])).catch(() => setQuotes([]))
         .finally(() => setLoading(false));
-    } else {
+    } else if (tab === 'invoices') {
       api.get<{ data: Invoice[] }>(`/billing/invoices?${params}`)
         .then((r) => setInvoices(r.data ?? [])).catch(() => setInvoices([]))
+        .finally(() => setLoading(false));
+    } else {
+      api.get<{ data: Expense[] }>(`/billing/expenses?limit=100${statusFilter ? `&status=${statusFilter}` : ''}`)
+        .then((r) => setExpenses(r.data ?? [])).catch(() => setExpenses([]))
         .finally(() => setLoading(false));
     }
   }, [tab, query, statusFilter]);
@@ -99,6 +115,11 @@ export default function BillingPage() {
           {tab === 'invoices' && (
             <Link href="/app/billing/new">
               <Button size="sm"><Plus className="h-4 w-4" /> New Invoice</Button>
+            </Link>
+          )}
+          {tab === 'expenses' && (
+            <Link href="/app/matters">
+              <Button size="sm" variant="secondary"><Receipt className="h-4 w-4" /> Record via Matter</Button>
             </Link>
           )}
         </div>
@@ -142,6 +163,7 @@ export default function BillingPage() {
         {([
           { key: 'quotations', label: 'Quotations', icon: <FileText className="h-4 w-4" /> },
           { key: 'invoices',   label: 'Invoices',   icon: <DollarSign className="h-4 w-4" /> },
+          { key: 'expenses',   label: 'Expenses',   icon: <Receipt className="h-4 w-4" /> },
         ] as const).map((t) => (
           <button key={t.key} onClick={() => { setTab(t.key); setQuery(''); setStatus(''); }}
             className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors ${
@@ -170,7 +192,7 @@ export default function BillingPage() {
               <option value="EXPIRED">Expired</option>
               <option value="CONVERTED">Converted to Invoice</option>
             </>
-          ) : (
+          ) : tab === 'invoices' ? (
             <>
               <option value="DRAFT">Draft</option>
               <option value="ISSUED">Issued</option>
@@ -179,6 +201,14 @@ export default function BillingPage() {
               <option value="OVERDUE">Overdue</option>
               <option value="CANCELLED">Cancelled</option>
               <option value="VOID">Void</option>
+            </>
+          ) : (
+            <>
+              <option value="DRAFT">Draft</option>
+              <option value="SUBMITTED">Submitted</option>
+              <option value="APPROVED">Approved</option>
+              <option value="REJECTED">Rejected</option>
+              <option value="REIMBURSED">Reimbursed</option>
             </>
           )}
         </select>
@@ -239,6 +269,48 @@ export default function BillingPage() {
              ))}
           </tbody>
         </Table>
+      )}
+
+      {/* Expenses table */}
+      {tab === 'expenses' && (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-700">
+            Expenses are costs incurred on client matters. Record them via the Matter detail page, then include them as
+            <strong> EXPENSE</strong> line items when creating an invoice.
+          </div>
+          <Table>
+            <thead>
+              <tr>
+                <Th>Date</Th>
+                <Th>Description</Th>
+                <Th>Matter</Th>
+                <Th>Amount</Th>
+                <Th>Recorded By</Th>
+                <Th>Status</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? <LoadingRow colSpan={6} /> :
+               !expenses.length ? <EmptyRow colSpan={6} message="No expenses recorded. Go to a Matter → Expenses tab to record one." /> :
+               expenses.map((exp) => (
+                 <tr key={exp.id}>
+                   <Td className="text-xs text-gray-500">{formatDate(exp.expenseDate)}</Td>
+                   <Td className="text-sm text-gray-900">{exp.description ?? '—'}</Td>
+                   <Td className="text-xs text-gray-600">
+                     {exp.matter
+                       ? <Link href={`/app/matters/${exp.matter.id}`} className="text-primary-700 hover:underline">
+                           {exp.matter.matterCode} — {exp.matter.title}
+                         </Link>
+                       : '—'}
+                   </Td>
+                   <Td className="font-medium text-gray-900">{fmt(exp.amount, exp.currency)}</Td>
+                   <Td className="text-xs text-gray-500">{exp.user?.name ?? '—'}</Td>
+                   <Td><StatusBadge status={exp.status} /></Td>
+                 </tr>
+               ))}
+            </tbody>
+          </Table>
+        </div>
       )}
 
       {/* Invoices table */}

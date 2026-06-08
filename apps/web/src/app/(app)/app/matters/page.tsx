@@ -15,9 +15,12 @@ type Matter = {
   id: string;
   title: string;
   matterCode: string;
+  caseNumber?: string | null;
   status: string;
   category: string;
   createdAt: string;
+  progressPercent?: number | null;
+  progressStage?: string | null;
   client?: { id: string; name: string } | null;
   clientId?: string | null;
   leadAdvocate?: { id: string; name: string } | null;
@@ -82,20 +85,28 @@ export default function MattersPage() {
             <Th>Client</Th>
             <Th>Lead Advocate</Th>
             <Th>Category</Th>
+            <Th>Progress</Th>
             <Th>Status</Th>
             <Th>Opened</Th>
             <Th></Th>
           </tr>
         </thead>
         <tbody>
-          {loading ? <LoadingRow colSpan={7} /> :
-           !matters.length ? <EmptyRow colSpan={7} message="No matters found" /> :
+          {loading ? <LoadingRow colSpan={9} /> :
+           !matters.length ? <EmptyRow colSpan={9} message="No matters found" /> :
            matters.map((m) => (
              <tr key={m.id}>
                <Td>
-                 <span className="font-mono text-xs text-gray-600 bg-gray-50 rounded px-1.5 py-0.5">
-                   {m.matterCode ?? `MTR-${m.id.slice(-6).toUpperCase()}`}
-                 </span>
+                 <div className="space-y-0.5">
+                   <span className="font-mono text-xs text-gray-600 bg-gray-50 rounded px-1.5 py-0.5 block">
+                     {m.matterCode ?? `MTR-${m.id.slice(-6).toUpperCase()}`}
+                   </span>
+                   {m.caseNumber && (
+                     <span className="font-mono text-[10px] text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 block">
+                       {m.caseNumber}
+                     </span>
+                   )}
+                 </div>
                </Td>
                <Td><Link href={`/app/matters/${m.id}`} className="font-medium text-primary-700 hover:underline">{m.title}</Link></Td>
                <Td>
@@ -106,6 +117,23 @@ export default function MattersPage() {
                </Td>
                <Td className="text-sm text-gray-600">{m.leadAdvocate?.name ?? m.assignedLawyer?.name ?? '—'}</Td>
                <Td className="text-gray-600 text-xs">{m.category?.replace(/_/g, ' ')}</Td>
+               <Td>
+                 {m.progressPercent != null ? (
+                   <div className="flex items-center gap-2 min-w-[80px]">
+                     <div className="flex-1 bg-gray-100 rounded-full h-1.5">
+                       <div
+                         className={`h-1.5 rounded-full ${
+                           m.progressPercent < 25 ? 'bg-red-400' :
+                           m.progressPercent < 50 ? 'bg-amber-400' :
+                           m.progressPercent < 75 ? 'bg-blue-400' : 'bg-green-500'
+                         }`}
+                         style={{ width: `${m.progressPercent}%` }}
+                       />
+                     </div>
+                     <span className="text-xs text-gray-500 w-7 text-right">{m.progressPercent}%</span>
+                   </div>
+                 ) : <span className="text-gray-300 text-xs">—</span>}
+               </Td>
                <Td><StatusBadge status={m.status} /></Td>
                <Td className="text-gray-500 text-xs">{formatDate(m.createdAt)}</Td>
                <Td>

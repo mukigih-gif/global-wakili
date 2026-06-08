@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { validate } from '../../middleware/validate';
 import { requirePermissions } from '../../middleware/rbac';
 import { PERMISSIONS } from '../../config/permissions';
+import { getBranchFilter } from '../../utils/branch-filter';
 
 import {
   applyRetainer,
@@ -397,6 +398,265 @@ router.post(
   billingPermission('createNotification'),
   validate({ body: billingNotificationSchema }),
   createBillingNotification,
+);
+
+// ── Invoices ──────────────────────────────────────────────────────────────────
+
+router.get(
+  '/invoices',
+  billingPermission('viewInvoice'),
+  async (req: Request, res: Response) => {
+    try {
+      const branchFilter = getBranchFilter(req.user ?? {});
+      const { matterId, clientId, status, take = '50', skip = '0' } = req.query as Record<string, string>;
+
+      const invoices = await req.db.invoice.findMany({
+        where: {
+          tenantId: req.tenantId,
+          ...(branchFilter.branchId ? { branchId: branchFilter.branchId } : {}),
+          ...(matterId  ? { matterId }  : {}),
+          ...(clientId  ? { clientId }  : {}),
+          ...(status    ? { status: status as any } : {}),
+        },
+        include: {
+          matter: { select: { id: true, title: true, matterCode: true, branchId: true } },
+          client: { select: { id: true, name: true, clientCode: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: Math.min(parseInt(take) || 50, 200),
+        skip: parseInt(skip) || 0,
+      });
+
+      const shaped = invoices.map((inv) => ({
+        ...inv,
+        totalAmount: inv.total,
+        issuedAt: inv.issuedDate ?? inv.createdAt,
+      }));
+
+      res.json({ success: true, data: shaped });
+    } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
+  }
+);
+
+router.post(
+  '/invoices',
+  billingPermission('createInvoice'),
+  async (req: Request, res: Response) => {
+    try {
+      const { matterId, clientId, currency = 'KES', dueDate, notes, lineItems = [] } = req.body;
+      if (!matterId) { res.status(400).json({ error: 'matterId is required' }); return; }
+
+      const matter = await req.db.matter.findFirst({
+        where: { tenantId: req.tenantId, id: matterId },
+        select: { id: true, clientId: true, branchId: true, leadAdvocateId: true },
+      });
+      if (!matter) { res.status(404).json({ error: 'Matter not found' }); return; }
+
+      const effectiveClientId = clientId || matter.clientId;
+
+      // Generate sequential invoice number
+      const count = await req.db.invoice.count({ where: { tenantId: req.tenantId } });
+      const invoiceNumber = `INV-${String(count + 1).padStart(5, '0')}`;
+
+      const subtotal = lineItems.reduce((s: number, l: any) => s + (l.quantity || 1) * (l.unitPrice || 0), 0);
+      const vatAmount = lineItems.reduce((s: number, l: any) => s + ((l.quantity || 1) * (l.unitPrice || 0) * ((l.vatRate || 0) / 100)), 0);
+      const total = subtotal + vatAmount;
+
+      const invoice = await req.db.invoice.create({
+        data: {
+          invoiceNumber,
+          tenantId:    req.tenantId!,
+          matterId,
+          clientId:    effectiveClientId,
+          branchId:    matter.branchId ?? undefined,
+          currency,
+          status:      'INVOICED',
+          subTotal:    subtotal,
+          vatAmount,
+          taxAmount:   vatAmount,
+          total,
+          netAmount:   total,
+          balanceDue:  total,
+          paidAmount:  0,
+          dueDate:     dueDate ? new Date(dueDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          issuedDate:  new Date(),
+        },
+        include: {
+          matter: { select: { id: true, title: true, matterCode: true } },
+          client: { select: { id: true, name: true, clientCode: true } },
+        },
+      });
+
+      res.status(201).json({ success: true, data: { ...invoice, totalAmount: invoice.total } });
+    } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
+  }
+);
+
+// ── Invoice Payment (Account Debit) ──────────────────────────────────────────
+
+router.post(
+  '/invoices/:invoiceId/payment',
+  billingPermission('createInvoice'),
+  async (req: Request, res: Response) => {
+    try {
+      const { invoiceId } = req.params;
+      const { amount, reference, method = 'ACCOUNT_DEBIT' } = req.body;
+      if (!amount || parseFloat(amount) <= 0) { res.status(400).json({ error: 'amount must be > 0' }); return; }
+
+      const invoice = await req.db.invoice.findFirst({
+        where: { tenantId: req.tenantId, id: invoiceId },
+        select: { id: true, total: true, paidAmount: true, balanceDue: true, status: true, clientId: true },
+      });
+      if (!invoice) { res.status(404).json({ error: 'Invoice not found' }); return; }
+
+      const pay     = Math.min(parseFloat(amount), parseFloat(String(invoice.balanceDue ?? invoice.total)));
+      const newPaid = parseFloat(String(invoice.paidAmount ?? 0)) + pay;
+      const newBal  = parseFloat(String(invoice.total)) - newPaid;
+      const newStatus = newBal <= 0 ? 'PAID' : 'PARTIALLY_PAID';
+
+      const updated = await req.db.invoice.update({
+        where: { id: invoiceId },
+        data: {
+          paidAmount: newPaid,
+          balanceDue: Math.max(newBal, 0),
+          status:     newStatus as any,
+          reconciledAt: newStatus === 'PAID' ? new Date() : undefined,
+        },
+      });
+
+      res.status(200).json({ success: true, data: { ...updated, reference, method, paymentAmount: pay } });
+    } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
+  }
+);
+
+// ── Quotations (client billing fee estimates / proformas) ─────────────────────
+// The system uses "quotations" as pre-invoice fee proposals sent to clients.
+// These are backed by the ProformaInvoice model when available; otherwise
+// invoices in DRAFT-equivalent status are used.
+
+router.get(
+  '/quotations',
+  billingPermission('viewInvoice'),
+  async (req: Request, res: Response) => {
+    try {
+      // Quotations are proformas — try the proformaInvoice delegate
+      const branchFilter = getBranchFilter(req.user ?? {});
+      const { matterId, clientId, status, take = '50', skip = '0' } = req.query as Record<string, string>;
+
+      const delegate = (req.db as any).proformaInvoice;
+
+      if (!delegate) {
+        // Schema not migrated yet — return empty list gracefully
+        res.json({ success: true, data: [] });
+        return;
+      }
+
+      const quotations = await delegate.findMany({
+        where: {
+          tenantId: req.tenantId,
+          ...(branchFilter.branchId ? { branchId: branchFilter.branchId } : {}),
+          ...(matterId ? { matterId } : {}),
+          ...(clientId ? { clientId } : {}),
+          ...(status ? { status } : {}),
+        },
+        include: {
+          client: { select: { id: true, name: true, clientCode: true } },
+          matter: { select: { id: true, title: true, matterCode: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: Math.min(parseInt(take) || 50, 200),
+        skip: parseInt(skip) || 0,
+      });
+
+      const shaped = quotations.map((q: any) => ({
+        ...q,
+        quotationNumber: q.proformaNumber ?? q.quotationNumber,
+        totalAmount: q.total ?? q.totalAmount ?? 0,
+      }));
+
+      res.json({ success: true, data: shaped });
+    } catch (e) {
+      // Non-fatal — proforma schema may not be applied yet
+      res.json({ success: true, data: [] });
+    }
+  }
+);
+
+router.post(
+  '/quotations/convert',
+  billingPermission('createInvoice'),
+  async (req: Request, res: Response) => {
+    res.status(501).json({ success: false, error: 'Quotation conversion requires proforma schema migration' });
+  }
+);
+
+// ── Expense Entries (billable expenses on matters) ────────────────────────────
+
+router.get(
+  '/expenses',
+  billingPermission('viewInvoice'),
+  async (req: Request, res: Response) => {
+    try {
+      const branchFilter = getBranchFilter(req.user ?? {});
+      const { matterId, status, limit = '50', skip = '0' } = req.query as Record<string, string>;
+      const expenses = await req.db.expenseEntry.findMany({
+        where: {
+          tenantId: req.tenantId,
+          ...(branchFilter.branchId ? { branchId: branchFilter.branchId } : {}),
+          ...(matterId ? { matterId } : {}),
+          ...(status ? { status: status as any } : {}),
+        },
+        include: {
+          user:   { select: { id: true, name: true } },
+          matter: { select: { id: true, title: true, matterCode: true } },
+        },
+        orderBy: { expenseDate: 'desc' },
+        take:    Math.min(parseInt(limit) || 50, 200),
+        skip:    parseInt(skip) || 0,
+      });
+      res.json({ success: true, data: expenses });
+    } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
+  }
+);
+
+router.post(
+  '/expenses',
+  billingPermission('createInvoice'),
+  async (req: Request, res: Response) => {
+    try {
+      const { matterId, description, amount, currency = 'KES', expenseDate, notes } = req.body;
+      if (!matterId) { res.status(400).json({ success: false, error: 'matterId is required' }); return; }
+      if (!amount || parseFloat(amount) <= 0) { res.status(400).json({ success: false, error: 'amount must be > 0' }); return; }
+
+      const matter = await req.db.matter.findFirst({
+        where: { tenantId: req.tenantId, id: matterId },
+        select: { id: true, branchId: true },
+      });
+      if (!matter) { res.status(404).json({ success: false, error: 'Matter not found' }); return; }
+
+      const createData: any = {
+        tenantId:    req.tenantId,
+        matterId,
+        userId:      req.user?.sub,
+        description: description ?? null,
+        amount:      parseFloat(amount),
+        currency,
+        expenseDate: expenseDate ? new Date(expenseDate) : new Date(),
+        notes:       notes ?? null,
+        status:      'DRAFT',
+      };
+      if (matter.branchId) createData.branchId = matter.branchId;
+
+      const expense = await req.db.expenseEntry.create({
+        data: createData,
+        include: {
+          user:   { select: { id: true, name: true } },
+          matter: { select: { id: true, title: true, matterCode: true } },
+        },
+      });
+      res.status(201).json({ success: true, data: expense });
+    } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
+  }
 );
 
 router.use((req: Request, res: Response) => {

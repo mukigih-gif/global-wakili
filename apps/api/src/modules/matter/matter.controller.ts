@@ -4,6 +4,7 @@ import type { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/async-handler';
 import MatterService from './MatterService';
 import { MatterProgressNotificationService } from './MatterProgressNotificationService';
+import { getBranchFilter } from '../../utils/branch-filter';
 import type { MatterInput } from './matter.types';
 
 type MetadataRecord = Record<string, unknown>;
@@ -157,11 +158,14 @@ export const updateMatter = asyncHandler(async (req: Request, res: Response) => 
 
 export const listOpenMatters = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = requireTenantId(req);
+  const branchFilter = getBranchFilter(req.user ?? {});
 
   const result = await MatterService.listOpen(req.db, tenantId, {
-    page: parsePositiveInteger(req.query.page),
-    limit: parsePositiveInteger(req.query.limit),
-    search: typeof req.query.search === 'string' ? req.query.search : undefined,
+    page:     parsePositiveInteger(req.query.page),
+    limit:    parsePositiveInteger(req.query.limit),
+    search:   typeof req.query.search === 'string' ? req.query.search : undefined,
+    status:   typeof req.query.status === 'string' ? req.query.status : undefined,
+    branchId: branchFilter.branchId,
   });
 
   res.status(200).json({

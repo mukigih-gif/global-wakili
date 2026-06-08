@@ -4,28 +4,33 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
-import { Plus, ChevronLeft, ChevronRight, List, CalendarDays, ChevronDown, RefreshCw, Globe } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, List, CalendarDays, ChevronDown, RefreshCw, Globe, Edit2, Trash2, X, MapPin, Save } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
 type CalendarEvent = {
   id: string;
   title: string;
+  type?: string;
   eventType: string;
   startTime: string;
   endTime?: string | null;
   location?: string | null;
+  description?: string | null;
   status: string;
-  matter?: { matterCode: string } | null;
+  matter?: { id: string; matterCode: string } | null;
+  matterId?: string | null;
 };
 
 const EVENT_COLORS: Record<string, string> = {
-  COURT_HEARING:    'bg-red-100 text-red-800 border-red-200',
-  CLIENT_MEETING:   'bg-blue-100 text-blue-800 border-blue-200',
+  COURT_HEARING:    'bg-red-100    text-red-800    border-red-200',
+  CLIENT_MEETING:   'bg-blue-100   text-blue-800   border-blue-200',
   INTERNAL_MEETING: 'bg-purple-100 text-purple-800 border-purple-200',
-  DEADLINE:         'bg-amber-100 text-amber-800 border-amber-200',
-  REMINDER:         'bg-green-100 text-green-800 border-green-200',
-  OTHER:            'bg-gray-100 text-gray-700 border-gray-200',
+  DEADLINE:         'bg-orange-100 text-orange-800 border-orange-200',
+  COMPLIANCE_DATE:  'bg-amber-100  text-amber-800  border-amber-200',
+  BRING_UP:         'bg-yellow-100 text-yellow-800 border-yellow-200',
+  REMINDER:         'bg-green-100  text-green-800  border-green-200',
+  OTHER:            'bg-gray-100   text-gray-700   border-gray-200',
 };
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -46,9 +51,13 @@ export default function CalendarPage() {
   const [view, setView]     = useState<'month' | 'list'>('month');
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading]     = useState(true);
-  const [selected, setSelected]   = useState<CalendarEvent | null>(null);
+  const [selected, setSelected]     = useState<CalendarEvent | null>(null);
   const [showSyncPanel, setShowSyncPanel] = useState(false);
-  const [refreshKey, setRefreshKey]       = useState(0); // force reload
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [editing, setEditing]       = useState(false);
+  const [deleting, setDeleting]     = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editForm, setEditForm]     = useState({ title: '', type: '', startTime: '', endTime: '', location: '', description: '' });
 
   const loadEvents = useCallback(() => {
     setLoading(true);
@@ -81,8 +90,9 @@ export default function CalendarPage() {
 
   const eventsOnDay = (day: number) => events.filter((e) => {
     const d = new Date(e.startTime);
+    const evType = e.type ?? e.eventType;
     return d.getFullYear() === year && d.getMonth() === month && d.getDate() === day
-      && (!filterType || e.eventType === filterType);
+      && (!filterType || evType === filterType);
   });
 
   const daysInMonth  = getDaysInMonth(year, month);
@@ -225,8 +235,8 @@ export default function CalendarPage() {
             {cells.map((day, idx) => {
               const isToday = day !== null && day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
               const dayEvents = day !== null ? eventsOnDay(day) : [];
-              const hasCompliance = dayEvents.some((e) => e.eventType === 'COMPLIANCE_DATE' || e.eventType === 'DEADLINE');
-              const hasHearing    = dayEvents.some((e) => e.eventType === 'COURT_HEARING');
+              const hasCompliance = dayEvents.some((e) => ['COMPLIANCE_DATE', 'DEADLINE', 'BRING_UP'].includes(e.type ?? e.eventType));
+              const hasHearing    = dayEvents.some((e) => (e.type ?? e.eventType) === 'COURT_HEARING');
               return (
                 <div
                   key={idx}
@@ -240,15 +250,18 @@ export default function CalendarPage() {
                         {day}
                       </span>
                       <div className="space-y-0.5">
-                        {loading ? null : dayEvents.slice(0, 3).map((e) => (
-                          <button
-                            key={e.id}
-                            onClick={() => setSelected(e)}
-                            className={`w-full text-left text-[11px] font-medium px-1.5 py-0.5 rounded border truncate ${EVENT_COLORS[e.eventType] ?? EVENT_COLORS.OTHER}`}
-                          >
-                            {e.title}
-                          </button>
-                        ))}
+                        {loading ? null : dayEvents.slice(0, 3).map((e) => {
+                          const evType = e.type ?? e.eventType;
+                          return (
+                            <button
+                              key={e.id}
+                              onClick={() => { setSelected(e); setEditing(false); setDeleting(false); }}
+                              className={`w-full text-left text-[11px] font-medium px-1.5 py-0.5 rounded border truncate ${EVENT_COLORS[evType] ?? EVENT_COLORS.OTHER}`}
+                            >
+                              {e.title}
+                            </button>
+                          );
+                        })}
                         {dayEvents.length > 3 && (
                           <p className="text-[11px] text-gray-400 pl-1">+{dayEvents.length - 3} more</p>
                         )}
@@ -272,8 +285,9 @@ export default function CalendarPage() {
               .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
               .map((e) => {
                 const d = new Date(e.startTime);
+                const evType = e.type ?? e.eventType;
                 return (
-                  <div key={e.id} className="flex gap-4 rounded-xl border border-gray-200 bg-white p-4 hover:shadow-sm transition-shadow">
+                  <div key={e.id} onClick={() => { setSelected(e); setEditing(false); }} className="flex gap-4 rounded-xl border border-gray-200 bg-white p-4 hover:shadow-sm transition-shadow cursor-pointer">
                     <div className="flex-shrink-0 text-center w-10">
                       <p className="text-xs text-gray-400 uppercase">{DAYS[d.getDay()]}</p>
                       <p className="text-xl font-bold text-gray-900 leading-tight">{d.getDate()}</p>
@@ -281,8 +295,8 @@ export default function CalendarPage() {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start justify-between gap-2">
                         <p className="font-semibold text-gray-900 text-sm">{e.title}</p>
-                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border flex-shrink-0 ${EVENT_COLORS[e.eventType] ?? EVENT_COLORS.OTHER}`}>
-                          {e.eventType?.replace(/_/g, ' ')}
+                        <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full border flex-shrink-0 ${EVENT_COLORS[evType] ?? EVENT_COLORS.OTHER}`}>
+                          {evType?.replace(/_/g, ' ')}
                         </span>
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
@@ -298,22 +312,159 @@ export default function CalendarPage() {
         </div>
       )}
 
-      {/* Event detail modal */}
+      {/* Event detail / edit / delete modal */}
       {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setSelected(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-start justify-between mb-4">
-              <h3 className="font-bold text-gray-900 text-lg">{selected.title}</h3>
-              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600"><Plus className="h-5 w-5 rotate-45" /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => { setSelected(null); setEditing(false); setDeleting(false); }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-start justify-between px-6 pt-5 pb-3">
+              {editing ? (
+                <input
+                  className="form-input text-lg font-bold flex-1 mr-3"
+                  value={editForm.title}
+                  onChange={(e) => setEditForm((f) => ({ ...f, title: e.target.value }))}
+                />
+              ) : (
+                <div className="flex-1">
+                  <h3 className="font-bold text-gray-900 text-lg leading-tight">{selected.title}</h3>
+                  <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full border mt-1 ${EVENT_COLORS[selected.type ?? selected.eventType] ?? EVENT_COLORS.OTHER}`}>
+                    {(selected.type ?? selected.eventType)?.replace(/_/g, ' ')}
+                  </span>
+                </div>
+              )}
+              <button onClick={() => { setSelected(null); setEditing(false); setDeleting(false); }} className="text-gray-400 hover:text-gray-600 flex-shrink-0 ml-2">
+                <X className="h-5 w-5" />
+              </button>
             </div>
-            <dl className="space-y-2 text-sm">
-              <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">Type</dt><dd className="text-gray-900">{selected.eventType?.replace(/_/g, ' ')}</dd></div>
-              <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">Start</dt><dd className="text-gray-900">{new Date(selected.startTime).toLocaleString('en-KE')}</dd></div>
-              {selected.endTime && <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">End</dt><dd className="text-gray-900">{new Date(selected.endTime).toLocaleString('en-KE')}</dd></div>}
-              {selected.location && <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">Location</dt><dd className="text-gray-900">{selected.location}</dd></div>}
-              {selected.matter && <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">Matter</dt><dd className="text-gray-900">{selected.matter.matterCode}</dd></div>}
-              <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">Status</dt><dd className="text-gray-900">{selected.status}</dd></div>
-            </dl>
+
+            {/* Body */}
+            <div className="px-6 pb-4">
+              {!editing ? (
+                <dl className="space-y-2 text-sm">
+                  <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">Start</dt><dd className="text-gray-900">{new Date(selected.startTime).toLocaleString('en-KE')}</dd></div>
+                  {selected.endTime && <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">End</dt><dd className="text-gray-900">{new Date(selected.endTime).toLocaleString('en-KE')}</dd></div>}
+                  {selected.location && <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">Location</dt><dd className="text-gray-900 flex items-center gap-1"><MapPin className="h-3 w-3" />{selected.location}</dd></div>}
+                  {selected.matter && (
+                    <div className="flex gap-2">
+                      <dt className="text-gray-500 w-20 flex-shrink-0">Matter</dt>
+                      <dd>
+                        <Link href={`/app/matters/${selected.matter.id}`} className="text-primary-600 hover:underline text-sm">{selected.matter.matterCode}</Link>
+                      </dd>
+                    </div>
+                  )}
+                  {selected.description && <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">Notes</dt><dd className="text-gray-700 text-xs">{selected.description}</dd></div>}
+                  <div className="flex gap-2"><dt className="text-gray-500 w-20 flex-shrink-0">Status</dt><dd className="text-gray-900">{selected.status}</dd></div>
+                </dl>
+              ) : (
+                <div className="space-y-3 text-sm">
+                  <div>
+                    <label className="form-label">Event Type</label>
+                    <select className="form-select w-full" value={editForm.type} onChange={(e) => setEditForm((f) => ({ ...f, type: e.target.value }))}>
+                      <option value="COURT_HEARING">Court Hearing</option>
+                      <option value="CLIENT_MEETING">Client Meeting</option>
+                      <option value="INTERNAL_MEETING">Internal Meeting</option>
+                      <option value="DEADLINE">Deadline</option>
+                      <option value="COMPLIANCE_DATE">Compliance Date</option>
+                      <option value="BRING_UP">Bring Up</option>
+                      <option value="REMINDER">Reminder</option>
+                      <option value="OTHER">Other</option>
+                    </select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="form-label">Start</label>
+                      <input type="datetime-local" className="form-input w-full text-xs" value={editForm.startTime} onChange={(e) => setEditForm((f) => ({ ...f, startTime: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="form-label">End</label>
+                      <input type="datetime-local" className="form-input w-full text-xs" value={editForm.endTime} onChange={(e) => setEditForm((f) => ({ ...f, endTime: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="form-label">Location</label>
+                    <input className="form-input w-full" value={editForm.location} onChange={(e) => setEditForm((f) => ({ ...f, location: e.target.value }))} placeholder="e.g. Milimani Law Courts" />
+                  </div>
+                  <div>
+                    <label className="form-label">Description / Notes</label>
+                    <textarea className="form-input w-full resize-none" rows={2} value={editForm.description} onChange={(e) => setEditForm((f) => ({ ...f, description: e.target.value }))} />
+                  </div>
+                </div>
+              )}
+
+              {deleting && (
+                <div className="mt-3 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-xs text-red-700">
+                  Delete this event permanently? This cannot be undone.
+                </div>
+              )}
+            </div>
+
+            {/* Footer actions */}
+            <div className="flex items-center justify-between px-6 pb-5 pt-2 border-t border-gray-100">
+              <div className="flex gap-2">
+                {!editing && !deleting && (
+                  <>
+                    <Button size="sm" variant="secondary" onClick={() => {
+                      const evType = selected.type ?? selected.eventType;
+                      setEditForm({
+                        title:       selected.title,
+                        type:        evType,
+                        startTime:   new Date(selected.startTime).toISOString().slice(0, 16),
+                        endTime:     selected.endTime ? new Date(selected.endTime).toISOString().slice(0, 16) : '',
+                        location:    selected.location ?? '',
+                        description: selected.description ?? '',
+                      });
+                      setEditing(true);
+                    }}>
+                      <Edit2 className="h-3.5 w-3.5" /> Edit
+                    </Button>
+                    <Button size="sm" variant="danger" onClick={() => setDeleting(true)}>
+                      <Trash2 className="h-3.5 w-3.5" /> Delete
+                    </Button>
+                  </>
+                )}
+                {editing && (
+                  <>
+                    <Button size="sm" loading={editSaving} onClick={async () => {
+                      setEditSaving(true);
+                      try {
+                        await api.patch(`/calendar/events/${selected.id}`, {
+                          title:       editForm.title || undefined,
+                          type:        editForm.type  || undefined,
+                          startTime:   editForm.startTime ? new Date(editForm.startTime).toISOString() : undefined,
+                          endTime:     editForm.endTime   ? new Date(editForm.endTime).toISOString()   : null,
+                          location:    editForm.location    || null,
+                          description: editForm.description || null,
+                        });
+                        setSelected(null); setEditing(false);
+                        setRefreshKey((k) => k + 1);
+                      } catch { /* show error inline */ }
+                      finally { setEditSaving(false); }
+                    }}>
+                      <Save className="h-3.5 w-3.5" /> Save
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>Cancel</Button>
+                  </>
+                )}
+                {deleting && (
+                  <>
+                    <Button size="sm" variant="danger" onClick={async () => {
+                      try {
+                        await api.delete(`/calendar/events/${selected.id}`);
+                        setSelected(null); setDeleting(false);
+                        setRefreshKey((k) => k + 1);
+                      } catch { /* ignore */ }
+                    }}>Confirm Delete</Button>
+                    <Button size="sm" variant="ghost" onClick={() => setDeleting(false)}>Cancel</Button>
+                  </>
+                )}
+              </div>
+              {!editing && !deleting && (
+                <Link href={`/app/calendar/new${selected.matterId ? `?matterId=${selected.matterId}` : ''}`} className="text-xs text-primary-600 hover:underline">
+                  + New Event
+                </Link>
+              )}
+            </div>
           </div>
         </div>
       )}

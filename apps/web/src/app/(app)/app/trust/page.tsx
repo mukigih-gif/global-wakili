@@ -8,7 +8,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
 import { StatCard } from '@/components/ui/Card';
-import { Scale, Plus, ArrowUpRight, RefreshCw, AlertCircle, CheckCircle } from 'lucide-react';
+import { Scale, Plus, ArrowUpRight, RefreshCw, AlertCircle, CheckCircle, Settings, X } from 'lucide-react';
 import Link from 'next/link';
 
 type TrustAccount = { id: string; accountName: string; accountNumber: string; bankName: string; currentBalance: string; reconciliationBalance: string; isActive: boolean; lastReconciled?: string | null };
@@ -26,6 +26,10 @@ export default function TrustPage() {
   const [selectedAccount, setSelAcc] = useState('');
   const [running3Way, setRunning3Way] = useState(false);
   const [reconResult, setReconResult] = useState<{ status: string; bankBalance: string; trustLiability: string; clientLedgerTotal: string } | null>(null);
+  const [showNewAccount, setShowNewAccount] = useState(false);
+  const [accountForm, setAccountForm] = useState({ accountName: '', accountNumber: '', bankName: '', currency: 'KES', custodian: '' });
+  const [accountSaving, setAccountSaving] = useState(false);
+  const [accountError, setAccountError]   = useState('');
 
   useEffect(() => {
     setLoading(true);
@@ -76,6 +80,9 @@ export default function TrustPage() {
         <div className="flex gap-2">
           <Button size="sm" variant="secondary" onClick={() => setTab('reconcile')}>
             <RefreshCw className="h-4 w-4" /> 3-Way Reconciliation
+          </Button>
+          <Button size="sm" variant="secondary" onClick={() => { setShowNewAccount(true); setAccountError(''); }}>
+            <Settings className="h-4 w-4" /> New Account
           </Button>
           <Link href="/app/trust/deposit">
             <Button size="sm"><Plus className="h-4 w-4" /> New Deposit</Button>
@@ -244,6 +251,64 @@ export default function TrustPage() {
                 'Unclaimed trust funds must be reported after 6 months',
               ].map((rule) => <p key={rule}>✓ {rule}</p>)}
             </div>
+          </div>
+        </div>
+      )}
+      {/* New Trust Account Modal */}
+      {showNewAccount && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowNewAccount(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-gray-900 text-lg">New Trust Account</h3>
+              <button onClick={() => setShowNewAccount(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+            {accountError && <div className="rounded bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{accountError}</div>}
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!accountForm.accountName || !accountForm.accountNumber || !accountForm.bankName) {
+                setAccountError('Account name, number, and bank are required'); return;
+              }
+              setAccountSaving(true); setAccountError('');
+              try {
+                await api.post('/trust/accounts', accountForm);
+                setShowNewAccount(false);
+                setAccountForm({ accountName: '', accountNumber: '', bankName: '', currency: 'KES', custodian: '' });
+                setTab('accounts');
+                // Reload accounts
+                api.get<any>('/trust/overview').then((r) => setAccounts(r.dashboard?.accounts ?? [])).catch(() => {});
+              } catch (err: unknown) {
+                setAccountError(err instanceof Error ? err.message : 'Failed to create account');
+              } finally { setAccountSaving(false); }
+            }} className="space-y-3">
+              <div>
+                <label className="form-label">Account Name *</label>
+                <input required value={accountForm.accountName} onChange={(e) => setAccountForm((f) => ({ ...f, accountName: e.target.value }))} className="form-input w-full" placeholder="e.g. Client Trust Account 1" />
+              </div>
+              <div>
+                <label className="form-label">Bank Account Number *</label>
+                <input required value={accountForm.accountNumber} onChange={(e) => setAccountForm((f) => ({ ...f, accountNumber: e.target.value }))} className="form-input w-full" placeholder="e.g. 1234567890" />
+              </div>
+              <div>
+                <label className="form-label">Bank Name *</label>
+                <input required value={accountForm.bankName} onChange={(e) => setAccountForm((f) => ({ ...f, bankName: e.target.value }))} className="form-input w-full" placeholder="e.g. Equity Bank Kenya" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Currency</label>
+                  <select value={accountForm.currency} onChange={(e) => setAccountForm((f) => ({ ...f, currency: e.target.value }))} className="form-select w-full">
+                    <option value="KES">KES</option><option value="USD">USD</option><option value="GBP">GBP</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Custodian</label>
+                  <input value={accountForm.custodian} onChange={(e) => setAccountForm((f) => ({ ...f, custodian: e.target.value }))} className="form-input w-full" placeholder="Responsible partner" />
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button type="submit" loading={accountSaving}>Create Account</Button>
+                <Button type="button" variant="secondary" onClick={() => setShowNewAccount(false)}>Cancel</Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

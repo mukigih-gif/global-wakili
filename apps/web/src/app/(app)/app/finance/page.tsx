@@ -9,7 +9,7 @@ import { StatCard } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
-import { DollarSign, TrendingUp, FileText, AlertCircle, Plus, BookOpen, CreditCard, ArrowUpRight, ArrowDownLeft, Scale } from 'lucide-react';
+import { DollarSign, TrendingUp, FileText, AlertCircle, Plus, BookOpen, CreditCard, ArrowUpRight, ArrowDownLeft, Scale, X } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
@@ -19,14 +19,15 @@ type JournalEntry = { id: string; reference: string; description: string; amount
 type Account = { id: string; accountCode: string; accountName: string; accountType: string; balance: string; currency: string };
 type Receipt = { id: string; receiptNumber: string; amount: string; currency: string; paymentMethod: string; receivedAt: string; client?: { name: string } | null };
 
-type Tab = 'overview' | 'invoices' | 'journals' | 'accounts' | 'receipts';
+type Tab = 'overview' | 'invoices' | 'journals' | 'accounts' | 'receipts' | 'statements';
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-  { key: 'overview',  label: 'Overview',       icon: <TrendingUp className="h-4 w-4" /> },
-  { key: 'invoices',  label: 'Invoices',        icon: <FileText className="h-4 w-4" /> },
-  { key: 'journals',  label: 'Journal Entries', icon: <BookOpen className="h-4 w-4" /> },
-  { key: 'accounts',  label: 'Chart of Accounts', icon: <Scale className="h-4 w-4" /> },
-  { key: 'receipts',  label: 'Payment Receipts', icon: <CreditCard className="h-4 w-4" /> },
+  { key: 'overview',   label: 'Overview',          icon: <TrendingUp className="h-4 w-4" /> },
+  { key: 'invoices',   label: 'Invoices',           icon: <FileText className="h-4 w-4" /> },
+  { key: 'journals',   label: 'Journal Entries',    icon: <BookOpen className="h-4 w-4" /> },
+  { key: 'accounts',   label: 'Chart of Accounts',  icon: <Scale className="h-4 w-4" /> },
+  { key: 'receipts',   label: 'Payment Receipts',   icon: <CreditCard className="h-4 w-4" /> },
+  { key: 'statements', label: 'P&L / Balance Sheet', icon: <TrendingUp className="h-4 w-4" /> },
 ];
 
 export default function FinancePage() {
@@ -37,6 +38,15 @@ export default function FinancePage() {
   const [receipts, setReceipts] = useState<Receipt[]>([]);
   const [loading, setLoading]   = useState(false);
   const [statusFilter, setStatus] = useState('');
+  const [statements, setStatements] = useState<{ pnl: any; balanceSheet: any } | null>(null);
+  const [stmtYear, setStmtYear]     = useState(new Date().getFullYear());
+  const [showJournal, setShowJournal] = useState(false);
+  const [journalSaving, setJournalSaving] = useState(false);
+  const [journalError, setJournalError]   = useState('');
+  const [journalForm, setJournalForm] = useState({
+    description: '', reference: '', date: new Date().toISOString().slice(0, 10),
+    drAccountId: '', crAccountId: '', amount: '', notes: '',
+  });
 
   useEffect(() => {
     setLoading(true);
@@ -46,14 +56,21 @@ export default function FinancePage() {
       api.get<{ data: Invoice[] }>(`/billing/invoices?${p}&limit=50`)
         .then((r) => setInvoices(r.data ?? [])).catch(() => {}).finally(() => setLoading(false));
     } else if (tab === 'journals') {
-      api.get<{ data: JournalEntry[] }>('/finance/journals?limit=50')
-        .then((r) => setJournals(r.data ?? [])).catch(() => {}).finally(() => setLoading(false));
+      Promise.all([
+        api.get<{ data: JournalEntry[] }>('/finance/journals?limit=50').then((r) => setJournals(r.data ?? [])).catch(() => {}),
+        accounts.length === 0 ? api.get<{ data: Account[] }>('/finance/accounts?limit=200').then((r) => setAccounts(r.data ?? [])).catch(() => {}) : Promise.resolve(),
+      ]).finally(() => setLoading(false));
     } else if (tab === 'accounts') {
       api.get<{ data: Account[] }>('/finance/accounts?limit=200')
         .then((r) => setAccounts(r.data ?? [])).catch(() => setAccounts([])).finally(() => setLoading(false));
     } else if (tab === 'receipts') {
       api.get<{ data: Receipt[] }>('/billing/receipts?limit=50')
         .then((r) => setReceipts(r.data ?? [])).catch(() => {}).finally(() => setLoading(false));
+    } else if (tab === 'statements') {
+      api.get<any>(`/finance/statements?year=${stmtYear}`)
+        .then((r) => setStatements(r))
+        .catch(() => setStatements(null))
+        .finally(() => setLoading(false));
     }
   }, [tab, statusFilter]);
 
@@ -185,7 +202,9 @@ export default function FinancePage() {
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">Posted journal entries from all modules</p>
-            <Button size="sm" variant="secondary"><Plus className="h-4 w-4" /> Manual Journal</Button>
+            <Button size="sm" variant="secondary" onClick={() => { setShowJournal(true); setJournalError(''); }}>
+              <Plus className="h-4 w-4" /> Manual Journal
+            </Button>
           </div>
           <Table>
             <thead><tr><Th>Reference</Th><Th>Description</Th><Th>Amount</Th><Th>Source</Th><Th>Date</Th></tr></thead>
@@ -250,6 +269,176 @@ export default function FinancePage() {
              ))}
           </tbody>
         </Table>
+      )}
+
+      {/* Financial Statements */}
+      {tab === 'statements' && (
+        <div className="space-y-5">
+          <div className="flex items-center gap-3">
+            <label className="text-sm text-gray-600 font-medium">Year:</label>
+            <select className="form-select w-28" value={stmtYear} onChange={(e) => setStmtYear(parseInt(e.target.value))}>
+              {[0, 1, 2, 3].map((i) => {
+                const y = new Date().getFullYear() - i;
+                return <option key={y} value={y}>{y}</option>;
+              })}
+            </select>
+            <Button size="sm" variant="secondary" onClick={() => {
+              setLoading(true);
+              api.get<any>(`/finance/statements?year=${stmtYear}`).then(setStatements).catch(() => setStatements(null)).finally(() => setLoading(false));
+            }}>Load Statements</Button>
+          </div>
+
+          {loading ? (
+            <div className="text-center py-8 text-gray-400 text-sm">Loading financial statements…</div>
+          ) : !statements ? (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 p-8 text-center">
+              <BookOpen className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">Financial statements not available.</p>
+              <p className="text-xs text-gray-400 mt-1">Post journal entries and invoice payments to generate P&L and Balance Sheet.</p>
+              <Button size="sm" variant="secondary" className="mt-3" onClick={() => { setTab('journals'); }}>Go to Journal Entries</Button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+              {/* P&L Statement */}
+              <div className="card">
+                <div className="card-header flex items-center justify-between">
+                  <h2 className="font-semibold text-gray-900">Profit & Loss Statement</h2>
+                  <span className="text-xs text-gray-400">FY {stmtYear}</span>
+                </div>
+                <div className="p-4 space-y-1 text-sm">
+                  {statements.pnl ? (
+                    <>
+                      <div className="flex justify-between font-semibold text-gray-800 bg-gray-50 px-2 py-1.5 rounded"><span>Revenue</span><span>{formatCurrency(statements.pnl.totalRevenue ?? 0)}</span></div>
+                      {(statements.pnl.revenueLines ?? []).map((l: any) => (
+                        <div key={l.account} className="flex justify-between text-gray-600 px-4 py-0.5"><span>{l.account}</span><span>{formatCurrency(l.amount)}</span></div>
+                      ))}
+                      <div className="flex justify-between font-semibold text-gray-800 bg-gray-50 px-2 py-1.5 rounded mt-2"><span>Expenses</span><span className="text-red-600">{formatCurrency(statements.pnl.totalExpenses ?? 0)}</span></div>
+                      {(statements.pnl.expenseLines ?? []).map((l: any) => (
+                        <div key={l.account} className="flex justify-between text-gray-600 px-4 py-0.5"><span>{l.account}</span><span className="text-red-500">{formatCurrency(l.amount)}</span></div>
+                      ))}
+                      <div className={`flex justify-between font-bold text-base border-t-2 border-gray-300 pt-2 mt-2 px-2 ${parseFloat(statements.pnl.netProfit ?? 0) >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                        <span>Net {parseFloat(statements.pnl.netProfit ?? 0) >= 0 ? 'Profit' : 'Loss'}</span>
+                        <span>{formatCurrency(Math.abs(parseFloat(statements.pnl.netProfit ?? 0)))}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-gray-400 text-center py-4">P&L data not available for {stmtYear}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Balance Sheet */}
+              <div className="card">
+                <div className="card-header flex items-center justify-between">
+                  <h2 className="font-semibold text-gray-900">Balance Sheet</h2>
+                  <span className="text-xs text-gray-400">As at 31 Dec {stmtYear}</span>
+                </div>
+                <div className="p-4 space-y-1 text-sm">
+                  {statements.balanceSheet ? (
+                    <>
+                      <div className="flex justify-between font-semibold text-gray-800 bg-gray-50 px-2 py-1.5 rounded"><span>Assets</span><span>{formatCurrency(statements.balanceSheet.totalAssets ?? 0)}</span></div>
+                      {(statements.balanceSheet.assetLines ?? []).map((l: any) => (
+                        <div key={l.account} className="flex justify-between text-gray-600 px-4 py-0.5"><span>{l.account}</span><span>{formatCurrency(l.amount)}</span></div>
+                      ))}
+                      <div className="flex justify-between font-semibold text-gray-800 bg-gray-50 px-2 py-1.5 rounded mt-2"><span>Liabilities</span><span className="text-red-600">{formatCurrency(statements.balanceSheet.totalLiabilities ?? 0)}</span></div>
+                      {(statements.balanceSheet.liabilityLines ?? []).map((l: any) => (
+                        <div key={l.account} className="flex justify-between text-gray-600 px-4 py-0.5"><span>{l.account}</span><span className="text-red-500">{formatCurrency(l.amount)}</span></div>
+                      ))}
+                      <div className="flex justify-between font-semibold text-gray-800 bg-gray-50 px-2 py-1.5 rounded mt-2"><span>Equity</span><span className="text-blue-700">{formatCurrency(statements.balanceSheet.equity ?? 0)}</span></div>
+                      <div className={`flex justify-between font-bold text-base border-t-2 border-gray-300 pt-2 mt-2 px-2 ${Math.abs((statements.balanceSheet.totalAssets ?? 0) - (statements.balanceSheet.totalLiabilities ?? 0) - (statements.balanceSheet.equity ?? 0)) < 0.01 ? 'text-green-700' : 'text-red-700'}`}>
+                        <span>Balanced</span>
+                        <span>{Math.abs((statements.balanceSheet.totalAssets ?? 0) - (statements.balanceSheet.totalLiabilities ?? 0) - (statements.balanceSheet.equity ?? 0)) < 0.01 ? '✓' : '⚠ Imbalanced'}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="text-gray-400 text-center py-4">Balance sheet not available for {stmtYear}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Manual Journal Entry Modal */}
+      {showJournal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowJournal(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2"><BookOpen className="h-5 w-5 text-primary-600" /> Manual Journal Entry</h3>
+              <button onClick={() => setShowJournal(false)} className="text-gray-400 hover:text-gray-600"><X className="h-5 w-5" /></button>
+            </div>
+            <p className="text-xs text-gray-500">Double-entry: select the Debit account and Credit account. Must be equal and opposite.</p>
+            {journalError && <div className="rounded bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{journalError}</div>}
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!journalForm.drAccountId || !journalForm.crAccountId || !journalForm.amount || parseFloat(journalForm.amount) <= 0) {
+                setJournalError('All required fields must be filled'); return;
+              }
+              setJournalSaving(true); setJournalError('');
+              try {
+                await api.post('/finance/journals', {
+                  description: journalForm.description,
+                  reference:   journalForm.reference || `MJE-${Date.now().toString(36).toUpperCase()}`,
+                  date:        new Date(journalForm.date).toISOString(),
+                  lines: [
+                    { accountId: journalForm.drAccountId, debit: parseFloat(journalForm.amount), credit: 0, description: journalForm.notes || journalForm.description },
+                    { accountId: journalForm.crAccountId, debit: 0, credit: parseFloat(journalForm.amount), description: journalForm.notes || journalForm.description },
+                  ],
+                });
+                setShowJournal(false);
+                setJournalForm({ description: '', reference: '', date: new Date().toISOString().slice(0, 10), drAccountId: '', crAccountId: '', amount: '', notes: '' });
+                // Reload journals
+                api.get<{ data: JournalEntry[] }>('/finance/journals?limit=50').then((r) => setJournals(r.data ?? [])).catch(() => {});
+              } catch (err: unknown) {
+                setJournalError(err instanceof Error ? err.message : 'Failed to post journal entry');
+              } finally { setJournalSaving(false); }
+            }} className="space-y-3">
+              <div>
+                <label className="form-label">Description *</label>
+                <input required value={journalForm.description} onChange={(e) => setJournalForm((f) => ({ ...f, description: e.target.value }))} className="form-input w-full" placeholder="e.g. Accrual for legal fees — January" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label">Reference</label>
+                  <input value={journalForm.reference} onChange={(e) => setJournalForm((f) => ({ ...f, reference: e.target.value }))} className="form-input w-full" placeholder="Auto-generated if blank" />
+                </div>
+                <div>
+                  <label className="form-label">Date *</label>
+                  <input required type="date" value={journalForm.date} onChange={(e) => setJournalForm((f) => ({ ...f, date: e.target.value }))} className="form-input w-full" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="form-label text-green-700">Debit Account (DR) *</label>
+                  <select required value={journalForm.drAccountId} onChange={(e) => setJournalForm((f) => ({ ...f, drAccountId: e.target.value }))} className="form-select w-full">
+                    <option value="">Select account…</option>
+                    {accounts.map((a) => <option key={a.id} value={a.id}>{a.accountCode} — {a.accountName}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label text-red-700">Credit Account (CR) *</label>
+                  <select required value={journalForm.crAccountId} onChange={(e) => setJournalForm((f) => ({ ...f, crAccountId: e.target.value }))} className="form-select w-full">
+                    <option value="">Select account…</option>
+                    {accounts.map((a) => <option key={a.id} value={a.id}>{a.accountCode} — {a.accountName}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="form-label">Amount *</label>
+                <input required type="number" min="0.01" step="0.01" value={journalForm.amount} onChange={(e) => setJournalForm((f) => ({ ...f, amount: e.target.value }))} className="form-input w-full" placeholder="0.00" />
+              </div>
+              <div>
+                <label className="form-label">Line Notes</label>
+                <input value={journalForm.notes} onChange={(e) => setJournalForm((f) => ({ ...f, notes: e.target.value }))} className="form-input w-full" placeholder="Optional per-line note" />
+              </div>
+              <div className="flex gap-2 pt-1 border-t border-gray-100">
+                <Button type="submit" loading={journalSaving}>Post Journal Entry</Button>
+                <Button type="button" variant="secondary" onClick={() => setShowJournal(false)}>Cancel</Button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
