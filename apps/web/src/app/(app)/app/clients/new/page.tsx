@@ -9,8 +9,9 @@ import { Input } from '@/components/ui/Input';
 import { ArrowLeft, Users, Briefcase, Shield, CheckCircle, AlertTriangle } from 'lucide-react';
 import Link from 'next/link';
 
-// KRA PIN format: 1 letter + 9 digits + 1 letter (e.g. P052312345J or A000000000B)
-const KRA_PIN_REGEX = /^[A-Z]\d{9}[A-Z]$/;
+// KRA PIN format: A or P + 9 digits + 1 letter (e.g. P052312345J or A000000000B)
+// Must match the backend validator (/^[AP][0-9]{9}[A-Z]$/i) to avoid false-positive validation.
+const KRA_PIN_REGEX = /^[AP]\d{9}[A-Z]$/i;
 
 type ConflictResult = { hasConflict: boolean; conflicts?: Array<{ name: string; matter?: string }> };
 
@@ -85,9 +86,22 @@ export default function NewClientPage() {
 
     setError(''); setLoading(true);
     try {
-      const result = await api.post<{ id: string } | { client?: { id: string }; id?: string }>('/clients', {
-        ...form, kraPin: form.kraPin.trim().toUpperCase(),
-      });
+      // Map UI field names to the API contract (type / phoneNumber)
+      const payload = {
+        name: form.name.trim(),
+        type: form.clientType,
+        email: form.email || undefined,
+        phoneNumber: form.phone || undefined,
+        idNumber: form.idNumber.trim(),
+        kraPin: form.kraPin.trim().toUpperCase(),
+        address: form.address || undefined,
+        metadata: {
+          city: form.city || undefined,
+          country: form.country || undefined,
+          notes: form.notes || undefined,
+        },
+      };
+      const result = await api.post<{ id: string } | { client?: { id: string }; id?: string }>('/clients', payload);
       // Handle both { id } and { client: { id } } response shapes
       const clientId = (result as { id: string }).id
         ?? (result as { client?: { id: string } }).client?.id;
@@ -162,10 +176,9 @@ export default function NewClientPage() {
                 <label className="form-label">Client Type *</label>
                 <select required value={form.clientType} onChange={(e) => set('clientType', e.target.value)} className="form-select w-full">
                   <option value="INDIVIDUAL">Individual</option>
-                  <option value="COMPANY">Company</option>
-                  <option value="NGO">NGO / Non-Profit</option>
-                  <option value="GOVERNMENT">Government Entity</option>
-                  <option value="PARTNERSHIP">Partnership</option>
+                  <option value="CORPORATE">Company / Corporate</option>
+                  <option value="STATE_AGENCY">Government / State Agency</option>
+                  <option value="OTHER">NGO / Partnership / Other</option>
                 </select>
               </div>
               <Input label="Email Address" type="email" value={form.email}

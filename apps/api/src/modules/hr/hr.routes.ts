@@ -321,7 +321,7 @@ router.get(
           employeeProfile: {
             select: {
               employeeNumber: true, employmentType: true, employmentStatus: true,
-              hireDate: true, terminationDate: true, workLocation: true, position: true,
+              hireDate: true, terminationDate: true, workLocation: true,
               department: { select: { id: true, name: true } },
               jobTitle: { select: { id: true, title: true } },
             },
@@ -361,7 +361,7 @@ router.get(
           employeeProfile: {
             select: {
               employeeNumber: true, employmentType: true, employmentStatus: true,
-              hireDate: true, terminationDate: true, workLocation: true, position: true,
+              hireDate: true, terminationDate: true, workLocation: true,
               department: { select: { id: true, name: true } },
               jobTitle: { select: { id: true, title: true } },
             },

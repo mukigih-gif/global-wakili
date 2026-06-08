@@ -83,7 +83,7 @@ export class ClientService {
   ): Promise<ClientValidationIssue[]> {
     const issues: ClientValidationIssue[] = [];
 
-    const [existingByCode, existingByEmail, existingByPhone, existingByPin] = await Promise.all([
+    const [existingByCode, existingByEmail, existingByPhone, existingByPin, existingByNationalId] = await Promise.all([
       input.clientCode
         ? db.client.findFirst({
             where: {
@@ -124,6 +124,16 @@ export class ClientService {
             select: { id: true },
           })
         : Promise.resolve(null),
+      input.idNumber?.trim()
+        ? db.client.findFirst({
+            where: {
+              tenantId,
+              nationalId: input.idNumber.trim(),
+              ...(excludeClientId ? { id: { not: excludeClientId } } : {}),
+            },
+            select: { id: true },
+          })
+        : Promise.resolve(null),
     ]);
 
     if (existingByCode) {
@@ -151,6 +161,13 @@ export class ClientService {
       issues.push({
         code: 'DUPLICATE_KRA_PIN',
         message: 'A client with this KRA PIN already exists.',
+      });
+    }
+
+    if (existingByNationalId) {
+      issues.push({
+        code: 'DUPLICATE_NATIONAL_ID',
+        message: 'A client with this ID / registration number already exists.',
       });
     }
 

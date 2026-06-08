@@ -120,7 +120,38 @@ function parsePositiveInteger(value: unknown): number | undefined {
 
 export const createMatter = asyncHandler(async (req: Request, res: Response) => {
   const tenantId = requireTenantId(req);
-  const input = req.body as MatterInput;
+  const actorId  = (req as any).user?.id ?? (req as any).user?.sub ?? null;
+  const actorBranchId = (req as any).user?.branchId ?? null;
+
+  // Resolve a branchId: explicit → actor's branch → client's branch → tenant's first branch.
+  let branchId: string | null = req.body.branchId || actorBranchId || null;
+  if (!branchId && req.body.clientId) {
+    const client = await req.db.client.findFirst({
+      where: { tenantId, id: req.body.clientId },
+      select: { branchId: true },
+    }).catch(() => null);
+    branchId = client?.branchId ?? null;
+  }
+  if (!branchId) {
+    const firstBranch = await req.db.branch.findFirst({
+      where: { tenantId },
+      select: { id: true },
+      orderBy: { createdAt: 'asc' },
+    }).catch(() => null);
+    branchId = firstBranch?.id ?? null;
+  }
+
+  // Resolve a leadAdvocateId: explicit → assigned lawyer → current actor.
+  const leadAdvocateId =
+    req.body.leadAdvocateId || req.body.assignedLawyerId || actorId || null;
+
+  const input: MatterInput = {
+    ...req.body,
+    leadAdvocateId,
+    branchId,
+    // Frontend may send matterType instead of category
+    category: req.body.category || req.body.matterType || 'GENERAL',
+  };
 
   const created = await MatterService.create(req.db, tenantId, input);
 

@@ -189,14 +189,14 @@ router.get('/orders', requirePermissions(PERMISSIONS.procurement.viewBill), asyn
     const { status, limit = '50' } = req.query as Record<string, string>;
     const orders = await req.db.purchaseOrder.findMany({
       where: { tenantId: req.tenantId, ...(status ? { status: status as any } : {}) },
-      include: { supplier: { select: { id: true, name: true } } },
+      include: { vendor: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
       take: Math.min(parseInt(limit) || 50, 200),
     });
     const shaped = orders.map((o: any) => ({
       ...o,
       poNumber: o.poNumber ?? `PO-${o.id.slice(-6).toUpperCase()}`,
-      vendor: o.supplier,
+      vendor: o.vendor,
       totalAmount: parseFloat(String(o.totalAmount ?? o.total ?? 0)),
     }));
     res.json({ success: true, data: shaped });

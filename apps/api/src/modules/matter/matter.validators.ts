@@ -38,11 +38,17 @@ export const matterReportConfigSchema = z.object({
 
 export const matterInputSchema = z.object({
   matterCode: z.string().trim().max(50).optional().nullable(),
+  caseNumber: z.string().trim().max(100).optional().nullable(),
   matterReference: z.string().trim().max(100).optional().nullable(),
   title: z.string().trim().min(1).max(255),
   description: z.string().trim().max(4000).optional().nullable(),
   clientId: z.string().trim().min(1),
   branchId: z.string().trim().min(1).optional().nullable(),
+
+  // Categorisation — frontend may send either `category` or `matterType`.
+  category: z.string().trim().max(100).optional().nullable(),
+  matterType: z.string().trim().max(100).optional().nullable(),
+  riskLevel: z.string().trim().max(50).optional().nullable(),
 
   status: z.enum(['ACTIVE', 'ON_HOLD', 'COMPLETED', 'CLOSED', 'ARCHIVED']).optional(),
   billingModel: z.enum(['HOURLY', 'FIXED_FEE', 'CONTINGENCY', 'CAPPED_FEE']).optional(),
@@ -50,9 +56,13 @@ export const matterInputSchema = z.object({
   openedDate: z.coerce.date().optional().nullable(),
   closeDate: z.coerce.date().optional().nullable(),
 
+  // Responsibility roles
+  leadAdvocateId: z.string().trim().min(1).optional().nullable(),
+  assignedLawyerId: z.string().trim().min(1).optional().nullable(),
   originatorId: z.string().trim().min(1).optional().nullable(),
   partnerId: z.string().trim().min(1).optional().nullable(),
   assigneeId: z.string().trim().min(1).optional().nullable(),
+  commissionRate: z.union([z.string().trim(), z.number()]).optional().nullable(),
 
   estimatedValue: decimalLikeSchema.optional().nullable(),
   progressPercent: z.number().min(0).max(100).optional().nullable(),

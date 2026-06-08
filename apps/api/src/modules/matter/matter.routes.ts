@@ -370,9 +370,10 @@ router.post(
 
       const matter = await req.db.matter.findFirst({
         where: { id: matterId, tenantId: req.tenantId },
-        select: { clientId: true, currency: true, branchId: true },
+        select: { clientId: true, branchId: true, client: { select: { currency: true } } },
       });
       if (!matter) return res.status(404).json({ error: 'Matter not found' });
+      const matterCurrency = (matter as any).client?.currency ?? 'KES';
 
       const [timeEntries, expenses] = await Promise.all([
         timeEntryIds.length
@@ -405,7 +406,7 @@ router.post(
             matterId,
             clientId: matter.clientId,
             branchId: matter.branchId,
-            currency: matter.currency ?? 'KES',
+            currency: matterCurrency,
             invoiceNumber,
             subTotal,
             total: subTotal,
