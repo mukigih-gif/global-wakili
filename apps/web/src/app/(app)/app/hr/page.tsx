@@ -67,19 +67,24 @@ export default function HRPage() {
 
       <Table>
         <thead>
-          <tr><Th>Employee</Th><Th>Email</Th><Th>Job Title</Th><Th>Department</Th><Th>Status</Th><Th>Start Date</Th></tr>
+          <tr><Th>Employee</Th><Th>Email</Th><Th>Job Title</Th><Th>Department</Th><Th>Status</Th><Th>Start Date</Th><Th></Th></tr>
         </thead>
         <tbody>
           {loading ? <LoadingRow colSpan={6} /> :
            !employees.length ? <EmptyRow colSpan={6} message="No employees found" /> :
            employees.map((e) => (
-             <tr key={e.id}>
-               <Td className="font-medium">{e.name}</Td>
+             <tr key={e.id} className="hover:bg-gray-50 cursor-pointer">
+               <Td className="font-medium">
+                 <Link href={`/app/hr/employees/${e.id}`} className="text-primary-700 hover:underline">{e.name}</Link>
+               </Td>
                <Td className="text-gray-500 text-sm">{e.email}</Td>
                <Td className="text-gray-600">{e.jobTitle ?? '—'}</Td>
                <Td className="text-gray-600">{e.department ?? '—'}</Td>
                <Td><StatusBadge status={e.status} /></Td>
                <Td className="text-gray-500 text-xs">{formatDate(e.startDate)}</Td>
+               <Td>
+                 <Link href={`/app/hr/employees/${e.id}`} className="text-xs text-primary-600 hover:underline">View</Link>
+               </Td>
              </tr>
            ))
           }
