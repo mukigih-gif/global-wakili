@@ -150,7 +150,7 @@ router.get(
       });
       // Expose createdBy as requestedBy for frontend compatibility
       const shaped = drns.map((d) => ({ ...d, requestedBy: d.createdBy }));
-      res.json({ success: true, data: shaped });
+      res.json({ data: shaped });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   }
 );
@@ -276,7 +276,7 @@ router.get(
           select: { sourceId: true },
         })).map((l: any) => l.sourceId)
       );
-      res.json({ success: true, data: expenses.map((e: any) => ({ ...e, isInvoiced: billedIds.has(e.id) })) });
+      res.json({ data: expenses.map((e: any) => ({ ...e, isInvoiced: billedIds.has(e.id) })) });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   }
 );
@@ -293,7 +293,7 @@ router.get(
         orderBy: { createdAt: 'desc' },
         take: 100,
       });
-      res.json({ success: true, data: updates });
+      res.json({ data: updates });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   }
 );
@@ -380,7 +380,7 @@ router.get(
         orderBy: { entryDate: 'desc' },
         take: 200,
       });
-      res.json({ success: true, data: entries });
+      res.json({ data: entries });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   }
 );

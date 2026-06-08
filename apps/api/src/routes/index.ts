@@ -98,7 +98,7 @@ router.get('/users', async (req: Request, res: Response) => {
       orderBy: { name: 'asc' },
       take: limit,
     });
-    res.json({ success: true, data: users.map((u) => ({ ...u, role: u.tenantRole ?? u.systemRole })) });
+    res.json({ data: users.map((u) => ({ ...u, role: u.tenantRole ?? u.systemRole })) });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
@@ -107,7 +107,7 @@ router.get('/search', async (req: Request, res: Response) => {
   try {
     const q = String(req.query.q ?? '').trim();
     const limit = Math.min(parseInt(String(req.query.limit ?? 10)) || 10, 25);
-    if (!q) { res.json({ success: true, data: [] }); return; }
+    if (!q) { res.json({ data: [] }); return; }
 
     const ci = { contains: q, mode: 'insensitive' as const };
     const per = Math.max(2, Math.ceil(limit / 3));
@@ -144,7 +144,7 @@ router.get('/search', async (req: Request, res: Response) => {
       })),
     ].slice(0, limit);
 
-    res.json({ success: true, data });
+    res.json({ data });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
@@ -193,7 +193,7 @@ router.get('/time-capture/wip', requirePermissions(PERMISSIONS.matter.createTime
       capturedAt:  e.activityAt,
       approvedBy:  null,
     }));
-    res.json({ success: true, data: shaped });
+    res.json({ data: shaped });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
@@ -255,7 +255,7 @@ router.get('/settings/labels', requirePermissions(PERMISSIONS.platform.viewSetti
     const modules = mod ? [mod] : LABEL_MODULES;
     const result: Record<string, LabelDefinition[]> = {};
     for (const m of modules) result[m] = await getLabelDefs(req.db, req.tenantId!, m);
-    res.json({ success: true, data: result });
+    res.json({ data: result });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 

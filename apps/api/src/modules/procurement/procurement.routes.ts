@@ -164,7 +164,7 @@ router.get('/requests', requirePermissions(PERMISSIONS.procurement.viewBill), as
       currency: r.currency ?? 'KES',
       priority: r.priority ?? 'NORMAL',
     }));
-    res.json({ success: true, data: shaped });
+    res.json({ data: shaped });
   } catch (e) { next(e); }
 });
 
@@ -203,7 +203,7 @@ router.get('/orders', requirePermissions(PERMISSIONS.procurement.viewBill), asyn
       vendor: o.vendor,
       totalAmount: parseFloat(String(o.totalAmount ?? o.total ?? 0)),
     }));
-    res.json({ success: true, data: shaped });
+    res.json({ data: shaped });
   } catch (e) { next(e); }
 });
 
@@ -222,7 +222,7 @@ router.get('/bills', requirePermissions(PERMISSIONS.procurement.viewBill), async
       vendor: b.supplier,
       amount: parseFloat(String(b.total ?? 0)),
     }));
-    res.json({ success: true, data: shaped });
+    res.json({ data: shaped });
   } catch (e) { next(e); }
 });
 

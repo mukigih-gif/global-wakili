@@ -336,7 +336,7 @@ router.get(
         department: u.employeeProfile?.department?.name ?? null,
         startDate: u.employeeProfile?.hireDate ?? u.createdAt,
       }));
-      res.json({ success: true, data: shaped });
+      res.json({ data: shaped });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   },
 );
@@ -369,7 +369,7 @@ router.get(
         },
       });
       if (!user) return res.status(404).json({ error: 'Employee not found' });
-      res.json({ success: true, data: { ...user, jobTitle: (user as any).employeeProfile?.jobTitle?.title ?? null, department: (user as any).employeeProfile?.department?.name ?? null } });
+      res.json({ data: { ...user, jobTitle: (user as any).employeeProfile?.jobTitle?.title ?? null, department: (user as any).employeeProfile?.department?.name ?? null } });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   },
 );
@@ -708,8 +708,8 @@ router.get('/onboarding', requireHrPermission(HR_PERMISSIONS.viewEmployee), asyn
       orderBy: { createdAt: 'desc' },
       take: 100,
     }).catch(() => []);
-    res.json({ success: true, data: records });
-  } catch { res.json({ success: true, data: [] }); }
+    res.json({ data: records });
+  } catch { res.json({ data: [] }); }
 });
 
 router.post('/onboarding', requireHrPermission(HR_PERMISSIONS.createEmployee), async (req: Request, res: Response) => {
@@ -761,7 +761,7 @@ router.get('/leave', requireHrPermission(HR_PERMISSIONS.viewLeavePolicy), async 
       orderBy: { startDate: 'desc' },
       take: Math.min(parseInt(limit) || 50, 200),
     });
-    res.json({ success: true, data: records });
+    res.json({ data: records });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
