@@ -49,6 +49,9 @@ export type ClientInput = {
   registrationNumber?: string | null;
   taxExempt?: boolean;
   address?: string | null;
+  city?: string | null;
+  country?: string | null;
+  riskBand?: string | null;
   postalAddress?: string | null;
   currency?: string | null;
   branchId?: string | null;

@@ -92,11 +92,10 @@ export default function ClientDetailPage() {
         phoneNumber: editForm.phoneNumber.trim() || undefined,
         kraPin: editForm.kraPin.trim() ? editForm.kraPin.trim().toUpperCase() : undefined,
         address: editForm.address.trim() || undefined,
-        metadata: {
-          city: editForm.city.trim() || undefined,
-          country: editForm.country.trim() || undefined,
-          riskBand: editForm.riskBand || undefined,
-        },
+        // city/country/riskBand are real Client columns — send top-level so they persist.
+        city: editForm.city.trim() || undefined,
+        country: editForm.country.trim() || undefined,
+        riskBand: editForm.riskBand || undefined,
       };
       await api.patch(`/clients/${id}`, payload);
       setEditing(false);

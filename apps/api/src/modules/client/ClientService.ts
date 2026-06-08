@@ -373,6 +373,9 @@ export class ClientService {
           : {}),
         ...(input.taxExempt !== undefined ? { taxExempt: input.taxExempt } : {}),
         ...(input.address !== undefined ? { address: input.address?.trim() ?? null } : {}),
+        ...(input.city !== undefined ? { city: input.city?.trim() ?? null } : {}),
+        ...(input.country !== undefined ? { country: input.country?.trim() ?? null } : {}),
+        ...(input.riskBand !== undefined ? { riskBand: (input.riskBand ?? 'LOW') as any } : {}),
         ...(input.postalAddress !== undefined
           ? { postalAddress: input.postalAddress?.trim() ?? null }
           : {}),
