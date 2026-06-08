@@ -1090,6 +1090,7 @@ export class MatterService {
       search?: string;
       status?: string;
       branchId?: string | null;
+      clientId?: string | null;
     },
   ) {
     const page = params?.page && params.page > 0 ? params.page : 1;
@@ -1098,6 +1099,15 @@ export class MatterService {
     const search = params?.search?.trim() ?? '';
 
     let where = buildMatterSearchWhere(tenantId, search, params?.branchId);
+
+    // Scope to a specific client (e.g. the client profile Matters tab).
+    if (params?.clientId) {
+      where = { ...where, clientId: params.clientId };
+      // Option B: when viewing one client, show their FULL matter history,
+      // not just ACTIVE/ON_HOLD. Drop the default status restriction unless
+      // an explicit status filter is requested below.
+      delete (where as any).status;
+    }
 
     // Allow overriding status filter (e.g. 'CLOSED', 'PENDING')
     if (params?.status && params.status !== 'ALL') {

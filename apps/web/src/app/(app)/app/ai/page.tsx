@@ -240,7 +240,7 @@ export default function AIPage() {
                    }
                  </Td>
                  <Td className="text-gray-500 text-xs">{formatDate(a.createdAt)}</Td>
-                 <Td><a href={`/app/ai/artifacts/${a.id}`} className="text-xs text-primary-600 hover:underline">View</a></Td>
+                 <Td><span className="text-xs text-gray-300 cursor-not-allowed" title="Artifact detail view coming in Gate 10">View</span></Td>
                </tr>
              ))
             }

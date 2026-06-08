@@ -197,6 +197,7 @@ export const listOpenMatters = asyncHandler(async (req: Request, res: Response) 
     search:   typeof req.query.search === 'string' ? req.query.search : undefined,
     status:   typeof req.query.status === 'string' ? req.query.status : undefined,
     branchId: branchFilter.branchId,
+    clientId: typeof req.query.clientId === 'string' ? req.query.clientId : undefined,
   });
 
   res.status(200).json({

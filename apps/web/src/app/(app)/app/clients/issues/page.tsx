@@ -92,9 +92,9 @@ export default function ClientIssuesPage() {
                <Td className="text-xs text-gray-500">{issue.firstResponseAt ? formatDateTime(issue.firstResponseAt) : <span className="text-orange-500">No response yet</span>}</Td>
                <Td className="text-xs text-gray-500">{formatDate(issue.createdAt)}</Td>
                <Td>
-                 <Link href={`/app/clients/issues/${issue.id}`} className="text-xs text-primary-600 hover:underline flex items-center gap-1">
+                 <span className="text-xs text-gray-300 cursor-not-allowed flex items-center gap-1" title="Issue detail view coming soon">
                    <MessageSquare className="h-3 w-3" /> Open
-                 </Link>
+                 </span>
                </Td>
              </tr>
            ))

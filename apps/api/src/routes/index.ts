@@ -102,6 +102,52 @@ router.get('/users', async (req: Request, res: Response) => {
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+// ── Global search — fans out across matters, clients, tasks (tenant-scoped) ────
+router.get('/search', async (req: Request, res: Response) => {
+  try {
+    const q = String(req.query.q ?? '').trim();
+    const limit = Math.min(parseInt(String(req.query.limit ?? 10)) || 10, 25);
+    if (!q) { res.json({ success: true, data: [] }); return; }
+
+    const ci = { contains: q, mode: 'insensitive' as const };
+    const per = Math.max(2, Math.ceil(limit / 3));
+
+    const [matters, clients, tasks] = await Promise.all([
+      req.db.matter.findMany({
+        where: { tenantId: req.tenantId, OR: [{ title: ci }, { matterCode: ci }, { caseNumber: ci }] },
+        select: { id: true, title: true, matterCode: true },
+        take: per,
+      }).catch(() => []),
+      req.db.client.findMany({
+        where: { tenantId: req.tenantId, OR: [{ name: ci }, { clientCode: ci }, { kraPin: ci }] },
+        select: { id: true, name: true, clientCode: true },
+        take: per,
+      }).catch(() => []),
+      req.db.matterTask.findMany({
+        where: { tenantId: req.tenantId, title: ci },
+        select: { id: true, title: true },
+        take: per,
+      }).catch(() => []),
+    ]);
+
+    const data = [
+      ...(matters as any[]).map((m) => ({
+        type: 'matter', id: m.id, label: m.title,
+        reference: m.matterCode ?? undefined, href: `/app/matters/${m.id}`,
+      })),
+      ...(clients as any[]).map((c) => ({
+        type: 'client', id: c.id, label: c.name,
+        reference: c.clientCode ?? undefined, href: `/app/clients/${c.id}`,
+      })),
+      ...(tasks as any[]).map((t) => ({
+        type: 'task', id: t.id, label: t.title, href: `/app/tasks/${t.id}`,
+      })),
+    ].slice(0, limit);
+
+    res.json({ success: true, data });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 router.patch('/users/me', async (req: Request, res: Response) => {
   try {
     const { name, phone } = req.body;

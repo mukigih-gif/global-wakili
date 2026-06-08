@@ -747,4 +747,50 @@ router.patch('/onboarding/:id/steps', requireHrPermission(HR_PERMISSIONS.updateE
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
+// ── Leave records (list) ──────────────────────────────────────────────────────
+router.get('/leave', requireHrPermission(HR_PERMISSIONS.viewLeavePolicy), async (req: Request, res: Response) => {
+  try {
+    const { employeeId, status, limit = '50' } = req.query as Record<string, string>;
+    const records = await req.db.leaveRequest.findMany({
+      where: {
+        tenantId: req.tenantId,
+        ...(employeeId ? { userId: employeeId } : {}),
+        ...(status ? { status: status as any } : {}),
+      },
+      include: { user: { select: { id: true, name: true } } },
+      orderBy: { startDate: 'desc' },
+      take: Math.min(parseInt(limit) || 50, 200),
+    });
+    res.json({ success: true, data: records });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// ── Payroll statutory deductions summary (for tax page) ───────────────────────
+router.get('/payroll/deductions', requireHrPermission(HR_PERMISSIONS.viewEmployee), async (req: Request, res: Response) => {
+  try {
+    const now = new Date();
+    const year = parseInt(String(req.query.year ?? now.getFullYear())) || now.getFullYear();
+    const month = parseInt(String(req.query.month ?? (now.getMonth() + 1))) || (now.getMonth() + 1);
+
+    const payslips = await req.db.payslip.findMany({
+      where: { tenantId: req.tenantId, batch: { year, month } },
+      select: { grossPay: true, netPay: true, paye: true, shif: true, nssf: true, housingLevy: true },
+    }).catch(() => []);
+
+    const sum = (key: string) => (payslips as any[]).reduce((s, p) => s + parseFloat(String(p[key] ?? 0)), 0);
+
+    res.json({
+      success: true,
+      period: `${year}-${String(month).padStart(2, '0')}`,
+      paye: sum('paye'),
+      shif: sum('shif'),
+      nssf: sum('nssf'),
+      housingLevy: sum('housingLevy'),
+      grossSalary: sum('grossPay'),
+      netSalary: sum('netPay'),
+      employeeCount: (payslips as any[]).length,
+    });
+  } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
 export default router;
