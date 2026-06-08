@@ -1254,8 +1254,8 @@ function MatterUpdatesTab({ matterId }: { matterId: string }) {
               <textarea required value={form.content} onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))} rows={4} className="form-input w-full resize-none" placeholder="Describe what happened, decisions made, next steps…" />
             </div>
             <div>
-              <label className="form-label">Next Bring-Up Date <span className="font-normal text-gray-400">(optional — adds a reminder to the calendar)</span></label>
-              <input type="date" value={form.bringUpDate} onChange={(e) => setForm((f) => ({ ...f, bringUpDate: e.target.value }))} className="form-input w-full sm:w-56" />
+              <label className="form-label">Next Bring-Up Date &amp; Time <span className="font-normal text-gray-400">(optional — adds a reminder to the calendar)</span></label>
+              <input type="datetime-local" value={form.bringUpDate} onChange={(e) => setForm((f) => ({ ...f, bringUpDate: e.target.value }))} className="form-input w-full sm:w-64" />
             </div>
             <div className="flex gap-6 text-sm">
               <label className="flex items-center gap-2 cursor-pointer">

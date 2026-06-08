@@ -328,8 +328,10 @@ router.post(
       let calendarEvent: any = null;
       const bu = bringUpDate ? new Date(bringUpDate) : null;
       if (bu && !isNaN(bu.getTime())) {
-        const startTime = new Date(bu); startTime.setHours(9, 0, 0, 0);
-        const endTime = new Date(bu); endTime.setHours(10, 0, 0, 0);
+        const startTime = new Date(bu);
+        // Honor the picked time; only default to 09:00 if a date-only value was sent.
+        if (!/T\d/.test(bringUpDate as string)) startTime.setHours(9, 0, 0, 0);
+        const endTime = new Date(startTime.getTime() + 60 * 60 * 1000);
         calendarEvent = await CalendarService.createEvent(req.db, {
           tenantId: req.tenantId,
           creatorId: actorId,
