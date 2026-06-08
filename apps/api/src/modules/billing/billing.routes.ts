@@ -433,7 +433,7 @@ router.get(
         issuedAt: inv.issuedDate ?? inv.createdAt,
       }));
 
-      res.json({ success: true, data: shaped });
+      res.json({ data: shaped });
     } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
   }
 );
@@ -547,7 +547,7 @@ router.get(
 
       if (!delegate) {
         // Schema not migrated yet — return empty list gracefully
-        res.json({ success: true, data: [] });
+        res.json({ data: [] });
         return;
       }
 
@@ -574,10 +574,10 @@ router.get(
         totalAmount: q.total ?? q.totalAmount ?? 0,
       }));
 
-      res.json({ success: true, data: shaped });
+      res.json({ data: shaped });
     } catch (e) {
       // Non-fatal — proforma schema may not be applied yet
-      res.json({ success: true, data: [] });
+      res.json({ data: [] });
     }
   }
 );
@@ -614,7 +614,7 @@ router.get(
         take:    Math.min(parseInt(limit) || 50, 200),
         skip:    parseInt(skip) || 0,
       });
-      res.json({ success: true, data: expenses });
+      res.json({ data: expenses });
     } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
   }
 );

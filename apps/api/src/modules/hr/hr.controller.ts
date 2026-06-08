@@ -89,7 +89,7 @@ export const getHrDashboard = asyncHandler(async (req: Request, res: Response) =
     month: req.query.month ? Number(req.query.month) : undefined,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const createEmployee = asyncHandler(async (req: Request, res: Response) => {
@@ -117,7 +117,7 @@ export const updateEmployee = asyncHandler(async (req: Request, res: Response) =
       req.body.probationEndDate !== undefined ? optionalDate(req.body.probationEndDate) : undefined,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const listEmployees = asyncHandler(async (req: Request, res: Response) => {
@@ -136,13 +136,13 @@ export const listEmployees = asyncHandler(async (req: Request, res: Response) =>
     skip: req.query.skip ? Number(req.query.skip) : undefined,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const getEmployeeById = asyncHandler(async (req: Request, res: Response) => {
   const data = await employeeService.getEmployeeById(getTenantId(req), req.params.employeeId);
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const changeEmployeeStatus = asyncHandler(async (req: Request, res: Response) => {
@@ -156,7 +156,7 @@ export const changeEmployeeStatus = asyncHandler(async (req: Request, res: Respo
     metadata: req.body.metadata,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const terminateEmployee = asyncHandler(async (req: Request, res: Response) => {
@@ -171,7 +171,7 @@ export const terminateEmployee = asyncHandler(async (req: Request, res: Response
     metadata: req.body.metadata,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const createDepartment = asyncHandler(async (req: Request, res: Response) => {
@@ -192,7 +192,7 @@ export const updateDepartment = asyncHandler(async (req: Request, res: Response)
     departmentId: req.params.departmentId,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const listDepartments = asyncHandler(async (req: Request, res: Response) => {
@@ -205,7 +205,7 @@ export const listDepartments = asyncHandler(async (req: Request, res: Response) 
     skip: req.query.skip ? Number(req.query.skip) : undefined,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const getDepartmentById = asyncHandler(async (req: Request, res: Response) => {
@@ -214,7 +214,7 @@ export const getDepartmentById = asyncHandler(async (req: Request, res: Response
     req.params.departmentId,
   );
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const archiveDepartment = asyncHandler(async (req: Request, res: Response) => {
@@ -225,7 +225,7 @@ export const archiveDepartment = asyncHandler(async (req: Request, res: Response
     reason: req.body.reason,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const createContract = asyncHandler(async (req: Request, res: Response) => {
@@ -259,7 +259,7 @@ export const updateContract = asyncHandler(async (req: Request, res: Response) =
       req.body.signedByEmployerAt !== undefined ? optionalDate(req.body.signedByEmployerAt) : undefined,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const listContracts = asyncHandler(async (req: Request, res: Response) => {
@@ -272,7 +272,7 @@ export const listContracts = asyncHandler(async (req: Request, res: Response) =>
     skip: req.query.skip ? Number(req.query.skip) : undefined,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const getContractById = asyncHandler(async (req: Request, res: Response) => {
@@ -281,7 +281,7 @@ export const getContractById = asyncHandler(async (req: Request, res: Response) 
     req.params.contractId,
   );
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const activateContract = asyncHandler(async (req: Request, res: Response) => {
@@ -291,7 +291,7 @@ export const activateContract = asyncHandler(async (req: Request, res: Response)
     actorId: getActorId(req),
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const terminateContract = asyncHandler(async (req: Request, res: Response) => {
@@ -303,7 +303,7 @@ export const terminateContract = asyncHandler(async (req: Request, res: Response
     terminationDate: requiredDate(req.body.terminationDate),
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const createLeavePolicy = asyncHandler(async (req: Request, res: Response) => {
@@ -329,7 +329,7 @@ export const updateLeavePolicy = asyncHandler(async (req: Request, res: Response
     effectiveTo: req.body.effectiveTo !== undefined ? optionalDate(req.body.effectiveTo) : undefined,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const listLeavePolicies = asyncHandler(async (req: Request, res: Response) => {
@@ -341,7 +341,7 @@ export const listLeavePolicies = asyncHandler(async (req: Request, res: Response
     skip: req.query.skip ? Number(req.query.skip) : undefined,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const getLeavePolicyById = asyncHandler(async (req: Request, res: Response) => {
@@ -350,7 +350,7 @@ export const getLeavePolicyById = asyncHandler(async (req: Request, res: Respons
     req.params.leavePolicyId,
   );
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const accrueLeave = asyncHandler(async (req: Request, res: Response) => {
@@ -363,7 +363,7 @@ export const accrueLeave = asyncHandler(async (req: Request, res: Response) => {
     actorId: getActorId(req),
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const createGeoFence = asyncHandler(async (req: Request, res: Response) => {
@@ -399,7 +399,7 @@ export const clockOut = asyncHandler(async (req: Request, res: Response) => {
     userAgent: req.headers['user-agent'] ?? null,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const createManualAttendance = asyncHandler(async (req: Request, res: Response) => {
@@ -426,7 +426,7 @@ export const listAttendance = asyncHandler(async (req: Request, res: Response) =
     skip: req.query.skip ? Number(req.query.skip) : undefined,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const getAttendanceSummary = asyncHandler(async (req: Request, res: Response) => {
@@ -437,7 +437,7 @@ export const getAttendanceSummary = asyncHandler(async (req: Request, res: Respo
     to: requiredDate(req.query.to),
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const createPerformanceReview = asyncHandler(async (req: Request, res: Response) => {
@@ -460,7 +460,7 @@ export const startSelfReview = asyncHandler(async (req: Request, res: Response) 
     actorId: getActorId(req),
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const submitSelfReview = asyncHandler(async (req: Request, res: Response) => {
@@ -471,7 +471,7 @@ export const submitSelfReview = asyncHandler(async (req: Request, res: Response)
     actorId: getActorId(req),
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const submitManagerReview = asyncHandler(async (req: Request, res: Response) => {
@@ -482,7 +482,7 @@ export const submitManagerReview = asyncHandler(async (req: Request, res: Respon
     actorId: getActorId(req),
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const listPerformanceReviews = asyncHandler(async (req: Request, res: Response) => {
@@ -496,13 +496,13 @@ export const listPerformanceReviews = asyncHandler(async (req: Request, res: Res
     skip: req.query.skip ? Number(req.query.skip) : undefined,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const getPerformanceReviewById = asyncHandler(async (req: Request, res: Response) => {
   const data = await performanceService.getReviewById(getTenantId(req), req.params.reviewId);
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const cancelPerformanceReview = asyncHandler(async (req: Request, res: Response) => {
@@ -513,7 +513,7 @@ export const cancelPerformanceReview = asyncHandler(async (req: Request, res: Re
     reason: req.body.reason,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const createDisciplinaryCase = asyncHandler(async (req: Request, res: Response) => {
@@ -536,7 +536,7 @@ export const scheduleDisciplinaryHearing = asyncHandler(async (req: Request, res
     hearingAt: requiredDate(req.body.hearingAt),
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const issueDisciplinaryAction = asyncHandler(async (req: Request, res: Response) => {
@@ -562,7 +562,7 @@ export const closeDisciplinaryCase = asyncHandler(async (req: Request, res: Resp
     notes: req.body.notes,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const cancelDisciplinaryCase = asyncHandler(async (req: Request, res: Response) => {
@@ -573,7 +573,7 @@ export const cancelDisciplinaryCase = asyncHandler(async (req: Request, res: Res
     reason: req.body.reason,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const listDisciplinaryCases = asyncHandler(async (req: Request, res: Response) => {
@@ -588,13 +588,13 @@ export const listDisciplinaryCases = asyncHandler(async (req: Request, res: Resp
     skip: req.query.skip ? Number(req.query.skip) : undefined,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const getDisciplinaryCaseById = asyncHandler(async (req: Request, res: Response) => {
   const data = await disciplinaryService.getCaseById(getTenantId(req), req.params.caseId);
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const createHrDocument = asyncHandler(async (req: Request, res: Response) => {
@@ -629,7 +629,7 @@ export const signHrDocument = asyncHandler(async (req: Request, res: Response) =
     userAgent: req.headers['user-agent'] ?? null,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const revokeHrDocument = asyncHandler(async (req: Request, res: Response) => {
@@ -640,7 +640,7 @@ export const revokeHrDocument = asyncHandler(async (req: Request, res: Response)
     reason: req.body.reason,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const listHrDocuments = asyncHandler(async (req: Request, res: Response) => {
@@ -657,7 +657,7 @@ export const listHrDocuments = asyncHandler(async (req: Request, res: Response) 
     skip: req.query.skip ? Number(req.query.skip) : undefined,
   });
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
 
 export const getHrDocumentById = asyncHandler(async (req: Request, res: Response) => {
@@ -666,5 +666,5 @@ export const getHrDocumentById = asyncHandler(async (req: Request, res: Response
     req.params.hrDocumentId,
   );
 
-  res.status(200).json({ success: true, module: 'hr', data });
+  res.status(200).json({ module: 'hr', data });
 });
