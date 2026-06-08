@@ -65,10 +65,10 @@ export default function NewClientPage() {
     if (!form.name.trim()) { setError('Enter client name first to run a conflict check'); return; }
     setCheckingConflict(true);
     try {
-      const result = await api.post<ConflictResult>('/clients/conflict-check', {
+      const r = await api.post<any>('/clients/conflict-check', {
         name: form.name, idNumber: form.idNumber, kraPin: form.kraPin,
       });
-      setConflict(result);
+      setConflict((r?.data ?? r) as ConflictResult);
     } catch {
       setConflict(null);
     } finally {

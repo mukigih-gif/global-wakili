@@ -61,8 +61,8 @@ export default function FirmSettingsPage() {
   const logoRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    api.get<FirmSettings>('/tenant/settings')
-      .then((r) => setSettings({ ...DEFAULT, ...r }))
+    api.get<any>('/tenant/settings')
+      .then((r) => setSettings({ ...DEFAULT, ...(r?.data ?? r) }))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);

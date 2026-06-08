@@ -36,7 +36,7 @@ export default function TrustPage() {
     if (tab === 'accounts') {
       // Trust overview returns { dashboard: { accounts: [...] }, recentTransactions: [...] }
       api.get<any>('/trust/overview')
-        .then((r) => setAccounts(r.dashboard?.accounts ?? []))
+        .then((r) => { const d = r?.data ?? r; setAccounts(d.dashboard?.accounts ?? []); })
         .catch(() => setAccounts([])).finally(() => setLoading(false));
     } else if (tab === 'transactions') {
       const p = new URLSearchParams();
@@ -46,7 +46,7 @@ export default function TrustPage() {
         .then((r) => setTxns(r.data ?? [])).catch(() => setTxns([])).finally(() => setLoading(false));
     } else if (tab === 'ledger') {
       api.get<any>('/trust/overview')
-        .then((r) => setLedger(r.dashboard?.clientLedgers ?? []))
+        .then((r) => { const d = r?.data ?? r; setLedger(d.dashboard?.clientLedgers ?? []); })
         .catch(() => setLedger([])).finally(() => setLoading(false));
     } else {
       setLoading(false);
@@ -275,7 +275,7 @@ export default function TrustPage() {
                 setAccountForm({ accountName: '', accountNumber: '', bankName: '', currency: 'KES', custodian: '' });
                 setTab('accounts');
                 // Reload accounts
-                api.get<any>('/trust/overview').then((r) => setAccounts(r.dashboard?.accounts ?? [])).catch(() => {});
+                api.get<any>('/trust/overview').then((r) => { const d = r?.data ?? r; setAccounts(d.dashboard?.accounts ?? []); }).catch(() => {});
               } catch (err: unknown) {
                 setAccountError(err instanceof Error ? err.message : 'Failed to create account');
               } finally { setAccountSaving(false); }

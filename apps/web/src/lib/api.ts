@@ -53,12 +53,9 @@ async function request<T>(
 
   if (res.status === 204) return undefined as unknown as T;
   const json = await res.json();
-  // Only unwrap the { success: true, data: ... } envelope.
-  // List responses like { data: [...], pagination: {} } do NOT have a 'success' key
-  // and must be returned as-is so callers can read r.data and r.pagination.
-  if (json && typeof json === 'object' && json.success === true && 'data' in json) {
-    return json.data as T;
-  }
+  // No envelope unwrapping — responses are returned as-is for ONE consistent shape.
+  // List callers read `r.data`; single-resource callers read `(r.data ?? r)`.
+  // This removes the prior unwrap/r.data mismatch that left lists silently empty.
   return json as T;
 }
 

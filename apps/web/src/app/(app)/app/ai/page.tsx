@@ -84,7 +84,7 @@ export default function AIPage() {
     setRunning(true); setError(''); setResult(null);
     try {
       const res = await api.post<any>(scope.endpoint, buildPayload(active));
-      setResult(res);
+      setResult(res?.data ?? res);
       loadArtifacts();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'AI task failed');

@@ -185,7 +185,7 @@ export default function PlatformHealthPage() {
     ]).then(async ([h, tenants]) => {
       // Build health from available data
       const [auditCount, matterCount, clientCount, userCount] = await Promise.all([
-        api.get<{ total: number }>('/audit/stats').then((r) => r.total ?? 0).catch(() => 0),
+        api.get<any>('/audit/stats').then((r) => (r?.data ?? r)?.total ?? 0).catch(() => 0),
         api.get<{ total: number }>('/matters?limit=1').then(() => 5).catch(() => 0),
         api.get<{ total: number }>('/clients?limit=1').then(() => 5).catch(() => 0),
         api.get<{ total: number }>('/users?limit=1').then(() => 1).catch(() => 0),

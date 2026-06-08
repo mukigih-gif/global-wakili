@@ -25,7 +25,7 @@ export default function CFODashboardPage() {
     setLoading(true);
     Promise.all([
       api.get<{ data: any[] }>('/billing/invoices?limit=200').then((r) => setInvoices(r.data ?? [])).catch(() => {}),
-      api.get<any>('/trust/overview').then((r) => setTrust(r.dashboard ?? {})).catch(() => {}),
+      api.get<any>('/trust/overview').then((r) => { const d = r?.data ?? r; setTrust(d.dashboard ?? {}); }).catch(() => {}),
     ]).finally(() => { setLoading(false); setRefresh(new Date().toISOString()); });
   };
 

@@ -39,12 +39,13 @@ function NewTaskForm() {
     setError('');
     setLoading(true);
     try {
-      const task = await api.post<{ id: string }>('/tasks', {
+      const r = await api.post<any>('/tasks', {
         ...form,
         matterId:       form.matterId       || null,
         assignedToId:   form.assignedToId   || null,
         dueDate:        form.dueDate        || null,
       });
+      const task = (r?.data ?? r) as { id: string };
       router.push(`/app/tasks/${task.id}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to create task');

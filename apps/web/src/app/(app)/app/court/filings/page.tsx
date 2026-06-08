@@ -60,7 +60,7 @@ export default function CourtFilingsPage() {
   const [form, setForm] = useState({ title: '', filingType: 'PLEADING', matterId: '', dueDate: '', courtRef: '', notes: '' });
 
   useEffect(() => {
-    api.get<Dashboard>('/court/filings/dashboard').then(setDashboard).catch(() => null);
+    api.get<any>('/court/filings/dashboard').then((r) => setDashboard(r?.data ?? r)).catch(() => null);
     api.get<{ data: { id: string; title: string; matterCode: string }[] }>('/matters?limit=100').then((r) => setMatters(r.data ?? [])).catch(() => {});
   }, []);
 

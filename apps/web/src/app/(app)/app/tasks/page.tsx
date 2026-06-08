@@ -59,8 +59,8 @@ export default function TasksPage() {
   const [viewMode, setViewMode] = useState<'mine' | 'all'>('all');
 
   useEffect(() => {
-    api.get<Dashboard>('/tasks/dashboard')
-      .then(setDashboard)
+    api.get<any>('/tasks/dashboard')
+      .then((r) => setDashboard(r?.data ?? r))
       .catch(() => null);
   }, []);
 

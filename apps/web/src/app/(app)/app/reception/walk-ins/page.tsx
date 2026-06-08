@@ -84,7 +84,7 @@ export default function WalkInsPage() {
     if (!form.clientName.trim()) { setError('Client name is required'); return; }
     setError(''); setSaving(true);
     try {
-      const result = await api.post<ExpressService>('/reception/express-services', {
+      const r = await api.post<any>('/reception/express-services', {
         clientName:  form.clientName,
         serviceType: form.serviceType,
         amount:      form.amount,
@@ -92,7 +92,7 @@ export default function WalkInsPage() {
         mpesaRef:    form.paymentMethod === 'MPESA' ? form.mpesaRef : null,
         notes:       form.notes,
       });
-      setReceipt(result);
+      setReceipt((r?.data ?? r) as ExpressService);
       setForm(EMPTY_FORM);
       setShowForm(false);
       load();

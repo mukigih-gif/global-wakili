@@ -91,7 +91,8 @@ export default function ReportsPage() {
   const runReport = async (key: string, name: string) => {
     setRunning(key);
     try {
-      const run = await api.post<ReportRun>('/reporting/runs', { reportKey: key, reportName: name });
+      const r = await api.post<any>('/reporting/runs', { reportKey: key, reportName: name });
+      const run = (r?.data ?? r) as ReportRun;
       setRuns((prev) => [run, ...prev]);
       setTab('runs');
     } catch {

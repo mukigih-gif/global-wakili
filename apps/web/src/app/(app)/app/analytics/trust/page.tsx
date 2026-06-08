@@ -11,7 +11,7 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     api.get<any>('/trust/overview')
-      .then((r) => setData(r.dashboard?.accounts ?? [])).catch(() => setData([])).finally(() => setLoading(false));
+      .then((r) => { const d = r?.data ?? r; setData(d.dashboard?.accounts ?? []); }).catch(() => setData([])).finally(() => setLoading(false));
   }, []);
   return (
     <div className="space-y-5">

@@ -51,10 +51,10 @@ export default function NewMatterPage() {
     if (!form.clientId) { setError('Select a client first to run a conflict check'); return; }
     setCheckingConflict(true);
     try {
-      const result = await api.post<ConflictResult>(
+      const r = await api.post<any>(
         '/matters/conflict-check', { clientId: form.clientId, title: form.title }
       );
-      setConflictResult(result);
+      setConflictResult((r?.data ?? r) as ConflictResult);
     } catch {
       setConflictResult(null);
     } finally {

@@ -38,7 +38,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const fetchMe = useCallback(async () => {
     if (!isAuthenticated()) { setLoading(false); return; }
     try {
-      const data = await api.get<{ user: User }>('/auth/me');
+      const r = await api.get<any>('/auth/me');
+      const data = r?.data ?? r;
       setUser(data.user);
     } catch {
       clearSession();

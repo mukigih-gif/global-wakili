@@ -87,7 +87,8 @@ export default function BillingPage() {
   const convertToInvoice = async (quotationId: string) => {
     setConverting(quotationId);
     try {
-      const inv = await api.post<Invoice>(`/billing/quotations/${quotationId}/convert`, {});
+      const r = await api.post<any>(`/billing/quotations/${quotationId}/convert`, {});
+      const inv = r?.data ?? r;
       router.push(`/app/billing/invoices/${inv.id}`);
     } catch {
       // show error inline — for now reload to show updated status

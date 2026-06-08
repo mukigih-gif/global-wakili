@@ -14,7 +14,8 @@ export default function MonitoringPage() {
 
   const check = () => {
     setLoading(true);
-    api.get<any>('/platform/health').then((r) => {
+    api.get<any>('/platform/health').then((raw) => {
+      const r = raw?.data ?? raw;
       setHealth({ api: 'UP', db: r.db ?? 'UP', queue: r.queue ?? 'UP', storage: r.storage ?? 'UP', uptime: r.uptime ?? '—', version: r.version ?? '1.0' });
       setChecked(new Date().toISOString());
     }).catch(() => setHealth({ api: 'UP', db: 'UNKNOWN', queue: 'UNKNOWN', storage: 'UNKNOWN', uptime: '—', version: '1.0' })).finally(() => setLoading(false));

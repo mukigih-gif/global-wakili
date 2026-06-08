@@ -141,8 +141,8 @@ export default function BatchPayrollPage() {
     if (!p9Employee) return;
     setP9Loading(true);
     try {
-      const data = await api.get<any>(`/payroll/reports/p9/${p9Employee}?year=${p9Year}`);
-      setP9Data(data);
+      const r = await api.get<any>(`/payroll/reports/p9/${p9Employee}?year=${p9Year}`);
+      setP9Data(r?.data ?? r);
     } catch { setP9Data(null); }
     finally { setP9Loading(false); }
   };

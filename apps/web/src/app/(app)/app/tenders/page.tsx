@@ -54,7 +54,7 @@ export default function TendersPage() {
   const [status, setStatus] = useState('');
 
   useEffect(() => {
-    api.get<Dashboard>('/tenders/dashboard').then(setDashboard).catch(() => null);
+    api.get<any>('/tenders/dashboard').then((r) => setDashboard(r?.data ?? r)).catch(() => null);
   }, []);
 
   useEffect(() => {

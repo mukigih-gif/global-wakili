@@ -53,7 +53,7 @@ function NewEventForm() {
     setError('');
     setLoading(true);
     try {
-      const event = await api.post<{ id: string }>('/calendar/events', {
+      const eventRes = await api.post<any>('/calendar/events', {
         title:           form.title,
         type:            form.type,
         startTime:       form.isAllDay ? `${form.startTime.slice(0,10)}T00:00:00.000Z` : new Date(form.startTime).toISOString(),
@@ -64,6 +64,7 @@ function NewEventForm() {
         attendeeIds:     selectedAttendees,
         reminderMinutes: form.reminderMinutes || 0,
       });
+      const event = (eventRes?.data ?? eventRes) as { id: string };
 
       // Send internal notifications to attendees
       if (notifyInternal && selectedAttendees.length > 0) {

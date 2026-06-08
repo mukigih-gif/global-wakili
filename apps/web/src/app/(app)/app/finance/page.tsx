@@ -68,7 +68,7 @@ export default function FinancePage() {
         .then((r) => setReceipts(r.data ?? [])).catch(() => {}).finally(() => setLoading(false));
     } else if (tab === 'statements') {
       api.get<any>(`/finance/statements?year=${stmtYear}`)
-        .then((r) => setStatements(r))
+        .then((r) => setStatements(r?.data ?? r))
         .catch(() => setStatements(null))
         .finally(() => setLoading(false));
     }
@@ -284,7 +284,7 @@ export default function FinancePage() {
             </select>
             <Button size="sm" variant="secondary" onClick={() => {
               setLoading(true);
-              api.get<any>(`/finance/statements?year=${stmtYear}`).then(setStatements).catch(() => setStatements(null)).finally(() => setLoading(false));
+              api.get<any>(`/finance/statements?year=${stmtYear}`).then((r) => setStatements(r?.data ?? r)).catch(() => setStatements(null)).finally(() => setLoading(false));
             }}>Load Statements</Button>
           </div>
 

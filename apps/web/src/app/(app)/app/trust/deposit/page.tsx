@@ -32,7 +32,7 @@ export default function TrustDepositPage() {
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    api.get<any>('/trust/overview').then((r) => setAccounts(r.dashboard?.accounts ?? [])).catch(() => {});
+    api.get<any>('/trust/overview').then((r) => { const d = r?.data ?? r; setAccounts(d.dashboard?.accounts ?? []); }).catch(() => {});
     api.get<{ data: Client[] }>('/clients?limit=200').then((r) => setClients(r.data ?? [])).catch(() => {});
     api.get<{ data: Matter[] }>('/matters?limit=200').then((r) => setMatters(r.data ?? [])).catch(() => {});
   }, []);
