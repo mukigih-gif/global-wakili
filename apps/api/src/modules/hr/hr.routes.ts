@@ -299,8 +299,46 @@ router.get(
 router.get(
   '/employees',
   requireHrPermission(HR_PERMISSIONS.viewEmployee),
-  validate({ query: employeeListQuerySchema }),
-  listEmployees,
+  async (req: Request, res: Response) => {
+    try {
+      const { status, search, limit = '100' } = req.query as Record<string, string>;
+      const users = await req.db.user.findMany({
+        where: {
+          tenantId: req.tenantId,
+          deletedAt: null,
+          ...(status ? { status: status as any } : {}),
+          ...(search ? {
+            OR: [
+              { name: { contains: search, mode: 'insensitive' as any } },
+              { email: { contains: search, mode: 'insensitive' as any } },
+            ],
+          } : {}),
+        },
+        select: {
+          id: true, name: true, email: true, phone: true, status: true,
+          basicSalary: true, accountNumber: true, bankName: true,
+          createdAt: true,
+          employeeProfile: {
+            select: {
+              employeeNumber: true, employmentType: true, employmentStatus: true,
+              hireDate: true, terminationDate: true, workLocation: true, position: true,
+              department: { select: { id: true, name: true } },
+              jobTitle: { select: { id: true, title: true } },
+            },
+          },
+        },
+        orderBy: { name: 'asc' },
+        take: Math.min(parseInt(limit) || 100, 500),
+      });
+      const shaped = users.map((u: any) => ({
+        ...u,
+        jobTitle: u.employeeProfile?.jobTitle?.title ?? u.employeeProfile?.position ?? null,
+        department: u.employeeProfile?.department?.name ?? null,
+        startDate: u.employeeProfile?.hireDate ?? u.createdAt,
+      }));
+      res.json({ success: true, data: shaped });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  },
 );
 
 router.post(
@@ -313,8 +351,27 @@ router.post(
 router.get(
   '/employees/:employeeId',
   requireHrPermission(HR_PERMISSIONS.viewEmployee),
-  validate({ params: employeeIdParamSchema }),
-  getEmployeeById,
+  async (req: Request, res: Response) => {
+    try {
+      const user = await req.db.user.findFirst({
+        where: { id: req.params.employeeId, tenantId: req.tenantId, deletedAt: null },
+        select: {
+          id: true, name: true, email: true, phone: true, status: true,
+          basicSalary: true, accountNumber: true, bankName: true, createdAt: true,
+          employeeProfile: {
+            select: {
+              employeeNumber: true, employmentType: true, employmentStatus: true,
+              hireDate: true, terminationDate: true, workLocation: true, position: true,
+              department: { select: { id: true, name: true } },
+              jobTitle: { select: { id: true, title: true } },
+            },
+          },
+        },
+      });
+      if (!user) return res.status(404).json({ error: 'Employee not found' });
+      res.json({ success: true, data: { ...user, jobTitle: (user as any).employeeProfile?.jobTitle?.title ?? null, department: (user as any).employeeProfile?.department?.name ?? null } });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  },
 );
 
 router.patch(

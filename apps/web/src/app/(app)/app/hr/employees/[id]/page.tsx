@@ -11,7 +11,7 @@ import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
 import {
   ArrowLeft, User, DollarSign, Calendar, FileText,
-  Briefcase, Phone, Mail, CreditCard, Clock,
+  Briefcase, Phone, Mail, CreditCard, Clock, TrendingUp, Star,
 } from 'lucide-react';
 
 type EmployeeDetail = {
@@ -53,16 +53,24 @@ type Payslip = {
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-type Tab = 'profile' | 'payslips' | 'leave' | 'attendance';
+type Tab = 'profile' | 'payslips' | 'performance' | 'leave' | 'attendance';
+
+type PerfReview = {
+  id: string; cycleName: string; status: string;
+  periodStart: string; periodEnd: string;
+  finalScore?: number | null; finalRating?: string | null;
+  selfScore?: number | null; managerScore?: number | null;
+};
 
 export default function EmployeeDashboardPage() {
   const { id } = useParams<{ id: string }>();
   const [emp, setEmp]         = useState<EmployeeDetail | null>(null);
-  const [payslips, setPayslips] = useState<Payslip[]>([]);
-  const [leave, setLeave]     = useState<any[]>([]);
+  const [payslips, setPayslips]   = useState<Payslip[]>([]);
+  const [leave, setLeave]         = useState<any[]>([]);
   const [attendance, setAttendance] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [tab, setTab]         = useState<Tab>('profile');
+  const [performance, setPerformance] = useState<PerfReview[]>([]);
+  const [loading, setLoading]     = useState(true);
+  const [tab, setTab]             = useState<Tab>('profile');
 
   useEffect(() => {
     if (!id) return;
@@ -72,14 +80,16 @@ export default function EmployeeDashboardPage() {
       api.get<{ data: Payslip[] }>(`/payroll/payslips?userId=${id}&limit=24`).then((r) => setPayslips(r.data ?? [])).catch(() => {}),
       api.get<{ data: any[] }>(`/hr/leave?employeeId=${id}&limit=20`).then((r) => setLeave(r.data ?? [])).catch(() => {}),
       api.get<{ data: any[] }>(`/hr/attendance?employeeId=${id}&limit=30`).then((r) => setAttendance(r.data ?? [])).catch(() => {}),
+      api.get<{ data: PerfReview[] }>(`/hr/performance?employeeId=${id}&take=20`).then((r) => setPerformance(r.data ?? [])).catch(() => {}),
     ]).finally(() => setLoading(false));
   }, [id]);
 
   const TABS: { key: Tab; label: string }[] = [
-    { key: 'profile',    label: 'Profile' },
-    { key: 'payslips',   label: `Payslips (${payslips.length})` },
-    { key: 'leave',      label: `Leave (${leave.length})` },
-    { key: 'attendance', label: 'Attendance' },
+    { key: 'profile',     label: 'Profile' },
+    { key: 'payslips',    label: `Payslips (${payslips.length})` },
+    { key: 'performance', label: `Performance (${performance.length})` },
+    { key: 'leave',       label: `Leave (${leave.length})` },
+    { key: 'attendance',  label: 'Attendance' },
   ];
 
   const dept  = emp?.employeeProfile?.department?.name ?? emp?.department ?? '—';
@@ -235,6 +245,51 @@ export default function EmployeeDashboardPage() {
                ))}
             </tbody>
           </Table>
+        </div>
+      )}
+
+      {/* Performance tab */}
+      {tab === 'performance' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-gray-600">{performance.length} review cycle{performance.length !== 1 ? 's' : ''}</p>
+            <Link href="/app/hr/performance">
+              <Button size="sm" variant="secondary"><TrendingUp className="h-3.5 w-3.5" /> Manage Reviews</Button>
+            </Link>
+          </div>
+          {!performance.length ? (
+            <div className="card p-8 text-center text-sm text-gray-400">
+              No performance reviews for this employee yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {performance.map((r) => {
+                const score = r.finalScore ?? r.managerScore ?? r.selfScore;
+                const scoreNum = score ? parseFloat(String(score)) : null;
+                const scoreColor = !scoreNum ? 'text-gray-400' : scoreNum >= 85 ? 'text-green-700' : scoreNum >= 65 ? 'text-blue-700' : scoreNum >= 50 ? 'text-amber-700' : 'text-red-700';
+                return (
+                  <div key={r.id} className="card p-4 flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <Star className="h-4 w-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="font-medium text-gray-900">{r.cycleName}</p>
+                        <p className="text-xs text-gray-500">{formatDate(r.periodStart)} — {formatDate(r.periodEnd)}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      {scoreNum !== null && (
+                        <p className={`text-lg font-bold ${scoreColor}`}>{scoreNum.toFixed(1)}</p>
+                      )}
+                      {r.finalRating && (
+                        <span className="text-xs px-1.5 py-0.5 rounded border border-gray-200 text-gray-600">{r.finalRating.replace(/_/g,' ')}</span>
+                      )}
+                      <StatusBadge status={r.status} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
 

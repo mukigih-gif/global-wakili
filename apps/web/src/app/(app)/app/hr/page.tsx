@@ -55,11 +55,11 @@ export default function HRPage() {
         <Link href="/app/hr/payroll/batch" className="card p-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-primary-700 hover:shadow-sm transition-all">
           <Receipt className="h-4 w-4 icon-finance" /> Batch Payroll
         </Link>
+        <Link href="/app/hr/performance" className="card p-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-primary-700 hover:shadow-sm transition-all">
+          <TrendingUp className="h-4 w-4 icon-hr" /> Performance Reviews
+        </Link>
         <Link href="/app/approvals" className="card p-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-primary-700 hover:shadow-sm transition-all">
           <Calendar className="h-4 w-4 icon-tasks" /> Leave Approvals
-        </Link>
-        <Link href="/app/dashboard/cfo" className="card p-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-primary-700 hover:shadow-sm transition-all">
-          <DollarSign className="h-4 w-4 icon-finance" /> CFO Dashboard
         </Link>
       </div>
 
