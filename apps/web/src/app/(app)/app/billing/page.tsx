@@ -62,6 +62,8 @@ export default function BillingPage() {
   const [query, setQuery]         = useState('');
   const [statusFilter, setStatus] = useState('');
   const [converting, setConverting] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState<string | null>(null);
+  const [refresh, setRefresh]     = useState(0);
 
   useEffect(() => {
     setLoading(true);
@@ -82,7 +84,17 @@ export default function BillingPage() {
         .then((r) => setExpenses(r.data ?? [])).catch(() => setExpenses([]))
         .finally(() => setLoading(false));
     }
-  }, [tab, query, statusFilter]);
+  }, [tab, query, statusFilter, refresh]);
+
+  const submitInvoice = async (invoiceId: string) => {
+    setSubmitting(invoiceId);
+    try {
+      await api.post(`/billing/invoices/${invoiceId}/submit`, {});
+      setRefresh((n) => n + 1);
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err) ? String((err as any).message) : 'Failed to submit for approval');
+    } finally { setSubmitting(null); }
+  };
 
   const convertToInvoice = async (quotationId: string) => {
     setConverting(quotationId);
@@ -349,8 +361,16 @@ export default function BillingPage() {
                  </Td>
                  <Td className="text-gray-500 text-xs">{inv.issuedAt ? formatDate(inv.issuedAt) : '—'}</Td>
                  <Td>
-                   <div className="flex items-center gap-2">
-                     <button className="text-xs text-primary-600 hover:underline">View</button>
+                   <div className="flex items-center gap-3">
+                     <button onClick={() => router.push(`/app/billing/invoices/${inv.id}`)} className="text-xs text-primary-600 hover:underline">View</button>
+                     {inv.status === 'DRAFT' && (
+                       <button disabled={submitting === inv.id} onClick={() => submitInvoice(inv.id)} className="text-xs text-primary-600 hover:text-primary-800 font-medium disabled:opacity-40">
+                         {submitting === inv.id ? '…' : 'Submit for approval'}
+                       </button>
+                     )}
+                     {inv.status === 'PENDING_APPROVAL' && (
+                       <Link href="/app/approvals" className="text-xs text-amber-600 hover:text-amber-800 font-medium">In approvals →</Link>
+                     )}
                      {inv.quotationId && (
                        <span className="text-[10px] text-gray-400 italic">from quote</span>
                      )}

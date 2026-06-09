@@ -470,7 +470,7 @@ router.post(
           clientId:    effectiveClientId,
           branchId:    matter.branchId ?? undefined,
           currency,
-          status:      'INVOICED',
+          status:      'DRAFT',
           subTotal:    subtotal,
           vatAmount,
           taxAmount:   vatAmount,
@@ -488,6 +488,47 @@ router.post(
       });
 
       res.status(201).json({ success: true, data: { ...invoice, totalAmount: invoice.total } });
+    } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
+  }
+);
+
+// Submit a DRAFT invoice for approval — raises a BILLING approval request and moves
+// the invoice to PENDING_APPROVAL. Approve/reject happens in the Approvals inbox;
+// the approval decision hook (approval.controller) flips the invoice INVOICED/DRAFT.
+router.post(
+  '/invoices/:invoiceId/submit',
+  billingPermission('createInvoice'),
+  async (req: Request, res: Response) => {
+    try {
+      const inv = await req.db.invoice.findFirst({
+        where: { id: req.params.invoiceId, tenantId: req.tenantId },
+        select: { id: true, status: true, invoiceNumber: true, total: true, currency: true, clientId: true, matterId: true },
+      });
+      if (!inv) { res.status(404).json({ success: false, error: 'Invoice not found' }); return; }
+      if (inv.status !== 'DRAFT') {
+        res.status(409).json({ success: false, error: `Only draft invoices can be submitted (current: ${inv.status})`, code: 'INVOICE_NOT_DRAFT' });
+        return;
+      }
+      const actorId = (req as any).user?.id ?? (req as any).user?.sub;
+      const result = await req.db.$transaction(async (tx: any) => {
+        const approval = await tx.approval.create({
+          data: {
+            tenantId: req.tenantId,
+            module: 'BILLING' as any,
+            entityType: 'INVOICE',
+            entityId: inv.id,
+            currentState: 'DRAFT' as any,
+            nextState: 'APPROVED' as any,
+            action: 'SUBMIT' as any,
+            status: 'PENDING' as any,
+            requestedById: actorId,
+            metadata: { invoiceNumber: inv.invoiceNumber, total: String(inv.total), currency: inv.currency, matterId: inv.matterId, clientId: inv.clientId },
+          },
+        });
+        await tx.invoice.update({ where: { id: inv.id }, data: { status: 'PENDING_APPROVAL' } });
+        return approval;
+      });
+      res.json({ success: true, data: { invoiceId: inv.id, status: 'PENDING_APPROVAL', approvalId: result.id } });
     } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
   }
 );
