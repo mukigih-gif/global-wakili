@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -22,6 +22,7 @@ type ConflictResult = { hasConflict: boolean; conflicts?: Array<{ name: string; 
 
 export default function NewMatterPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user: currentUser } = useAuth();
   const [loading, setLoading]           = useState(false);
   const [error, setError]               = useState('');
@@ -32,7 +33,7 @@ export default function NewMatterPage() {
 
   const [form, setForm] = useState({
     title: '', matterType: 'GENERAL', category: 'CIVIL',
-    clientId: '', assignedLawyerId: '', originatorId: '', description: '',
+    clientId: searchParams.get('clientId') ?? '', assignedLawyerId: '', originatorId: '', description: '',
     estimatedValue: '', currency: 'KES',
     commissionRate: '', caseNumber: '',
     openedDate: new Date().toISOString().slice(0, 10),

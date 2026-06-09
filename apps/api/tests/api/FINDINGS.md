@@ -93,3 +93,14 @@ regenerated on every test run — findings logged here survive reruns.
 - Fix: generic 'Internal Server Error' to client + server-side console.error
   (MATTER_ROUTE_ERROR); all 14 occurrences replaced
 - Status: FIXED IN CODE — verified by typecheck (no live 500 trigger available)
+
+## FRONTEND — Web App (10 Jun 2026)
+
+### BUG-B MEDIUM — New Matter form: client not preselected from client profile
+- File: apps/web/src/app/(app)/app/matters/new/page.tsx
+- Cause: page never read ?clientId= from the URL (no useSearchParams); form.clientId
+  initialized to '' so the dropdown defaulted to empty even when navigated from a
+  client profile (clients/[id]/page.tsx:357 links /app/matters/new?clientId=ID)
+- Fix: import useSearchParams; const searchParams = useSearchParams();
+  clientId: searchParams.get('clientId') ?? '' — presets the client dropdown
+- Status: FIXED IN CODE — web typecheck 0 errors (frontend; visual confirmation pending)
