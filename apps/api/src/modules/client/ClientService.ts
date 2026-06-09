@@ -365,7 +365,7 @@ export class ClientService {
     }
 
     return db.client.update({
-      where: { id: clientId },
+      where: { id: clientId, tenantId },
       data: {
         ...(input.clientCode !== undefined ? { clientCode: input.clientCode?.trim() ?? null } : {}),
         ...(input.type !== undefined ? { type: input.type } : {}),

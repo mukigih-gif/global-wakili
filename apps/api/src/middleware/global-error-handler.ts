@@ -21,7 +21,7 @@ export async function globalErrorHandler(
       : 500;
 
   const response: Record<string, unknown> = {
-    error: err?.message || 'Internal Server Error',
+    error: statusCode >= 500 ? 'Internal Server Error' : (err?.message || 'Internal Server Error'),
     code: err?.code || 'INTERNAL_ERROR',
     requestId: req.id,
   };

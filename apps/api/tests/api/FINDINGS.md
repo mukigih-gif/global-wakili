@@ -45,10 +45,30 @@ regenerated on every test run — findings logged here survive reruns.
 - Candidate: db.client.update where clause missing tenantId
 - Tenant-isolation guard rejects mutation without tenantId
 - Fix: add tenantId to where clause in update call
-- Status: OPEN
+- Status: FIXED IN CODE (ClientService.ts:368) — pending Vercel redeploy verification
 
 ### F-07 MEDIUM — GET /clients/:id/dashboard returns 500
 - File: ClientDashboardService.getInternalDashboard
 - Candidate: schema drift or null-handling crash on client with no activity
 - Fix: audit selected fields against live schema, add null guards
+- Status: OPEN
+
+**Status update (10 Jun 2026) — ROOT CAUSE CONFIRMED & FIXED:**
+- Diagnosed from the live 500 response body (raw Prisma error — see F-08).
+- Actual cause: ClientDashboardService portalUser select referenced
+  `firstName`/`lastName`, which do NOT exist on the User model (User has
+  `name`). Prisma: "Unknown field `firstName` for select statement on model
+  `User`." Not schema drift; not null-handling.
+- Why typecheck missed it: the tenant-wrapped client (ClientDashboardDbClient)
+  does not enforce strict Prisma `select` typing.
+- Fix applied: portalUser.select now uses `name` (ClientDashboardService.ts:135).
+- Status: FIXED IN CODE (10 Jun 2026) — pending Vercel redeploy verification.
+
+### F-08 LOW — 500 responses leak raw Prisma error to the client
+- Observed: GET /clients/:id/dashboard 500 returned the full Prisma query echo,
+  model field list, and internal error message in the response body.
+- Risk: information disclosure (DB model/schema internals to any caller).
+- Candidate: global error middleware emits err.message verbatim for unhandled
+  500s (auth 4xx use a generic envelope, so it is 500-path specific).
+- Fix: return a generic 500 envelope in production; log details server-side only.
 - Status: OPEN
