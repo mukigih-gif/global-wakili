@@ -33,8 +33,8 @@ export default function TrustDepositPage() {
 
   useEffect(() => {
     api.get<any>('/trust/overview').then((r) => { const d = r?.data ?? r; setAccounts(d.dashboard?.accounts ?? []); }).catch(() => {});
-    api.get<{ data: Client[] }>('/clients?limit=200').then((r) => setClients(r.data ?? [])).catch(() => {});
-    api.get<{ data: Matter[] }>('/matters?limit=200').then((r) => setMatters(r.data ?? [])).catch(() => {});
+    api.get<{ data: Client[] }>('/clients?limit=100').then((r) => setClients(r.data ?? [])).catch(() => {});
+    api.get<{ data: Matter[] }>('/matters?limit=100').then((r) => setMatters(r.data ?? [])).catch(() => {});
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {

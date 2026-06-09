@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
+import { formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { ArrowLeft, Briefcase, AlertTriangle, CheckCircle, Shield, DollarSign } from 'lucide-react';
@@ -40,7 +41,7 @@ export default function NewMatterPage() {
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    api.get<{ data: Client[] }>('/clients?limit=200').then((r) => setClients(r.data ?? [])).catch(() => {});
+    api.get<{ data: Client[] }>('/clients?limit=100').then((r) => setClients(r.data ?? [])).catch(() => {});
     api.get<{ data: User[] }>('/users?limit=200').then((r) => setLawyers(r.data ?? [])).catch(() => {});
   }, []);
 
@@ -172,7 +173,9 @@ export default function NewMatterPage() {
                 <Input label="Estimated Value *" required type="number" min="1" step="100"
                   value={form.estimatedValue} onChange={(e) => set('estimatedValue', e.target.value)}
                   placeholder="e.g. 500000" />
-                <p className="text-xs text-gray-400 mt-0.5">Required. Can be revised at any stage.</p>
+                {form.estimatedValue && parseFloat(form.estimatedValue) > 0
+                  ? <p className="text-xs font-medium text-gray-600 mt-0.5">{formatCurrency(form.estimatedValue, form.currency)}</p>
+                  : <p className="text-xs text-gray-400 mt-0.5">Required. Can be revised at any stage.</p>}
               </div>
               <div className="w-24">
                 <label className="form-label">Currency</label>

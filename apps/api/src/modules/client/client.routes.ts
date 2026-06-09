@@ -21,13 +21,13 @@ const router = Router();
 
 const clientListQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
   search: z.string().trim().max(200).optional(),
 });
 
 const portalQuerySchema = z.object({
   page: z.coerce.number().int().min(1).optional(),
-  limit: z.coerce.number().int().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
   search: z.string().trim().max(200).optional(),
   portalUserId: z.string().trim().optional(),
 });
