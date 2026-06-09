@@ -151,7 +151,7 @@ router.get(
       // Expose createdBy as requestedBy for frontend compatibility
       const shaped = drns.map((d) => ({ ...d, requestedBy: d.createdBy }));
       res.json({ data: shaped });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );
 
@@ -209,7 +209,7 @@ router.post(
       })();
 
       res.status(201).json({ success: true, data: drn });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );
 
@@ -224,7 +224,7 @@ router.patch(
         data: { status: 'APPROVED' },
       });
       res.json({ success: true, updated: result.count });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );
 
@@ -238,7 +238,7 @@ router.patch(
         data: { status: 'REJECTED' },
       });
       res.json({ success: true, updated: result.count });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );
 
@@ -252,7 +252,7 @@ router.patch(
         data: { status: 'SETTLED' },
       });
       res.json({ success: true, updated: result.count });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );
 
@@ -277,7 +277,7 @@ router.get(
         })).map((l: any) => l.sourceId)
       );
       res.json({ data: expenses.map((e: any) => ({ ...e, isInvoiced: billedIds.has(e.id) })) });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );
 
@@ -294,7 +294,7 @@ router.get(
         take: 100,
       });
       res.json({ data: updates });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );
 
@@ -350,7 +350,7 @@ router.post(
       }
 
       res.json({ success: true, data: update, calendarEvent, bringUpScheduled: Boolean(calendarEvent) });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );
 
@@ -365,7 +365,7 @@ router.patch(
         data: { isClientVisible },
       });
       res.json({ success: true, data: update });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );
 
@@ -382,7 +382,7 @@ router.get(
         take: 200,
       });
       res.json({ data: entries });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );
 
@@ -430,7 +430,7 @@ router.post(
         include: { advocate: { select: { id: true, name: true } } },
       });
       res.json({ data: entry });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );
 
@@ -564,7 +564,7 @@ router.post(
       });
 
       res.json({ success: true, data: invoice });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );
 
@@ -605,7 +605,7 @@ router.post(
         });
       });
       res.json({ success: true, data: { id: inv.id, status: 'CANCELLED' } });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );
 
@@ -654,6 +654,6 @@ router.post(
       });
 
       res.json({ success: true, data: { invoiceId: inv.id, status: 'PENDING_APPROVAL', approvalId: result.id } });
-    } catch (e) { res.status(500).json({ error: String(e) }); }
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
   }
 );

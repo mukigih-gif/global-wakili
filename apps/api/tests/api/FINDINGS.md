@@ -83,4 +83,13 @@ regenerated on every test run — findings logged here survive reruns.
 - File: MatterService.ts line 974-978
 - Cause: update where clause missing tenantId — same pattern as F-06
 - Fix: where: { id, tenantId } added — matches F-06 fix
-- Status: FIXED IN CODE — pending Vercel redeploy verification
+- Status: VERIFIED LIVE — 10 Jun 2026 (PATCH /matters/:id now 200)
+
+### F-10 LOW — Matter inline handlers leak raw error on 500
+- File: matter.routes.ts — 14 inline catch blocks (154, 212, 227, 241, 255, 280,
+  297, 353, 368, 385, 433, 567, 608, 657)
+- Cause: `catch (e) { res.status(500).json({ error: String(e) }) }` responded
+  directly, bypassing the global handler, leaking String(e) (raw/Prisma error)
+- Fix: generic 'Internal Server Error' to client + server-side console.error
+  (MATTER_ROUTE_ERROR); all 14 occurrences replaced
+- Status: FIXED IN CODE — verified by typecheck (no live 500 trigger available)
