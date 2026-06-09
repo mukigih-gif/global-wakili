@@ -77,6 +77,15 @@ regenerated on every test run — findings logged here survive reruns.
   logged server-side via console.error. 4xx messages/codes unchanged.
 - Status: VERIFIED LIVE — 10 Jun 2026 (forced 500 returns generic body, no Prisma leak)
 
+### BUG-A LOW — Client list sort by status not implemented
+- Sort by status field is not in the allowed sort fields list
+- Currently unimplemented — returns unsorted list silently
+- Fix scope: add status to allowed sort fields in controller + service
+- Status: DEFERRED — feature gap, not a blocker
+- Refs: GET /clients → client.controller.ts:21 → ClientService.listActive
+  (orderBy hardcoded at ClientService.ts:426); route schema
+  client.routes.ts:22-26 strips any sortBy param
+
 ## GROUP 3 — Matter Endpoints (10 Jun 2026)
 
 ### F-09 MEDIUM — PATCH /matters/:id returns 500
@@ -93,6 +102,13 @@ regenerated on every test run — findings logged here survive reruns.
 - Fix: generic 'Internal Server Error' to client + server-side console.error
   (MATTER_ROUTE_ERROR); all 14 occurrences replaced
 - Status: FIXED IN CODE — verified by typecheck (no live 500 trigger available)
+
+### F-11 MEDIUM — Disbursement create gated by view-only permission
+- File: matter.routes.ts line 160 (POST /:matterId/disbursements)
+- Cause: create gated by matter.viewMatter (read) while approve/reject/mark-paid
+  use matter.updateMatter — a view-only user could create financial DRNs
+- Fix: gate POST disbursements with matter.updateMatter (Option A)
+- Status: FIXED IN CODE — verified by typecheck (RBAC gate; no destructive live probe)
 
 ## FRONTEND — Web App (10 Jun 2026)
 

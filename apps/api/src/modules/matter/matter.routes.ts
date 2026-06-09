@@ -157,7 +157,7 @@ router.get(
 
 router.post(
   '/:matterId/disbursements',
-  requirePermissions(PERMISSIONS.matter.viewMatter),
+  requirePermissions(PERMISSIONS.matter.updateMatter),
   async (req, res) => {
     try {
       const matter = await req.db.matter.findFirst({
