@@ -13,9 +13,10 @@ regenerated on every test run — findings logged here survive reruns.
 - Initiate handlers advertise single-auth redirect_uri
 - Real Google/Microsoft redirect returns 401 — OAuth login never completes
 - Fix required before portal goes live
-- Status: FIXED IN CODE (9 Jun 2026) — callbacks re-registered at the single-auth
-  path (/oauth/{google,microsoft}/callback). Pending verification against the live
-  deployment after Vercel redeploy.
+- Status: VERIFIED LIVE (9 Jun 2026) — callbacks re-registered at the single-auth
+  path (/oauth/{google,microsoft}/callback). Live probe of
+  GET /api/v1/auth/oauth/google/callback returns 400 (handler reached); pre-deploy
+  the same path returned 401 (unrouted), confirming the fix is deployed.
 
 ### F-02 LOW — POST /auth/logout returns 204 not 200
 - Inconsistent with the rest of the API envelope
