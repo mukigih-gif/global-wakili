@@ -1044,7 +1044,7 @@ authRouter.get('/oauth/google', (req: Request, res: Response) => {
  * GET /auth/oauth/google/callback
  * Google OAuth callback — exchanges code for user info and issues a JWT.
  */
-authRouter.get('/auth/oauth/google/callback', async (req: Request, res: Response, next: NextFunction) => {
+authRouter.get('/oauth/google/callback', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const code = String(req.query.code ?? '');
     const redirectUri = String(req.query.redirect_uri ?? `${req.protocol}://${req.get('host')}/api/v1/auth/oauth/google/callback`);
@@ -1120,7 +1120,7 @@ authRouter.get('/oauth/microsoft', (req: Request, res: Response) => {
  * GET /auth/oauth/microsoft/callback
  * Microsoft OAuth callback — exchanges code for user info and issues a JWT.
  */
-authRouter.get('/auth/oauth/microsoft/callback', async (req: Request, res: Response, next: NextFunction) => {
+authRouter.get('/oauth/microsoft/callback', async (req: Request, res: Response, next: NextFunction) => {
   try {
     const code = String(req.query.code ?? '');
     const redirectUri = String(req.query.redirect_uri ?? `${req.protocol}://${req.get('host')}/api/v1/auth/oauth/microsoft/callback`);

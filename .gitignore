@@ -10,6 +10,7 @@ packages/database/node_modules/
 # Environment
 .env
 .env.local
+.env.test
 
 # Build outputs
 dist/
@@ -17,6 +18,9 @@ build/
 startup-error.log
 
 tmp/
+
+# Regenerated test artifact (permanent log lives in FINDINGS.md)
+apps/api/tests/api/API_CERTIFICATION_REPORT.md
 
 # Database dumps — never commit real backup files
 # backup.sql, schema_dump*.sql already in repo as assessment artifacts
