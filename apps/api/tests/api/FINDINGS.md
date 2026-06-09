@@ -75,4 +75,4 @@ regenerated on every test run — findings logged here survive reruns.
   was reverted.
 - Fix: app.ts:138 now returns generic 'Internal Server Error' for 5xx; full error
   logged server-side via console.error. 4xx messages/codes unchanged.
-- Status: FIXED IN CODE (app.ts:138) — pending Vercel redeploy verification
+- Status: VERIFIED LIVE — 10 Jun 2026 (forced 500 returns generic body, no Prisma leak)
