@@ -716,6 +716,7 @@ router.post('/onboarding', requireHrPermission(HR_PERMISSIONS.createEmployee), a
   try {
     const { name, email, position, department, startDate } = req.body;
     if (!name || !email) return res.status(400).json({ error: 'Name and email required' });
+    if (!req.tenantId) return res.status(400).json({ error: 'Tenant context missing' });
     const record = await req.db.employeeOnboarding.create({
       data: {
         tenantId: req.tenantId,

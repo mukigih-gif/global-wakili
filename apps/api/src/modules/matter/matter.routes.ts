@@ -307,6 +307,7 @@ router.post(
         content: string; updateType?: string; isClientVisible?: boolean; notifyClient?: boolean; bringUpDate?: string;
       };
       if (!content?.trim()) return res.status(400).json({ error: 'Content is required' });
+      if (!req.tenantId) return res.status(400).json({ error: 'Tenant context missing' });
 
       const actorId = (req as any).user?.id ?? (req as any).user?.sub;
 
@@ -402,6 +403,7 @@ router.post(
       const totalHours = hours + mins / 60;
       const rate = parseFloat(String(appliedRate ?? 0));
       if (totalHours <= 0) return res.status(400).json({ error: 'Duration must be greater than zero' });
+      if (!req.tenantId) return res.status(400).json({ error: 'Tenant context missing' });
 
       const matter = await req.db.matter.findFirst({
         where: { id: matterId, tenantId: req.tenantId },
