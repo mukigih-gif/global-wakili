@@ -28,3 +28,27 @@ regenerated on every test run — findings logged here survive reruns.
 - Substituted with GET /auth/session for token validation
 - Implement before mobile client support
 - Status: OPEN (deferred)
+
+---
+
+## GROUP 2 — Client Endpoints (10 Jun 2026)
+
+### F-04 LOW — No client DELETE endpoint
+- File: client.routes.ts — routes cover POST/PATCH/GET only; no DELETE
+- Consequence: clients created via API cannot be removed via API (live test
+  data, e.g. __CERT_TEST_CLIENT__, persists; cleanup needs direct DB access)
+- Status: ACCEPTED for certification (Option B). Consider soft-delete/archive
+  endpoint before GA
+
+### F-06 MEDIUM — PATCH /clients/:id returns 500
+- File: ClientService.ts line 367
+- Candidate: db.client.update where clause missing tenantId
+- Tenant-isolation guard rejects mutation without tenantId
+- Fix: add tenantId to where clause in update call
+- Status: OPEN
+
+### F-07 MEDIUM — GET /clients/:id/dashboard returns 500
+- File: ClientDashboardService.getInternalDashboard
+- Candidate: schema drift or null-handling crash on client with no activity
+- Fix: audit selected fields against live schema, add null guards
+- Status: OPEN
