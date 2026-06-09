@@ -115,10 +115,13 @@ export default function NewMatterPage() {
               <p className="text-xs text-gray-400 mt-0.5">Court-assigned case number if already filed</p>
             </div>
             <div>
-              <label className="form-label">Client *</label>
+              <div className="flex items-center justify-between">
+                <label className="form-label">Client *</label>
+                <Link href="/app/clients/new" className="text-xs text-primary-600 hover:underline">+ Add Client</Link>
+              </div>
               <select required value={form.clientId} onChange={(e) => set('clientId', e.target.value)} className="form-select w-full">
-                <option value="">Select client…</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.clientCode})</option>)}
+                <option value="">{clients.length ? 'Select client…' : 'No clients yet — Add Client →'}</option>
+                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}{c.clientCode ? ` (${c.clientCode})` : ''}</option>)}
               </select>
             </div>
             <div>

@@ -13,7 +13,7 @@ type Client = { id: string; name: string; clientCode: string };
 type Matter = { id: string; title: string; matterCode: string; client?: { id: string } | null; clientId?: string | null };
 
 type LineItemKind = 'FEES' | 'DISBURSEMENT' | 'EXPENSE' | 'OTHER';
-type LineItem = { description: string; quantity: number; unitPrice: number; vatRate: number; sourceType: LineItemKind };
+type LineItem = { description: string; quantity: number; unitPrice: number; vatRate: number; sourceType: LineItemKind; sourceId?: string; sourceKind?: 'TIME_ENTRY' | 'EXPENSE' };
 
 function NewInvoiceForm() {
   const router = useRouter();
@@ -46,6 +46,34 @@ function NewInvoiceForm() {
         .catch(() => {});
     }
   }, [presetMatterId]);
+
+  // When a matter is chosen, pull its unbilled time entries + expenses as line items.
+  useEffect(() => {
+    if (!form.matterId) return;
+    let cancelled = false;
+    Promise.all([
+      api.get<{ data: any[] }>(`/matters/${form.matterId}/time-entries`).then((r) => r.data ?? []).catch(() => []),
+      api.get<{ data: any[] }>(`/matters/${form.matterId}/expenses`).then((r) => r.data ?? []).catch(() => []),
+    ]).then(([time, exp]) => {
+      if (cancelled) return;
+      const pulled: LineItem[] = [
+        ...time.filter((t: any) => !t.isInvoiced && t.isBillable !== false).map((t: any) => ({
+          description: t.description ?? 'Professional Fees',
+          quantity: parseFloat(String(t.durationHours ?? 0)) + parseFloat(String(t.durationMinutes ?? 0)) / 60,
+          unitPrice: parseFloat(String(t.appliedRate ?? 0)),
+          vatRate: 16, sourceType: 'FEES' as LineItemKind, sourceKind: 'TIME_ENTRY' as const, sourceId: t.id,
+        })),
+        ...exp.filter((e: any) => !e.isInvoiced).map((e: any) => ({
+          description: e.description ?? 'Expense (disbursement)',
+          quantity: 1, unitPrice: parseFloat(String(e.amount ?? 0)),
+          vatRate: 0, sourceType: 'EXPENSE' as LineItemKind, sourceKind: 'EXPENSE' as const, sourceId: e.id,
+        })),
+      ];
+      // Only replace the default blank line if there is unbilled WIP to bill.
+      if (pulled.length) setLines(pulled);
+    });
+    return () => { cancelled = true; };
+  }, [form.matterId]);
 
   const addLine = () => setLines((l) => [...l, { description: '', quantity: 1, unitPrice: 0, vatRate: 16, sourceType: 'FEES' }]);
   const removeLine = (i: number) => setLines((l) => l.filter((_, idx) => idx !== i));

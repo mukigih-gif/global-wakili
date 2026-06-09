@@ -480,12 +480,43 @@ router.post(
           paidAmount:  0,
           dueDate:     dueDate ? new Date(dueDate) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
           issuedDate:  new Date(),
+          // Persist the line items (previously the form's lines were dropped).
+          lines: {
+            create: (lineItems as any[]).map((l: any) => {
+              const base = (l.quantity || 1) * (l.unitPrice || 0);
+              const tax = base * ((l.vatRate || 0) / 100);
+              return {
+                tenantId: req.tenantId!,
+                matterId,
+                description: l.description ?? '',
+                quantity: l.quantity || 1,
+                unitPrice: l.unitPrice || 0,
+                subTotal: base,
+                taxRate: l.vatRate || 0,
+                taxAmount: tax,
+                total: base + tax,
+                sourceType: l.sourceKind ?? l.sourceType ?? 'OTHER',
+                ...(l.sourceId ? { sourceId: l.sourceId } : {}),
+              };
+            }),
+          },
         },
         include: {
           matter: { select: { id: true, title: true, matterCode: true } },
           client: { select: { id: true, name: true, clientCode: true } },
         },
       });
+
+      // Lock any matter time entries that were pulled in, so they can't be re-billed.
+      const billedTimeIds = (lineItems as any[])
+        .filter((l: any) => l.sourceKind === 'TIME_ENTRY' && l.sourceId)
+        .map((l: any) => l.sourceId);
+      if (billedTimeIds.length) {
+        await req.db.timeEntry.updateMany({
+          where: { id: { in: billedTimeIds }, tenantId: req.tenantId },
+          data: { isInvoiced: true, invoiceId: invoice.id },
+        });
+      }
 
       res.status(201).json({ success: true, data: { ...invoice, totalAmount: invoice.total } });
     } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
