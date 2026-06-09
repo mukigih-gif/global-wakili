@@ -93,7 +93,7 @@ function NewEventForm() {
   return (
     <div className="max-w-xl space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/app/calendar" className="text-gray-400 hover:text-gray-600"><ArrowLeft className="h-5 w-5" /></Link>
+        <Link href={presetMatter ? `/app/matters/${presetMatter}` : '/app/calendar'} className="text-gray-400 hover:text-gray-600"><ArrowLeft className="h-5 w-5" /></Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">New Event</h1>
           <p className="text-sm text-gray-500">Add a calendar event, hearing or meeting</p>
@@ -220,7 +220,7 @@ function NewEventForm() {
 
         <div className="flex gap-3 pt-2 border-t border-gray-100">
           <Button type="submit" loading={loading}>Save Event</Button>
-          <Link href="/app/calendar"><Button type="button" variant="secondary">Cancel</Button></Link>
+          <Link href={presetMatter ? `/app/matters/${presetMatter}` : '/app/calendar'}><Button type="button" variant="secondary">Cancel</Button></Link>
         </div>
       </form>
     </div>

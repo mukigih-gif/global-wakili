@@ -64,7 +64,7 @@ function NewDocumentForm() {
   return (
     <div className="max-w-xl space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/app/documents" className="text-gray-400 hover:text-gray-600"><ArrowLeft className="h-5 w-5" /></Link>
+        <Link href={presetMatter ? `/app/matters/${presetMatter}` : '/app/documents'} className="text-gray-400 hover:text-gray-600"><ArrowLeft className="h-5 w-5" /></Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Upload Document</h1>
           <p className="text-sm text-gray-500">Add a document to the firm repository</p>
@@ -136,7 +136,7 @@ function NewDocumentForm() {
 
         <div className="flex gap-3 pt-2 border-t border-gray-100">
           <Button type="submit" loading={loading}><Upload className="h-4 w-4" /> Upload Document</Button>
-          <Link href="/app/documents"><Button type="button" variant="secondary">Cancel</Button></Link>
+          <Link href={presetMatter ? `/app/matters/${presetMatter}` : '/app/documents'}><Button type="button" variant="secondary">Cancel</Button></Link>
         </div>
       </form>
     </div>

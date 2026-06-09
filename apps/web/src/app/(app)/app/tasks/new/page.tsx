@@ -57,7 +57,7 @@ function NewTaskForm() {
   return (
     <div className="max-w-xl space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/app/tasks" className="text-gray-400 hover:text-gray-600"><ArrowLeft className="h-5 w-5" /></Link>
+        <Link href={presetMatter ? `/app/matters/${presetMatter}` : '/app/tasks'} className="text-gray-400 hover:text-gray-600"><ArrowLeft className="h-5 w-5" /></Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">New Task</h1>
           <p className="text-sm text-gray-500">Create a task and assign it to a team member</p>

@@ -682,7 +682,7 @@ function MatterExpensesTab({ matterId, currency }: { matterId: string; currency:
             </div>
             <div>
               <label className="form-label">Date</label>
-              <input type="date" value={form.expenseDate} onChange={(e) => setForm((f) => ({ ...f, expenseDate: e.target.value }))} className="form-input w-full" />
+              <input type="date" value={form.expenseDate} onChange={(e) => setForm((f) => ({ ...f, expenseDate: e.target.value }))} max={new Date().toISOString().slice(0, 10)} className="form-input w-full" />
             </div>
             <div className="col-span-2">
               <label className="form-label">Notes</label>
@@ -1047,7 +1047,7 @@ function MatterTimeTab({ matterId, currency }: { matterId: string; currency: str
             </div>
             <div>
               <label className="form-label">Date</label>
-              <input type="date" value={form.entryDate} onChange={(e) => setForm((f) => ({ ...f, entryDate: e.target.value }))} className="form-input w-full" />
+              <input type="date" value={form.entryDate} onChange={(e) => setForm((f) => ({ ...f, entryDate: e.target.value }))} max={new Date().toISOString().slice(0, 10)} className="form-input w-full" />
             </div>
             <div>
               <label className="form-label">Hours *</label>

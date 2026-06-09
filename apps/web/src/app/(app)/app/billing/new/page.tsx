@@ -78,7 +78,7 @@ function NewInvoiceForm() {
   return (
     <div className="max-w-3xl space-y-6">
       <div className="flex items-center gap-3">
-        <Link href="/app/billing" className="text-gray-400 hover:text-gray-600"><ArrowLeft className="h-5 w-5" /></Link>
+        <Link href={lockedToMatter ? `/app/matters/${presetMatterId}` : '/app/billing'} className="text-gray-400 hover:text-gray-600"><ArrowLeft className="h-5 w-5" /></Link>
         <div>
           <h1 className="text-2xl font-bold text-gray-900">New Invoice</h1>
           <p className="text-sm text-gray-500">Create a client invoice with line items and VAT</p>
@@ -182,7 +182,7 @@ function NewInvoiceForm() {
         <div className="flex gap-3">
           <Button type="submit" loading={loading}>Create Invoice</Button>
           <Button type="button" variant="secondary" onClick={() => { /* save as draft */ }}>Save Draft</Button>
-          <Link href="/app/billing"><Button type="button" variant="ghost">Cancel</Button></Link>
+          <Link href={lockedToMatter ? `/app/matters/${presetMatterId}` : '/app/billing'}><Button type="button" variant="ghost">Cancel</Button></Link>
         </div>
       </form>
     </div>
