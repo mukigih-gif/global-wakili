@@ -20,7 +20,7 @@ function NewDocumentForm() {
   const [error, setError]     = useState('');
   const [matters, setMatters] = useState<Matter[]>([]);
   const [file, setFile]       = useState<File | null>(null);
-  const [form, setForm] = useState({ title: '', documentType: 'OTHER', matterId: presetMatter, description: '', tags: '' });
+  const [form, setForm] = useState({ title: '', category: 'GENERAL', matterId: presetMatter, description: '', tags: '' });
 
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
@@ -47,13 +47,23 @@ function NewDocumentForm() {
     try {
       const fd = new FormData();
       fd.append('file', file);
-      Object.entries(form).forEach(([k, v]) => v && fd.append(k, v));
-      await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1'}/documents/upload`, {
+      fd.append('title', form.title || file.name.replace(/\.[^/.]+$/, ''));
+      fd.append('category', form.category);
+      if (form.matterId)    fd.append('matterId', form.matterId);
+      if (form.description) fd.append('description', form.description);
+      // tags is an array on the API — send each comma-separated tag as its own field
+      if (form.tags) form.tags.split(',').map((t) => t.trim()).filter(Boolean).forEach((t) => fd.append('tags', t));
+
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1'}/documents`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${sessionStorage.getItem('gw_token')}`, 'x-tenant-id': sessionStorage.getItem('gw_tenant_id') ?? '' },
         body: fd,
       });
-      router.push('/app/documents');
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error(e.error || e.message || `Upload failed (${res.status})`);
+      }
+      router.push(form.matterId ? `/app/matters/${form.matterId}` : '/app/documents');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Upload failed');
     } finally {
@@ -105,16 +115,17 @@ function NewDocumentForm() {
         <Input label="Document Title *" required value={form.title} onChange={(e) => set('title', e.target.value)} placeholder="e.g. Sale Agreement — Doe v Smith" />
 
         <div>
-          <label className="form-label">Document Type</label>
-          <select value={form.documentType} onChange={(e) => set('documentType', e.target.value)} className="form-select w-full">
+          <label className="form-label">Document Category</label>
+          <select value={form.category} onChange={(e) => set('category', e.target.value)} className="form-select w-full">
             <option value="CONTRACT">Contract</option>
             <option value="PLEADING">Pleading</option>
-            <option value="AFFIDAVIT">Affidavit</option>
             <option value="CORRESPONDENCE">Correspondence</option>
-            <option value="INVOICE">Invoice</option>
-            <option value="COURT_ORDER">Court Order</option>
-            <option value="LAND_DOCUMENT">Land Document</option>
-            <option value="OTHER">Other</option>
+            <option value="COURT_FILING">Court Filing</option>
+            <option value="EVIDENCE">Evidence</option>
+            <option value="KYC">KYC / Compliance</option>
+            <option value="BILLING">Billing</option>
+            <option value="TRUST">Trust</option>
+            <option value="GENERAL">General / Other</option>
           </select>
         </div>
 

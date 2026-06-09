@@ -248,10 +248,17 @@ export class ClientService {
       });
     }
 
+    // Auto-generate a tenant-scoped client code when none is supplied (CLT-NNNNN).
+    let clientCode = input.clientCode?.trim() || null;
+    if (!clientCode) {
+      const existing = await (db.client as any).count({ where: { tenantId } });
+      clientCode = `CLT-${String(existing + 1).padStart(5, '0')}`;
+    }
+
     return db.client.create({
       data: {
         tenantId,
-        clientCode: input.clientCode?.trim() ?? null,
+        clientCode,
         type: input.type ?? 'INDIVIDUAL',
         status: input.status ?? 'ACTIVE',
         name: input.name.trim(),

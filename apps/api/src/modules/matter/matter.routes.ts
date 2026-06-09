@@ -468,9 +468,22 @@ router.post(
           : Promise.resolve([]),
       ]);
 
-      const subTotal =
-        (timeEntries as any[]).reduce((s: number, t: any) => s + parseFloat(String(t.billableAmount ?? 0)), 0) +
-        (expenses as any[]).reduce((s: number, e: any) => s + parseFloat(String(e.amount ?? 0)), 0);
+      // Server-side double-bill guard: drop any expense already on an invoice line.
+      const alreadyBilledExpenseIds: Set<string> = expenseIds.length
+        ? new Set((await req.db.invoiceLine.findMany({
+            where: { tenantId: req.tenantId, sourceType: 'EXPENSE', sourceId: { in: expenseIds } },
+            select: { sourceId: true },
+          })).map((l: any) => l.sourceId))
+        : new Set<string>();
+      const billableExpenses = (expenses as any[]).filter((e: any) => !alreadyBilledExpenseIds.has(e.id));
+
+      // VAT: professional fees (time) are taxable at 16%; expenses/disbursements pass through VAT-free.
+      const VAT_RATE = 16;
+      const feesBase = (timeEntries as any[]).reduce((s: number, t: any) => s + parseFloat(String(t.billableAmount ?? 0)), 0);
+      const expensesBase = billableExpenses.reduce((s: number, e: any) => s + parseFloat(String(e.amount ?? 0)), 0);
+      const subTotal = feesBase + expensesBase;
+      const vatAmount = Math.round(feesBase * VAT_RATE) / 100;
+      const total = subTotal + vatAmount;
 
       // Allocate invoice number
       const year = new Date().getFullYear();
@@ -489,34 +502,44 @@ router.post(
             currency: matterCurrency,
             invoiceNumber,
             subTotal,
-            total: subTotal,
-            balanceDue: subTotal,
+            vatAmount,
+            taxAmount: vatAmount,
+            total,
+            balanceDue: total,
             paidAmount: 0,
-            netAmount: subTotal,
-            status: 'DRAFT',
+            netAmount: total,
+            status: 'INVOICED',
             issuedDate: new Date(),
             ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
             ...(notes ? { notes } : {}),
             lines: {
               create: [
-                ...(timeEntries as any[]).map((t: any) => ({
+                ...(timeEntries as any[]).map((t: any) => {
+                  const base = parseFloat(String(t.billableAmount ?? 0));
+                  const tax = Math.round(base * VAT_RATE) / 100;
+                  return {
+                    tenantId: req.tenantId,
+                    matterId,
+                    description: t.description ?? 'Professional Fees',
+                    quantity: parseFloat(String(t.durationHours ?? 0)) + parseFloat(String(t.durationMinutes ?? 0)) / 60,
+                    unitPrice: parseFloat(String(t.appliedRate ?? 0)),
+                    subTotal: base,
+                    taxRate: VAT_RATE,
+                    taxAmount: tax,
+                    total: base + tax,
+                    sourceType: 'TIME_ENTRY',
+                    sourceId: t.id,
+                  };
+                }),
+                ...billableExpenses.map((e: any) => ({
                   tenantId: req.tenantId,
                   matterId,
-                  description: t.description ?? 'Professional Fees',
-                  quantity: parseFloat(String(t.durationHours ?? 0)) + parseFloat(String(t.durationMinutes ?? 0)) / 60,
-                  unitPrice: parseFloat(String(t.appliedRate ?? 0)),
-                  subTotal: parseFloat(String(t.billableAmount ?? 0)),
-                  total: parseFloat(String(t.billableAmount ?? 0)),
-                  sourceType: 'TIME_ENTRY',
-                  sourceId: t.id,
-                })),
-                ...(expenses as any[]).map((e: any) => ({
-                  tenantId: req.tenantId,
-                  matterId,
-                  description: e.description ?? 'Expense',
+                  description: e.description ?? 'Expense (disbursement)',
                   quantity: 1,
                   unitPrice: parseFloat(String(e.amount ?? 0)),
                   subTotal: parseFloat(String(e.amount ?? 0)),
+                  taxRate: 0,
+                  taxAmount: 0,
                   total: parseFloat(String(e.amount ?? 0)),
                   sourceType: 'EXPENSE',
                   sourceId: e.id,
@@ -539,6 +562,47 @@ router.post(
       });
 
       res.json({ success: true, data: invoice });
+    } catch (e) { res.status(500).json({ error: String(e) }); }
+  }
+);
+
+// Cancel an unpaid invoice and RELEASE its billed items back to unbilled.
+// Best-practice: locking time/expenses to an invoice must be reversible until paid.
+router.post(
+  '/:matterId/invoices/:invoiceId/cancel',
+  requirePermissions(PERMISSIONS.billing.createInvoice),
+  async (req, res) => {
+    try {
+      const { matterId, invoiceId } = req.params;
+      const inv = await req.db.invoice.findFirst({
+        where: { id: invoiceId, tenantId: req.tenantId, matterId },
+        select: { id: true, status: true, paidAmount: true },
+      });
+      if (!inv) return res.status(404).json({ error: 'Invoice not found' });
+      if (['PAID', 'PARTIALLY_PAID'].includes(inv.status) || parseFloat(String(inv.paidAmount ?? 0)) > 0) {
+        return res.status(409).json({ error: 'Cannot cancel an invoice that has payments; reverse the payment first', code: 'INVOICE_HAS_PAYMENTS' });
+      }
+      if (inv.status === 'CANCELLED') return res.json({ success: true, data: { id: inv.id, status: 'CANCELLED' } });
+
+      await req.db.$transaction(async (tx: any) => {
+        // Release time entries back to unbilled.
+        await tx.timeEntry.updateMany({
+          where: { invoiceId: inv.id, tenantId: req.tenantId },
+          data: { isInvoiced: false, invoiceId: null },
+        });
+        // Remove lines so linked expenses are released (the EXPENSE double-bill guard keys off invoice lines).
+        await tx.invoiceLine.deleteMany({ where: { invoiceId: inv.id, tenantId: req.tenantId } });
+        await tx.invoice.update({
+          where: { id: inv.id },
+          data: {
+            status: 'CANCELLED',
+            cancelledAt: new Date(),
+            cancellationReason: (req.body?.reason as string) ?? 'Cancelled — billed items released',
+            balanceDue: 0,
+          },
+        });
+      });
+      res.json({ success: true, data: { id: inv.id, status: 'CANCELLED' } });
     } catch (e) { res.status(500).json({ error: String(e) }); }
   }
 );

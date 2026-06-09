@@ -401,13 +401,28 @@ function MatterOverviewTab({ matter, matterId }: { matter: Matter; matterId: str
 function MatterInvoicesTab({ matterId }: { matterId: string }) {
   const [invoices, setInvoices] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cancelling, setCancelling] = useState<string | null>(null);
 
-  useEffect(() => {
+  const load = () => {
+    setLoading(true);
     api.get<{ data: any[] }>(`/billing/invoices?matterId=${matterId}&take=50`)
       .then((r) => setInvoices(r.data ?? []))
       .catch(() => setInvoices([]))
       .finally(() => setLoading(false));
-  }, [matterId]);
+  };
+
+  useEffect(() => { load(); }, [matterId]);
+
+  const cancelInvoice = async (invoiceId: string) => {
+    if (!confirm('Cancel this invoice? Its time entries and expenses will be released back to unbilled.')) return;
+    setCancelling(invoiceId);
+    try {
+      await api.post(`/matters/${matterId}/invoices/${invoiceId}/cancel`, {});
+      load();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err) ? String((err as any).message) : 'Failed to cancel invoice');
+    } finally { setCancelling(null); }
+  };
 
   return (
     <div className="space-y-3">
@@ -417,13 +432,14 @@ function MatterInvoicesTab({ matterId }: { matterId: string }) {
         </Link>
       </div>
       <Table>
-        <thead><tr><Th>Invoice No.</Th><Th>Total</Th><Th>Paid</Th><Th>Balance</Th><Th>Status</Th><Th>Issued</Th></tr></thead>
+        <thead><tr><Th>Invoice No.</Th><Th>Total</Th><Th>Paid</Th><Th>Balance</Th><Th>Status</Th><Th>Issued</Th><Th></Th></tr></thead>
         <tbody>
-          {loading ? <LoadingRow colSpan={6} /> :
-           !invoices.length ? <EmptyRow colSpan={6} message="No invoices for this matter" /> :
+          {loading ? <LoadingRow colSpan={7} /> :
+           !invoices.length ? <EmptyRow colSpan={7} message="No invoices for this matter" /> :
            invoices.map((inv) => {
              const total = parseFloat(inv.total ?? inv.totalAmount ?? 0);
              const paid  = parseFloat(inv.paidAmount ?? 0);
+             const canCancel = paid <= 0 && !['PAID', 'PARTIALLY_PAID', 'CANCELLED'].includes(inv.status);
              return (
                <tr key={inv.id}>
                  <Td><span className="font-mono text-xs">{inv.invoiceNumber}</span></Td>
@@ -433,6 +449,13 @@ function MatterInvoicesTab({ matterId }: { matterId: string }) {
                  <Td><StatusBadge status={inv.status} /></Td>
                  <Td className="text-xs text-gray-500">
                    {inv.issuedAt ? formatDate(inv.issuedAt) : inv.issuedDate ? formatDate(inv.issuedDate) : '—'}
+                 </Td>
+                 <Td>
+                   {canCancel && (
+                     <button disabled={cancelling === inv.id} onClick={() => cancelInvoice(inv.id)} className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-40">
+                       {cancelling === inv.id ? '…' : 'Cancel'}
+                     </button>
+                   )}
                  </Td>
                </tr>
              );
@@ -900,22 +923,30 @@ function MatterHearingsTab({ matterId }: { matterId: string }) {
   }, [matterId]);
 
   return (
-    <Table>
-      <thead><tr><Th>Date</Th><Th>Court</Th><Th>Judge</Th><Th>Purpose</Th><Th>Status</Th></tr></thead>
-      <tbody>
-        {loading ? <LoadingRow colSpan={5} /> :
-         !hearings.length ? <EmptyRow colSpan={5} message="No court hearings recorded for this matter" /> :
-         hearings.map((h) => (
-           <tr key={h.id}>
-             <Td className="text-xs text-gray-500">{formatDate(h.hearingDate ?? h.scheduledDate ?? h.date)}</Td>
-             <Td className="text-sm text-gray-900">{h.courtName ?? h.court ?? '—'}</Td>
-             <Td className="text-xs text-gray-600">{h.judgeName ?? h.judge ?? '—'}</Td>
-             <Td className="text-xs text-gray-600">{h.purpose ?? h.type ?? '—'}</Td>
-             <Td><StatusBadge status={h.status ?? 'SCHEDULED'} /></Td>
-           </tr>
-         ))}
-      </tbody>
-    </Table>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-gray-500">{hearings.length} court date{hearings.length !== 1 ? 's' : ''} for this matter</p>
+        <Link href={`/app/court/filings?matterId=${matterId}`}>
+          <Button size="sm"><Plus className="h-3.5 w-3.5" /> Add Court Date</Button>
+        </Link>
+      </div>
+      <Table>
+        <thead><tr><Th>Date</Th><Th>Court</Th><Th>Judge</Th><Th>Purpose</Th><Th>Status</Th></tr></thead>
+        <tbody>
+          {loading ? <LoadingRow colSpan={5} /> :
+           !hearings.length ? <EmptyRow colSpan={5} message="No court dates recorded. Click Add Court Date to schedule one." /> :
+           hearings.map((h) => (
+             <tr key={h.id}>
+               <Td className="text-xs text-gray-500">{formatDate(h.hearingDate ?? h.scheduledDate ?? h.date)}</Td>
+               <Td className="text-sm text-gray-900">{h.courtName ?? h.court ?? '—'}</Td>
+               <Td className="text-xs text-gray-600">{h.judgeName ?? h.judge ?? '—'}</Td>
+               <Td className="text-xs text-gray-600">{h.purpose ?? h.type ?? '—'}</Td>
+               <Td><StatusBadge status={h.status ?? 'SCHEDULED'} /></Td>
+             </tr>
+           ))}
+        </tbody>
+      </Table>
+    </div>
   );
 }
 
@@ -1129,7 +1160,9 @@ function RaiseInvoiceModal({
   const selExp  = expenses.filter((e) => selectedExp.has(e.id));
   const timeTotal  = selTime.reduce((s, e) => s + parseFloat(String(e.billableAmount ?? 0)), 0);
   const expTotal   = selExp.reduce((s, e)  => s + parseFloat(String(e.amount ?? 0)), 0);
-  const grandTotal = timeTotal + expTotal;
+  // VAT 16% on professional fees (time); expenses/disbursements are VAT-free.
+  const vatAmount  = Math.round(timeTotal * 16) / 100;
+  const grandTotal = timeTotal + expTotal + vatAmount;
 
   const handleCreate = async () => {
     if (!selectedTime.size && !selectedExp.size) { setError('Select at least one item to bill'); return; }
@@ -1226,7 +1259,8 @@ function RaiseInvoiceModal({
 
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50 rounded-b-2xl">
           <div>
-            <p className="text-xs text-gray-500">Invoice total</p>
+            <p className="text-xs text-gray-400">Subtotal {formatCurrency(timeTotal + expTotal, currency)} · VAT (16% on fees) {formatCurrency(vatAmount, currency)}</p>
+            <p className="text-xs text-gray-500 mt-0.5">Invoice total</p>
             <p className="text-xl font-bold text-gray-900">{formatCurrency(grandTotal, currency)}</p>
             <p className="text-xs text-gray-400">{selectedTime.size} time · {selectedExp.size} expense items</p>
           </div>
