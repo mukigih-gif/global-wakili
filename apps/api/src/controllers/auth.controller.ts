@@ -462,6 +462,12 @@ authRouter.post(
               subscriptionStatus: true,
             },
           },
+          branch: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
         },
       });
 
@@ -1066,7 +1072,7 @@ authRouter.get('/auth/oauth/google/callback', async (req: Request, res: Response
         ...(tenantId ? { tenantId } : {}),
         status: 'ACTIVE',
       },
-      include: { roles: true, tenant: { select: { id: true, slug: true, name: true, subscriptionStatus: true } } },
+      include: { roles: true, tenant: { select: { id: true, slug: true, name: true, subscriptionStatus: true } }, branch: { select: { id: true, name: true } } },
     });
 
     if (!user) {
@@ -1140,7 +1146,7 @@ authRouter.get('/auth/oauth/microsoft/callback', async (req: Request, res: Respo
         ...(tenantId ? { tenantId } : {}),
         status: 'ACTIVE',
       },
-      include: { roles: true, tenant: { select: { id: true, slug: true, name: true, subscriptionStatus: true } } },
+      include: { roles: true, tenant: { select: { id: true, slug: true, name: true, subscriptionStatus: true } }, branch: { select: { id: true, name: true } } },
     });
 
     if (!user) {
