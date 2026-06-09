@@ -974,6 +974,7 @@ export class MatterService {
     return db.matter.update({
       where: {
         id: matterId,
+        tenantId,
       },
       data: {
         ...(input.matterCode !== undefined

@@ -76,3 +76,11 @@ regenerated on every test run — findings logged here survive reruns.
 - Fix: app.ts:138 now returns generic 'Internal Server Error' for 5xx; full error
   logged server-side via console.error. 4xx messages/codes unchanged.
 - Status: VERIFIED LIVE — 10 Jun 2026 (forced 500 returns generic body, no Prisma leak)
+
+## GROUP 3 — Matter Endpoints (10 Jun 2026)
+
+### F-09 MEDIUM — PATCH /matters/:id returns 500
+- File: MatterService.ts line 974-978
+- Cause: update where clause missing tenantId — same pattern as F-06
+- Fix: where: { id, tenantId } added — matches F-06 fix
+- Status: FIXED IN CODE — pending Vercel redeploy verification
