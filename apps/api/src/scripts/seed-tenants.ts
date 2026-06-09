@@ -11,6 +11,7 @@ const TENANTS = [
     name: 'Alpha Advocates LLP',
     legalName: 'Alpha Advocates LLP',
     country: 'KE', currency: 'KES', timezone: 'Africa/Nairobi',
+    kraPin: 'P051234567X', billingCycleStart: 1, billingCycleEnd: 31,
     plan: 'PROFESSIONAL',
     adminEmail: 'admin@alphaadvocates.co.ke',
     adminName: 'Alice Mwangi',
@@ -21,6 +22,7 @@ const TENANTS = [
     name: 'Beta Legal Associates',
     legalName: 'Beta Legal Associates',
     country: 'KE', currency: 'KES', timezone: 'Africa/Nairobi',
+    kraPin: 'P051234568X', billingCycleStart: 1, billingCycleEnd: 31,
     plan: 'ENTERPRISE',
     adminEmail: 'admin@betalegal.co.ke',
     adminName: 'Brian Otieno',
@@ -31,6 +33,7 @@ const TENANTS = [
     name: 'Mwananchi & Co Advocates',
     legalName: 'Mwananchi & Co Advocates',
     country: 'KE', currency: 'KES', timezone: 'Africa/Nairobi',
+    kraPin: 'P051234569X', billingCycleStart: 1, billingCycleEnd: 31,
     plan: 'STARTER',
     adminEmail: 'admin@mwananchi.co.ke',
     adminName: 'David Kamau',
@@ -48,17 +51,24 @@ async function main() {
       continue;
     }
 
+    // Billing cycle: convert day-of-month (1..31) to dates in the current month
+    const now = new Date();
+    const year = now.getUTCFullYear();
+    const month = now.getUTCMonth();
+    const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+    const billingCycleStart = new Date(Date.UTC(year, month, Math.min(t.billingCycleStart, lastDay)));
+    const billingCycleEnd = new Date(Date.UTC(year, month, Math.min(t.billingCycleEnd, lastDay)));
+
     // Create tenant
     const tenant = await prisma.tenant.create({
       data: {
-        slug:         t.slug,
-        name:         t.name,
-        legalName:    t.legalName,
-        country:      t.country,
-        currency:     t.currency,
-        timezone:     t.timezone,
-        status:       'ACTIVE',
-        planId:       null, // set via subscription
+        slug:              t.slug,
+        name:              t.name,
+        kraPin:            t.kraPin,
+        currency:          t.currency,
+        timezone:          t.timezone,
+        billingCycleStart,
+        billingCycleEnd,
       },
     });
     console.log(`[OK] Tenant: ${t.name} (${tenant.id})`);

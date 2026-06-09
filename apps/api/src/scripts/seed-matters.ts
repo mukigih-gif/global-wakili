@@ -44,7 +44,7 @@ async function main() {
   let branch = await prisma.branch.findFirst({ where: { tenantId } });
   if (!branch) {
     branch = await prisma.branch.create({
-      data: { tenantId, name: 'Main Office', code: 'MAIN', isMainBranch: true, city: 'Nairobi', country: 'Kenya', status: 'ACTIVE' },
+      data: { tenantId, name: 'Main Office', kraPin: 'B051234567T', location: 'Nairobi, Kenya' },
     });
     console.log(`[OK] Branch: Main Office (${branch.id})`);
   } else {

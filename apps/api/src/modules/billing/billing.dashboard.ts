@@ -78,9 +78,9 @@ export class BillingDashboardService {
     const invoice = delegate(prisma, 'invoice');
     // proformaInvoice model may not exist — use safe wrapper
     const proformaInvoice = {
-      groupBy: async () => [],
-      findMany: async () => [],
-      count: async () => 0,
+      groupBy: async (_args?: any) => [],
+      findMany: async (_args?: any) => [],
+      count: async (_args?: any) => 0,
     };
     const creditNote = delegate(prisma, 'creditNote');
     const retainer = delegate(prisma, 'retainer');
