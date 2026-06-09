@@ -4812,6 +4812,8 @@ enum DeviceTrustStatus {
 }
 
 enum InvoiceStatus {
+  DRAFT
+  PENDING_APPROVAL
   INVOICED
   PARTIALLY_PAID
   PAID

@@ -413,6 +413,8 @@ function MatterInvoicesTab({ matterId }: { matterId: string }) {
 
   useEffect(() => { load(); }, [matterId]);
 
+  const [submitting, setSubmitting] = useState<string | null>(null);
+
   const cancelInvoice = async (invoiceId: string) => {
     if (!confirm('Cancel this invoice? Its time entries and expenses will be released back to unbilled.')) return;
     setCancelling(invoiceId);
@@ -422,6 +424,16 @@ function MatterInvoicesTab({ matterId }: { matterId: string }) {
     } catch (err: unknown) {
       alert(err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err) ? String((err as any).message) : 'Failed to cancel invoice');
     } finally { setCancelling(null); }
+  };
+
+  const submitInvoice = async (invoiceId: string) => {
+    setSubmitting(invoiceId);
+    try {
+      await api.post(`/matters/${matterId}/invoices/${invoiceId}/submit`, {});
+      load();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err) ? String((err as any).message) : 'Failed to submit for approval');
+    } finally { setSubmitting(null); }
   };
 
   return (
@@ -451,11 +463,21 @@ function MatterInvoicesTab({ matterId }: { matterId: string }) {
                    {inv.issuedAt ? formatDate(inv.issuedAt) : inv.issuedDate ? formatDate(inv.issuedDate) : '—'}
                  </Td>
                  <Td>
-                   {canCancel && (
-                     <button disabled={cancelling === inv.id} onClick={() => cancelInvoice(inv.id)} className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-40">
-                       {cancelling === inv.id ? '…' : 'Cancel'}
-                     </button>
-                   )}
+                   <div className="flex items-center gap-3">
+                     {inv.status === 'DRAFT' && (
+                       <button disabled={submitting === inv.id} onClick={() => submitInvoice(inv.id)} className="text-xs text-primary-600 hover:text-primary-800 font-medium disabled:opacity-40">
+                         {submitting === inv.id ? '…' : 'Submit for approval'}
+                       </button>
+                     )}
+                     {inv.status === 'PENDING_APPROVAL' && (
+                       <Link href="/app/approvals" className="text-xs text-amber-600 hover:text-amber-800 font-medium">In approvals →</Link>
+                     )}
+                     {canCancel && (
+                       <button disabled={cancelling === inv.id} onClick={() => cancelInvoice(inv.id)} className="text-xs text-red-500 hover:text-red-700 font-medium disabled:opacity-40">
+                         {cancelling === inv.id ? '…' : 'Cancel'}
+                       </button>
+                     )}
+                   </div>
                  </Td>
                </tr>
              );

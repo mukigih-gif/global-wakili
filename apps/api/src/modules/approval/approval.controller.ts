@@ -183,6 +183,14 @@ export const approveApprovalRequest = asyncHandler(async (req: Request, res: Res
     },
   });
 
+  // Invoice approval hook: an approved INVOICE request issues the invoice.
+  if ((result as any).entityType === 'INVOICE' && (result as any).entityId) {
+    await req.db.invoice.updateMany({
+      where: { id: (result as any).entityId, tenantId, status: 'PENDING_APPROVAL' as any },
+      data: { status: 'INVOICED' as any },
+    }).catch(() => {});
+  }
+
   res.status(200).json(result);
 });
 
@@ -213,6 +221,14 @@ export const rejectApprovalRequest = asyncHandler(async (req: Request, res: Resp
       rejectionReason: result.rejectionReason,
     },
   });
+
+  // Invoice approval hook: a rejected INVOICE request returns the invoice to draft.
+  if ((result as any).entityType === 'INVOICE' && (result as any).entityId) {
+    await req.db.invoice.updateMany({
+      where: { id: (result as any).entityId, tenantId, status: 'PENDING_APPROVAL' as any },
+      data: { status: 'DRAFT' as any },
+    }).catch(() => {});
+  }
 
   res.status(200).json(result);
 });
