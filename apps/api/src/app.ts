@@ -134,8 +134,12 @@ app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
       ? (err as { message: string }).message
       : 'Internal Server Error';
 
+  if (statusCode >= 500) {
+    console.error('UNHANDLED_ERROR', { requestId: req.id, path: req.originalUrl, method: req.method, err });
+  }
+
   res.status(statusCode).json({
-    error: message,
+    error: statusCode >= 500 ? 'Internal Server Error' : message,
     code: statusCode >= 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_FAILED',
     requestId: req.id,
   });

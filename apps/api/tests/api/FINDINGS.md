@@ -45,7 +45,7 @@ regenerated on every test run — findings logged here survive reruns.
 - Candidate: db.client.update where clause missing tenantId
 - Tenant-isolation guard rejects mutation without tenantId
 - Fix: add tenantId to where clause in update call
-- Status: FIXED IN CODE (ClientService.ts:368) — pending Vercel redeploy verification
+- Status: VERIFIED LIVE — 10 Jun 2026
 
 ### F-07 MEDIUM — GET /clients/:id/dashboard returns 500
 - File: ClientDashboardService.getInternalDashboard
@@ -62,13 +62,17 @@ regenerated on every test run — findings logged here survive reruns.
 - Why typecheck missed it: the tenant-wrapped client (ClientDashboardDbClient)
   does not enforce strict Prisma `select` typing.
 - Fix applied: portalUser.select now uses `name` (ClientDashboardService.ts:135).
-- Status: FIXED IN CODE (10 Jun 2026) — pending Vercel redeploy verification.
+- Status: VERIFIED LIVE — 10 Jun 2026
 
 ### F-08 LOW — 500 responses leak raw Prisma error to the client
 - Observed: GET /clients/:id/dashboard 500 returned the full Prisma query echo,
   model field list, and internal error message in the response body.
 - Risk: information disclosure (DB model/schema internals to any caller).
-- Candidate: global error middleware emits err.message verbatim for unhandled
-  500s (auth 4xx use a generic envelope, so it is 500-path specific).
-- Fix: return a generic 500 envelope in production; log details server-side only.
-- Status: OPEN
+- Confirmed location: the registered error handler is the inline app.use((err,...))
+  at app.ts:115-142; line 138 returned err.message verbatim for 5xx.
+- Note: middleware/global-error-handler.ts (globalErrorHandler) is DEAD CODE —
+  defined but never registered. An initial fix there (f2db4aa) had no effect and
+  was reverted.
+- Fix: app.ts:138 now returns generic 'Internal Server Error' for 5xx; full error
+  logged server-side via console.error. 4xx messages/codes unchanged.
+- Status: FIXED IN CODE (app.ts:138) — pending Vercel redeploy verification
