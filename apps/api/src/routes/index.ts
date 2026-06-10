@@ -1,6 +1,7 @@
 ﻿// apps/api/src/routes/index.ts
 
 import { Router } from 'express';
+import bcrypt from 'bcryptjs';
 
 import financeRoutes from '../modules/finance/finance.routes';
 import trustRoutes from '../modules/trust/trust.routes';
@@ -83,9 +84,11 @@ router.use('/platform', platformRoutes);
 // ── Firm Settings: Custom Labels (per module, per tenant) ─────────────────────
 // Labels stored in PlatformGlobalSetting with key `labels:definitions:{MODULE}`
 
-import type { Request, Response } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 import { requirePermissions } from '../middleware/rbac';
 import { PERMISSIONS } from '../config/permissions';
+import { logAdminAction } from '../utils/audit-logger';
+import { AuditAction, AuditSeverity } from '../types/audit';
 
 // ── Users (listing for dropdowns + self-update) ──────────────────────────────
 
@@ -163,6 +166,80 @@ router.patch('/users/me', async (req: Request, res: Response) => {
     });
     res.json({ success: true, data: updated });
   } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+// ── Roles (tenant-scoped, for user-management dropdowns) ─────────────────────
+router.get('/roles', requirePermissions(PERMISSIONS.admin.manageUsers), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const roles = await req.db.role.findMany({
+      where: { tenantId: req.tenantId },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+    res.json({ success: true, data: roles });
+  } catch (e) { next(e); }
+});
+
+// ── Create user — "Invite User" (Option A: admin-set temporary password, F-21) ──
+router.post('/users', requirePermissions(PERMISSIONS.admin.manageUsers), async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { name, email, password, roleName } = (req.body ?? {}) as {
+      name?: string; email?: string; password?: string; roleName?: string;
+    };
+    if (!name?.trim() || !email?.trim() || !password || !roleName?.trim()) {
+      res.status(400).json({ success: false, error: 'name, email, password and roleName are required' });
+      return;
+    }
+    if (!req.tenantId) { res.status(400).json({ success: false, error: 'Tenant context required' }); return; }
+    const normEmail = email.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normEmail)) {
+      res.status(400).json({ success: false, error: 'Invalid email format' });
+      return;
+    }
+    if (password.length < 8) {
+      res.status(400).json({ success: false, error: 'Password must be at least 8 characters' });
+      return;
+    }
+
+    const existing = await req.db.user.findFirst({
+      where: { tenantId: req.tenantId, email: normEmail }, select: { id: true },
+    });
+    if (existing) { res.status(400).json({ success: false, error: 'User with this email already exists' }); return; }
+
+    const role = await req.db.role.findFirst({
+      where: { tenantId: req.tenantId, name: roleName.trim() }, select: { id: true, name: true },
+    });
+    if (!role) { res.status(400).json({ success: false, error: `Role '${roleName}' not found` }); return; }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const created = await req.db.user.create({
+      data: {
+        tenantId: req.tenantId,
+        name: name.trim(),
+        email: normEmail,
+        passwordHash,
+        status: 'ACTIVE',
+        tenantRole: 'ADVOCATE',
+        roles: { connect: [{ id: role.id }] },
+      },
+      select: { id: true, name: true, email: true },
+    });
+
+    // Audit (best-effort — never blocks user creation).
+    void logAdminAction({
+      actor: req.user ? { id: req.user.sub, role: req.user.role ?? 'UNKNOWN' } : { id: 'system', role: 'SYSTEM' },
+      tenantId: req.tenantId,
+      action: AuditAction.CREATE,
+      severity: AuditSeverity.INFO,
+      entityType: 'User',
+      entityId: created.id,
+      req,
+      requestId: req.id,
+      after: { email: created.email, roleName: role.name },
+    }).catch(() => {});
+
+    res.status(201).json({ success: true, data: { id: created.id, name: created.name, email: created.email, role: role.name } });
+  } catch (e) { next(e); }
 });
 
 // ── Time Capture / WIP Entries ────────────────────────────────────────────────

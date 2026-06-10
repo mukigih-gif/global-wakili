@@ -203,3 +203,16 @@ regenerated on every test run — findings logged here survive reruns.
 - Fix: add requirePermissions(client.viewPortal) to the two portal routes
   (defense-in-depth).
 - Status: OPEN — portal routes still ungated (low severity; self-scoped, no data leak)
+
+### F-21 INFO — Invite User: Option A (temp password) is interim only
+- Current implementation uses an admin-set temporary password.
+- Future implementation must use an email token invite flow:
+  1. Admin enters name + email + role only (no password)
+  2. System generates a time-limited secure token (expires 24h)
+  3. Email sent to the new user with a set-password link
+  4. User sets their own password on first login
+  5. Token invalidated after use
+- This is the correct flow for a production legal platform.
+- Depends on: F-18 (password reset flow) + notification/email service wired (Gate 8).
+- Status: DEFERRED — implement in Gate 8 alongside F-18; replace Option A with the
+  token flow before firm go-live.
