@@ -24,6 +24,10 @@ import {
   AUTH_AUDIT_EVENT_CODES,
 } from '../types/audit';
 import { authMiddleware } from '../middleware/auth';
+import rateLimit from 'express-rate-limit';
+import { SecureTokenService } from '../services/SecureTokenService';
+import { EmailService } from '../modules/notifications/providers/EmailService';
+import { validatePasswordPolicy } from '../utils/password';
 
 export const authRouter = Router();
 
@@ -1023,6 +1027,77 @@ function getRequestIp(req: Request): string {
 
   return req.ip || 'unknown';
 }
+
+// ── Password reset (F-18) ─────────────────────────────────────────────────────
+
+// Per-email rate limiter: max 3 forgot-password requests per hour.
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 3,
+  keyGenerator: (req) => String((req.body?.email ?? '').toString().trim().toLowerCase()) || req.ip || 'unknown',
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: true, message: 'If an account exists a reset link has been sent' },
+});
+
+// POST /auth/forgot-password — always 200; never reveals whether the account exists.
+authRouter.post('/forgot-password', forgotPasswordLimiter, async (req: Request, res: Response) => {
+  const NEUTRAL = { success: true, message: 'If an account exists a reset link has been sent' };
+  try {
+    const email = String(req.body?.email ?? '').trim().toLowerCase();
+    const tenantSlug = req.body?.tenantSlug ? String(req.body.tenantSlug).trim().toLowerCase() : null;
+    if (email) {
+      const user = await prisma.user.findFirst({
+        where: { email, status: 'ACTIVE', deletedAt: null, ...(tenantSlug ? { tenant: { slug: tenantSlug } } : {}) },
+        select: { id: true, email: true, name: true, tenantId: true },
+      });
+      if (user?.tenantId) {
+        const rawToken = await SecureTokenService.generateToken(user.id, user.tenantId, 'PASSWORD_RESET', 60);
+        const appUrl = process.env.APP_URL ?? `${req.protocol}://${req.get('host')}`;
+        const link = `${appUrl}/reset-password?token=${rawToken}`;
+        const { fromEmail, fromName } = EmailService.resolveDefaultSender();
+        await EmailService.send({
+          tenantId: user.tenantId,
+          fromEmail,
+          fromName,
+          to: [{ email: user.email, name: user.name }],
+          subject: 'Reset your Global Wakili password',
+          textBody: `Click here to reset your password:\n\n${link}\n\nThis link expires in 1 hour. If you did not request this, you can ignore this email.`,
+        }).catch((e) => console.error('FORGOT_PASSWORD_EMAIL_FAILED', { tenantId: user.tenantId, error: String(e) }));
+      }
+    }
+  } catch (e) {
+    console.error('FORGOT_PASSWORD_ERROR', { error: String(e) }); // swallow — never reveal existence
+  }
+  res.status(200).json(NEUTRAL);
+});
+
+// POST /auth/reset-password — verify token, enforce policy, set new password.
+authRouter.post('/reset-password', async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const token = String(req.body?.token ?? '');
+    const newPassword = String(req.body?.newPassword ?? '');
+    if (!token || !newPassword) {
+      res.status(400).json({ success: false, error: 'token and newPassword are required' });
+      return;
+    }
+    const verified = await SecureTokenService.verifyToken(token, 'PASSWORD_RESET'); // 400 if invalid/expired
+    validatePasswordPolicy(newPassword);                                            // 400 if weak
+    const passwordHash = await bcrypt.hash(newPassword, 12);
+    const now = new Date();
+    await prisma.user.update({
+      where: { id: verified.userId },
+      data: {
+        passwordHash,
+        passwordChangedAt: now,
+        passwordExpiresAt: new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000),
+        failedLoginAttempts: 0,
+      },
+    });
+    await SecureTokenService.consumeToken(verified.id, verified.userId);
+    res.status(200).json({ success: true, message: 'Password reset successfully' });
+  } catch (e) { next(e); }
+});
 
 // ── OAuth / Social Login ──────────────────────────────────────────────────────
 

@@ -171,6 +171,9 @@ function LoginPageContent() {
                 </button>
               </div>
             </div>
+            <div className="text-right -mt-1">
+              <a href="/forgot-password" className="text-xs text-primary-600 hover:underline">Forgot password?</a>
+            </div>
             <Input
               label="Firm ID (optional)"
               type="text"
