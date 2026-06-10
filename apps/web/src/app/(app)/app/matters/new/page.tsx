@@ -1,24 +1,134 @@
 'use client';
 export const dynamic = 'force-dynamic';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api';
 import { formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
-import { ArrowLeft, Briefcase, AlertTriangle, CheckCircle, Shield, DollarSign } from 'lucide-react';
+import { ArrowLeft, Briefcase, AlertTriangle, CheckCircle, Shield, DollarSign, Search, X, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 
-type Client = { id: string; name: string; clientCode: string };
+type Client = { id: string; name: string; clientCode?: string | null; kraPin?: string | null; city?: string | null; country?: string | null };
 type User   = { id: string; name: string; role: string };
 
-// Roles allowed to be assigned to a matter (originators / partners)
 const ORIGINATOR_ROLES = ['MANAGING_PARTNER', 'PARTNER', 'FIRM_ADMIN', 'ADMIN'];
 const ASSIGNEE_ROLES   = ['MANAGING_PARTNER', 'PARTNER', 'ASSOCIATE', 'PUPIL', 'FIRM_ADMIN', 'ADMIN'];
 
 type ConflictResult = { hasConflict: boolean; conflicts?: Array<{ name: string; matter: string }> };
+
+// Disambiguating meta line (BUG-E): "PIN: A012345678B — CLT-00001 — Nairobi"
+function clientMeta(c: Client): string {
+  const parts: string[] = [];
+  if (c.kraPin) parts.push(`PIN: ${c.kraPin}`);
+  if (c.clientCode) parts.push(c.clientCode);
+  if (c.city) parts.push(c.city);
+  else if (c.country) parts.push(c.country);
+  return parts.join(' — ');
+}
+
+// Searchable client combobox (BUG-D + BUG-E): debounced server search, no library.
+function ClientCombobox({ initialClientId, onChange }: { initialClientId: string; onChange: (id: string) => void }) {
+  const [query, setQuery]       = useState('');
+  const [results, setResults]   = useState<Client[]>([]);
+  const [loading, setLoading]   = useState(false);
+  const [open, setOpen]         = useState(false);
+  const [selected, setSelected] = useState<Client | null>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Pre-populate when navigated from a client profile (?clientId=).
+  useEffect(() => {
+    if (initialClientId) {
+      api.get<Client>(`/clients/${initialClientId}`).then((c) => { if (c?.id) setSelected(c); }).catch(() => {});
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Close on outside click.
+  useEffect(() => {
+    const onDocClick = (e: MouseEvent) => {
+      if (boxRef.current && !boxRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, []);
+
+  const onType = (q: string) => {
+    setQuery(q);
+    setOpen(true);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (q.trim().length < 1) { setResults([]); setLoading(false); return; }
+    setLoading(true);
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const r = await api.get<{ data: Client[] }>(`/clients?search=${encodeURIComponent(q.trim())}&limit=20`);
+        setResults(r.data ?? []);
+      } catch {
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 300);
+  };
+
+  const pick = (c: Client) => { setSelected(c); onChange(c.id); setOpen(false); setQuery(''); setResults([]); };
+  const clear = () => { setSelected(null); onChange(''); setQuery(''); setResults([]); setOpen(false); };
+
+  return (
+    <div className="relative" ref={boxRef}>
+      {selected ? (
+        <div className="form-input w-full flex items-center justify-between">
+          <span className="truncate">
+            <span className="font-medium text-gray-900">{selected.name}</span>
+            {clientMeta(selected) && <span className="ml-2 text-xs text-gray-400">{clientMeta(selected)}</span>}
+          </span>
+          <button type="button" onClick={clear} className="ml-2 text-gray-400 hover:text-gray-600" aria-label="Clear selected client">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      ) : (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => onType(e.target.value)}
+            onFocus={() => setOpen(true)}
+            placeholder="Search clients by name…"
+            className="form-input w-full pl-9 pr-9"
+            autoComplete="off"
+          />
+          {loading && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 animate-spin" />}
+        </div>
+      )}
+
+      {!selected && open && query.trim().length >= 1 && (
+        <div className="absolute z-20 mt-1 w-full overflow-auto rounded-lg border border-gray-200 bg-white shadow-lg max-h-64">
+          {loading ? (
+            <div className="px-3 py-2 text-sm text-gray-400">Searching…</div>
+          ) : results.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-gray-400">No clients found.</div>
+          ) : (
+            results.map((c) => (
+              <button
+                type="button"
+                key={c.id}
+                onClick={() => pick(c)}
+                className="w-full border-b border-gray-100 px-3 py-2 text-left hover:bg-gray-50 last:border-0"
+              >
+                <div className="font-medium text-gray-900">{c.name}</div>
+                {clientMeta(c) && <div className="text-xs text-gray-500">{clientMeta(c)}</div>}
+              </button>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function NewMatterPage() {
   const router = useRouter();
@@ -26,7 +136,6 @@ export default function NewMatterPage() {
   const { user: currentUser } = useAuth();
   const [loading, setLoading]           = useState(false);
   const [error, setError]               = useState('');
-  const [clients, setClients]           = useState<Client[]>([]);
   const [lawyers, setLawyers]           = useState<User[]>([]);
   const [conflictResult, setConflictResult] = useState<ConflictResult | null>(null);
   const [checkingConflict, setCheckingConflict] = useState(false);
@@ -42,7 +151,6 @@ export default function NewMatterPage() {
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   useEffect(() => {
-    api.get<{ data: Client[] }>('/clients?limit=100').then((r) => setClients(r.data ?? [])).catch(() => {});
     api.get<{ data: User[] }>('/users?limit=200').then((r) => setLawyers(r.data ?? [])).catch(() => {});
   }, []);
 
@@ -53,9 +161,7 @@ export default function NewMatterPage() {
     if (!form.clientId) { setError('Select a client first to run a conflict check'); return; }
     setCheckingConflict(true);
     try {
-      const r = await api.post<any>(
-        '/matters/conflict-check', { clientId: form.clientId, title: form.title }
-      );
+      const r = await api.post<any>('/matters/conflict-check', { clientId: form.clientId, title: form.title });
       setConflictResult((r?.data ?? r) as ConflictResult);
     } catch {
       setConflictResult(null);
@@ -66,6 +172,7 @@ export default function NewMatterPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!form.clientId) { setError('Select a client'); return; }
     if (!form.estimatedValue || parseFloat(form.estimatedValue) <= 0) {
       setError('Estimated value is required and must be greater than 0'); return;
     }
@@ -121,10 +228,8 @@ export default function NewMatterPage() {
                 <label className="form-label">Client *</label>
                 <Link href="/app/clients/new" className="text-xs text-primary-600 hover:underline">+ Add Client</Link>
               </div>
-              <select required value={form.clientId} onChange={(e) => set('clientId', e.target.value)} className="form-select w-full">
-                <option value="">{clients.length ? 'Select client…' : 'No clients yet — Add Client →'}</option>
-                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}{c.clientCode ? ` (${c.clientCode})` : ''}</option>)}
-              </select>
+              <ClientCombobox initialClientId={form.clientId} onChange={(id) => set('clientId', id)} />
+              <p className="text-xs text-gray-400 mt-0.5">Type to search by name; results show PIN / code / city to tell duplicates apart.</p>
             </div>
             <div>
               <label className="form-label">Matter Type *</label>

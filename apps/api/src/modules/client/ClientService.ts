@@ -445,6 +445,8 @@ export class ClientService {
           riskBand: true,
           needsEnhancedDueDiligence: true,
           currency: true,
+          city: true,
+          country: true,
           createdAt: true,
           updatedAt: true,
           onboardingCompletedAt: true,
