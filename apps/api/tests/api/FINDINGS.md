@@ -301,6 +301,9 @@ regenerated on every test run — findings logged here survive reruns.
   the check was 400-ing for ALL inputs (total non-functionality).
 - Fix APPLIED (handler): buildConflictSearchTerms now also reads adversePartyNames +
   relatedEntityNames (the schema array fields that survive validation).
-- Status: PARTIAL — API now works for adversePartyNames/relatedEntityNames; the New
-  Matter UI still posts { clientId, title } (neither read) — UI alignment OPEN before
-  go-live (Gate 6 security review).
+- UI fix APPLIED: matters/new runConflictCheck now posts /matters/conflicts/check with
+  clientName (resolved from clientId) + matterTitle + caseNumber, and maps the
+  {matches,matchCount} response into the conflict list. (Was POSTing to the wrong path
+  /matters/conflict-check → 404, silently swallowed — the check never ran.)
+- Status: FIXED — API + New Matter UI aligned. (Separate: clients/new posts to
+  /clients/conflict-check — different endpoint, verify later.)

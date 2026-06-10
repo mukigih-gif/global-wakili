@@ -161,8 +161,22 @@ export default function NewMatterPage() {
     if (!form.clientId) { setError('Select a client first to run a conflict check'); return; }
     setCheckingConflict(true);
     try {
-      const r = await api.post<any>('/matters/conflict-check', { clientId: form.clientId, title: form.title });
-      setConflictResult((r?.data ?? r) as ConflictResult);
+      // Resolve the client name — the conflict handler searches by name, not id.
+      let clientName: string | undefined;
+      try { const c = await api.get<{ name?: string }>(`/clients/${form.clientId}`); clientName = c?.name; } catch {}
+      const r = await api.post<any>('/matters/conflicts/check', {
+        clientName,
+        matterTitle: form.title || undefined,
+        caseNumber:  form.caseNumber || undefined,
+      });
+      const data    = r?.data ?? r;
+      const matters = data?.matches?.matters ?? [];
+      const clients = data?.matches?.clients ?? [];
+      const conflicts = [
+        ...clients.map((c: any) => ({ name: c.name ?? 'Client', matter: 'Existing client record' })),
+        ...matters.map((m: any) => ({ name: m.title ?? 'Matter', matter: m.matterCode ?? m.caseNumber ?? '' })),
+      ];
+      setConflictResult({ hasConflict: (data?.matchCount ?? 0) > 0, conflicts });
     } catch {
       setConflictResult(null);
     } finally {
