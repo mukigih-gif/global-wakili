@@ -51,6 +51,7 @@ model Tenant {
   totalMatters                 Int                           @default(0)
   totalUsers                   Int                           @default(0)
   accountBalances              AccountBalance[]
+  secureTokens                 SecureToken[]
   apiKeys                      ApiKey[]
   approvals                    Approval[]
   auditAlerts                  AuditAlert[]
@@ -471,6 +472,7 @@ model User {
   attendedEvents                      CalendarEvent[]               @relation("EventAttendees")
   permissions                         Permission[]                  @relation("UserPermissions")
   roles                               Role[]                        @relation("UserRoles")
+  secureTokens                        SecureToken[]
   generatedPayrollBatches             PayrollBatch[]                @relation("PayrollBatchGeneratedBy")
   approvedPayrollBatches              PayrollBatch[]                @relation("PayrollBatchApprovedBy")
   verifiedEmployeeDocuments           EmployeeDocument[]            @relation("EmployeeDocumentVerifiedBy")
@@ -562,6 +564,29 @@ model Permission {
   @@unique([tenantId, action, resource], name: "unique_tenant_action_resource")
   @@index([tenantId])
   @@index([resource])
+}
+
+model SecureToken {
+  id        String          @id @default(cuid())
+  userId    String
+  tenantId  String
+  type      SecureTokenType
+  tokenHash String          @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime        @default(now())
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([tenantId])
+}
+
+enum SecureTokenType {
+  PASSWORD_RESET
+  EMAIL_INVITE
+  EMAIL_VERIFY
+  ACCOUNT_ACTIVATE
 }
 
 model FieldAccessPolicy {
