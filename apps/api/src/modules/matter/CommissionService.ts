@@ -583,7 +583,7 @@ async function aggregateWriteOffs(
     tenantId: params.tenantId,
     matterId: params.matterId,
     status: {
-      notIn: ['CANCELLED', 'REJECTED', 'REVERSED'],
+      notIn: ['REJECTED', 'REVERSED'],
     },
   };
 
