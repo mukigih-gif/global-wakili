@@ -120,3 +120,86 @@ regenerated on every test run — findings logged here survive reruns.
 - Fix: import useSearchParams; const searchParams = useSearchParams();
   clientId: searchParams.get('clientId') ?? '' — presets the client dropdown
 - Status: FIXED IN CODE — web typecheck 0 errors (frontend; visual confirmation pending)
+
+## RBAC & AUTH SECURITY (10 Jun 2026)
+
+### F-13 CRITICAL — RBAC permission system incomplete
+- Tenants had only ADMIN/USER roles; no role→permission wiring for staff roles,
+  so non-admin users could not be granted scoped access.
+- Status: FIXED — 11 default roles created with correct permissions
+  (seed-default-roles.ts); 7 role test users seeded; PlatformOnboardingService
+  .provisionTenant now seeds roles for every future tenant. Verified live:
+  7/7 role logins 200; CLERK denied gated client access (403). Fixed: 10 Jun 2026
+
+### F-14 MEDIUM — HR module uses a separate, bypass-only permission system
+- HR routes use requireHrPermission(HR_PERMISSIONS.*) (hr-permission.map.ts) with
+  colon-format keys (hr:employee:view) that are NOT in the 267-row catalog.
+- HR access is granted ONLY to MANAGING_PARTNER / SUPER_ADMIN / SYSTEM_ADMIN
+  (isSuperUser bypass), or a JWT permissions array the token never emits.
+- Consequence: a dedicated HR_MANAGER role cannot be granted HR access via
+  Role↔Permission; HR_MANAGER currently has payroll/client/reporting only.
+- Fix: connect HR RBAC to the catalog (DB-backed check like rbac.ts), or add
+  hr:* permissions and emit them in the JWT.
+- Status: OPEN — audit HR permissions in Gate 3
+
+### F-15 MEDIUM — Password expiry not enforced
+- User.passwordExpiresAt / passwordChangedAt / pcExpiryDate fields exist but are
+  never checked at login (no references in auth.controller / middleware).
+- Consequence: expired passwords still authenticate.
+- Fix: enforce passwordExpiresAt at login; set it whenever a password is set.
+- Status: OPEN — implement in auth bounded context
+
+### F-16 MEDIUM — No password complexity policy
+- Only adminPassword min(8) on firm registration; login password min(1).
+- No upper/lower/digit/special requirement; no shared password validator.
+- Fix: shared password-policy validator at all set-password points.
+- Status: OPEN — implement password validator (attachment points limited by F-12)
+
+### F-17 HIGH — No MFA (Multi-Factor Authentication) enforced
+- No TOTP, SMS OTP, or email OTP enforced at login.
+- Scaffolding exists but is unenforced: LoginSchema has optional mfaCode and the
+  User model has mfaSecret — neither is validated in the login flow.
+- Required for a legal platform handling confidential client data; Kenya Data
+  Protection Act requires reasonable security measures.
+- Fix: implement/enforce TOTP (Google Authenticator) as a minimum.
+- Status: OPEN — required before go-live
+
+### F-18 HIGH — No forgot-password / password-reset flow
+- No POST /auth/forgot-password and no POST /auth/reset-password endpoints exist.
+- Users are locked out permanently if a password is forgotten; the only recovery
+  path is a direct DB update (not acceptable in production).
+- Fix: forgot-password email flow with a time-limited reset token.
+- Status: OPEN — required before go-live
+
+### F-19 MEDIUM — Account lockout after failed attempts unverified
+- failedLoginAttempts exists on User; auth.controller increments it on wrong
+  password; a lockout check exists (isLocked / lockedUntil, ~line 567).
+- NOT verified end-to-end: that lockout actually fires at a threshold and
+  auto-unlocks after a timeout. If not enforced, brute force is possible.
+- Fix: verify lockout fires at 5 attempts, auto-unlocks after 30 min.
+- Status: OPEN — verify and complete implementation
+
+### F-20 HIGH — No domain/SSO login for firm staff
+- No SAML 2.0 or OpenID Connect for corporate domain login.
+- Law firms using Microsoft 365 or Google Workspace cannot enforce domain-level
+  authentication; staff must use separate Global Wakili credentials.
+- OAuth Google/Microsoft exists (F-01 fixed) but only for individual OAuth —
+  not domain-enforced SSO.
+- Fix: implement SAML 2.0 or OIDC for domain login; allow a firm admin to
+  configure their domain (e.g. @lawfirm.co.ke) so all @lawfirm.co.ke users
+  authenticate through the firm's IdP.
+- Status: OPEN — required before enterprise go-live
+
+### F-05 LOW — Client portal endpoints not RBAC-gated (mitigated by self-scoping)
+- File: client.routes.ts:74-84 — GET /clients/:id/portal/{dashboard,matters} have
+  NO requirePermissions, unlike every other client route.
+- Live probe (lowpriv = CLERK, zero client permissions), 10 Jun 2026:
+    GET /api/v1/clients                       → 403  (denied: no client.viewClient) PASS
+    GET /api/v1/clients/:id/portal/dashboard  → 404  (NOT 403: route is ungated;
+      controller self-scopes portalUserId = req.user.sub → no record → 404, no leak) FAIL
+    GET /api/v1/matters                       → 200  (CLERK has matter.view_matter) PASS
+- Net: RBAC role scoping is correct (client denied, matter allowed). The portal
+  routes lack an RBAC gate, but self-scoping prevents cross-client data exposure.
+- Fix: add requirePermissions(client.viewPortal) to the two portal routes
+  (defense-in-depth).
+- Status: OPEN — portal routes still ungated (low severity; self-scoped, no data leak)

@@ -4,6 +4,8 @@ import type { BillingPlan, PlatformDbClient } from './platform.types';
 import { PlatformQuotaService } from './PlatformQuotaService';
 import { PlatformSubscriptionService } from './PlatformSubscriptionService';
 import { PlatformTenantLifecycleService } from './PlatformTenantLifecycleService';
+import prisma from '../../config/database';
+import { seedDefaultRoles } from '../../scripts/seed-default-roles';
 
 const DEFAULT_MODULES_BY_PLAN: Record<BillingPlan, string[]> = {
   BASIC: ['client', 'matter', 'calendar', 'billing', 'finance', 'approval', 'reporting'],
@@ -174,6 +176,11 @@ export class PlatformOnboardingService {
       });
       quotas.push(policy);
     }
+
+    // F-13: every provisioned tenant gets the full permission catalog + all
+    // default roles (FIRM_ADMIN … CLERK). Idempotent; uses the real prisma
+    // client because PlatformDbClient does not expose permission/role delegates.
+    await seedDefaultRoles(prisma, input.tenantId);
 
     return {
       tenantId: input.tenantId,

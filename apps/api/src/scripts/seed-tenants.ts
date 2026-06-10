@@ -3,7 +3,9 @@
  * Creates test tenants: Alpha Advocates, Beta Legal, Mwananchi & Co
  * Run: npx dotenv-cli -e ../../.env -- node --require tsx/cjs src/scripts/seed-tenants.ts
  */
+import bcrypt from 'bcryptjs';
 import prisma from '../config/database';
+import { seedDefaultRoles } from './seed-default-roles';
 
 const TENANTS = [
   {
@@ -78,10 +80,23 @@ async function main() {
       data: { tenantId: tenant.id, name: 'ADMIN', isSystem: true },
     });
 
-    // Seed permissions for this tenant
-    const perms = await prisma.permission.findMany({ where: { tenantId: null } }).catch(() => []);
+    // Seed the permission catalog + all default roles (FIRM_ADMIN, MANAGING_PARTNER, … CLERK)
+    await seedDefaultRoles(prisma, tenant.id);
+
+    // Connect the full permission catalog to the legacy ADMIN role.
+    const allPerms = await prisma.permission.findMany({ where: { tenantId: tenant.id }, select: { id: true } });
+    await prisma.role.update({
+      where: { id: adminRole.id },
+      data: { permissions: { connect: allPerms.map((p) => ({ id: p.id })) } },
+    });
+
+    // Resolve FIRM_ADMIN to connect the admin user (full access).
+    const firmAdminRole = await prisma.role.findUniqueOrThrow({
+      where: { tenantId_name: { tenantId: tenant.id, name: 'FIRM_ADMIN' } },
+      select: { id: true },
+    });
+
     // Create admin user
-    const bcrypt = await import('bcryptjs');
     const hash   = await bcrypt.hash(t.adminPassword, 12);
     await prisma.user.create({
       data: {
@@ -91,7 +106,7 @@ async function main() {
         passwordHash: hash,
         status:       'ACTIVE',
         tenantRole:   'FIRM_ADMIN',
-        roles:        { connect: [{ id: adminRole.id }] },
+        roles:        { connect: [{ id: adminRole.id }, { id: firmAdminRole.id }] },
       },
     });
     console.log(`  └── Admin: ${t.adminEmail}`);
