@@ -216,3 +216,47 @@ regenerated on every test run — findings logged here survive reruns.
 - Depends on: F-18 (password reset flow) + notification/email service wired (Gate 8).
 - Status: DEFERRED — implement in Gate 8 alongside F-18; replace Option A with the
   token flow before firm go-live.
+
+---
+
+## GROUP 5 prep — Matter/Billing endpoint gaps (11 Jun 2026)
+
+### F-22 MEDIUM — No expense creation on matters (FIXED)
+- matter.routes.ts had GET /:matterId/expenses (list) but no POST to create one.
+- Fix: added POST /:matterId/expenses (gated matter.updateMatter), mirroring the
+  disbursement create — creates ExpenseEntry { tenantId, matterId, userId, amount,
+  currency(KES), description, reference, expenseDate(now), status DRAFT }.
+- Status: FIXED — typecheck 0; pending Render deploy verification.
+
+### F-23 MEDIUM — No per-matter profitability endpoint (FIXED)
+- No matter-level financial summary (fees vs costs).
+- Fix: added GET /:matterId/profitability (gated matter.viewMatter, read-only) —
+  aggregates TimeEntry.billableAmount (billable WIP), Invoice total/paidAmount
+  (excl. CANCELLED), DRN amount (excl. REJECTED), ExpenseEntry amount; returns
+  totalTimeValue, feesBilled, feesPaid, totalDisbursements, totalExpenses,
+  grossProfit = feesBilled − (disbursements + expenses).
+- Status: FIXED — typecheck 0; pending Render deploy verification.
+
+### F-24 MEDIUM — No invoice receipt endpoint (FIXED)
+- billing.routes.ts had no single-invoice GET and no receipt endpoint.
+- Fix: added GET /billing/invoices/:invoiceId/receipt (gated billing.viewInvoice,
+  read-only) — invoice summary (total/paidAmount/balanceDue/isPaid/status/dates) +
+  client + matter + payments[] (PaymentReceipt rows).
+- Caveat: POST /invoices/:id/payment only updates invoice.paidAmount and does NOT
+  write PaymentReceipt rows, so payments[] can be empty while paidAmount > 0.
+  A true payment audit trail (have /payment create a PaymentReceipt) is a follow-up.
+- Status: FIXED — typecheck 0; pending Render deploy verification.
+
+### F-25 INFO — "Debit Account" is not a missing endpoint (VERIFIED non-gap)
+- The web UI "Debit" action (clients/[id]/page.tsx:116) already calls the existing
+  POST /billing/invoices/:id/payment with method 'ACCOUNT_DEBIT'. Debit = a payment
+  via the existing endpoint; no separate route required.
+- Status: VERIFIED — non-gap; no code change. (Optional: persist `method` on payment.)
+
+### F-26 INFO — Reporting routes already exist (VERIFIED non-gap)
+- reporting.routes.ts is a full module (~18 endpoints): /overview, /capabilities,
+  /catalog, /definitions(+/search), /runs(+/search), /exports(+/search),
+  /dashboard-definitions, /dashboard-widgets, /schedules, /bi-connectors.
+- A "matter report" runs through the generic /definitions → /runs engine; no
+  dedicated matter-report route is needed.
+- Status: VERIFIED — non-gap; no code change (certification only, if desired).

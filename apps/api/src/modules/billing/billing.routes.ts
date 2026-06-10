@@ -601,6 +601,52 @@ router.post(
   }
 );
 
+// ── Invoice receipt ───────────────────────────────────────────────────────────
+router.get(
+  '/invoices/:invoiceId/receipt',
+  billingPermission('viewInvoice'),
+  async (req: Request, res: Response) => {
+    try {
+      const { invoiceId } = req.params;
+      const invoice = await req.db.invoice.findFirst({
+        where: { tenantId: req.tenantId, id: invoiceId },
+        include: {
+          client: { select: { id: true, name: true, clientCode: true, email: true, kraPin: true } },
+          matter: { select: { id: true, title: true, matterCode: true } },
+          paymentReceipts: {
+            orderBy: { createdAt: 'desc' },
+            select: { id: true, receiptNumber: true, amount: true, currency: true, method: true, reference: true, status: true, createdAt: true },
+          },
+        },
+      });
+      if (!invoice) { res.status(404).json({ error: 'Invoice not found' }); return; }
+
+      const num = (v: unknown) => parseFloat(String(v ?? 0)) || 0;
+      const total      = num(invoice.total);
+      const paidAmount = num(invoice.paidAmount);
+      const balanceDue = num(invoice.balanceDue ?? (total - paidAmount));
+
+      res.json({
+        success: true,
+        data: {
+          invoiceId:     invoice.id,
+          invoiceNumber: invoice.invoiceNumber,
+          status:        invoice.status,
+          issuedDate:    invoice.issuedDate ?? invoice.createdAt,
+          dueDate:       invoice.dueDate,
+          client:        invoice.client,
+          matter:        invoice.matter,
+          total,
+          paidAmount,
+          balanceDue,
+          isPaid:        balanceDue <= 0,
+          payments:      invoice.paymentReceipts,
+        },
+      });
+    } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
+  }
+);
+
 // ── Quotations (client billing fee estimates / proformas) ─────────────────────
 // The system uses "quotations" as pre-invoice fee proposals sent to clients.
 // These are backed by the ProformaInvoice model when available; otherwise

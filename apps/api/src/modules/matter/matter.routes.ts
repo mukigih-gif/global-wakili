@@ -281,6 +281,96 @@ router.get(
   }
 );
 
+router.post(
+  '/:matterId/expenses',
+  requirePermissions(PERMISSIONS.matter.updateMatter),
+  async (req, res) => {
+    try {
+      const matter = await req.db.matter.findFirst({
+        where: { tenantId: req.tenantId, id: req.params.matterId },
+        select: { id: true },
+      });
+      if (!matter) { res.status(404).json({ error: 'Matter not found' }); return; }
+      if (!req.tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
+      if (!req.user?.sub) { res.status(401).json({ error: 'Authenticated user required' }); return; }
+
+      const amount = parseFloat(req.body.amount) || 0;
+      const expense = await req.db.expenseEntry.create({
+        data: {
+          tenantId:    req.tenantId,
+          matterId:    req.params.matterId,
+          userId:      req.user.sub,
+          amount,
+          currency:    req.body.currency || 'KES',
+          description: req.body.description ?? null,
+          reference:   req.body.reference ?? null,
+          expenseDate: req.body.expenseDate ? new Date(req.body.expenseDate) : new Date(),
+          status:      'DRAFT',
+        },
+      });
+
+      res.status(201).json({ success: true, data: expense });
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
+  }
+);
+
+// ── Profitability ───────────────────────────────────────────────────────────
+router.get(
+  '/:matterId/profitability',
+  requirePermissions(PERMISSIONS.matter.viewMatter),
+  async (req, res) => {
+    try {
+      const { matterId } = req.params;
+      const matter = await req.db.matter.findFirst({
+        where: { tenantId: req.tenantId, id: matterId },
+        select: { id: true },
+      });
+      if (!matter) { res.status(404).json({ error: 'Matter not found' }); return; }
+
+      const num = (v: unknown) => parseFloat(String(v ?? 0)) || 0;
+
+      const [time, invoices, disbursements, expenses] = await Promise.all([
+        req.db.timeEntry.aggregate({
+          where: { tenantId: req.tenantId, matterId, isBillable: true },
+          _sum: { billableAmount: true },
+        }),
+        req.db.invoice.aggregate({
+          where: { tenantId: req.tenantId, matterId, status: { not: 'CANCELLED' } },
+          _sum: { total: true, paidAmount: true },
+        }),
+        req.db.disbursementRequestNote.aggregate({
+          where: { tenantId: req.tenantId, matterId, status: { not: 'REJECTED' } },
+          _sum: { amount: true },
+        }),
+        req.db.expenseEntry.aggregate({
+          where: { tenantId: req.tenantId, matterId },
+          _sum: { amount: true },
+        }),
+      ]);
+
+      const totalTimeValue     = num(time._sum.billableAmount);
+      const feesBilled         = num(invoices._sum.total);
+      const feesPaid           = num(invoices._sum.paidAmount);
+      const totalDisbursements = num(disbursements._sum.amount);
+      const totalExpenses      = num(expenses._sum.amount);
+      const grossProfit        = feesBilled - (totalDisbursements + totalExpenses);
+
+      res.json({
+        success: true,
+        data: {
+          matterId,
+          totalTimeValue,
+          feesBilled,
+          feesPaid,
+          totalDisbursements,
+          totalExpenses,
+          grossProfit,
+        },
+      });
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
+  }
+);
+
 // ── Matter Updates (Timeline) ────────────────────────────────────────────────
 router.get(
   '/:matterId/updates',
