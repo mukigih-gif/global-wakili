@@ -556,7 +556,7 @@ router.post(
             metadata: { invoiceNumber: inv.invoiceNumber, total: String(inv.total), currency: inv.currency, matterId: inv.matterId, clientId: inv.clientId },
           },
         });
-        await tx.invoice.update({ where: { id: inv.id }, data: { status: 'PENDING_APPROVAL' } });
+        await tx.invoice.update({ where: { id: inv.id, tenantId: req.tenantId }, data: { status: 'PENDING_APPROVAL' } });
         return approval;
       });
       res.json({ success: true, data: { invoiceId: inv.id, status: 'PENDING_APPROVAL', approvalId: result.id } });
@@ -587,7 +587,7 @@ router.post(
       const newStatus = newBal <= 0 ? 'PAID' : 'PARTIALLY_PAID';
 
       const updated = await req.db.invoice.update({
-        where: { id: invoiceId },
+        where: { id: invoiceId, tenantId: req.tenantId },
         data: {
           paidAmount: newPaid,
           balanceDue: Math.max(newBal, 0),

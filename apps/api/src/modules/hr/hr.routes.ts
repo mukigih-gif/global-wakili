@@ -743,7 +743,7 @@ router.patch('/onboarding/:id/steps', requireHrPermission(HR_PERMISSIONS.updateE
     steps[step] = completed;
     const completedCount = Object.values(steps).filter(Boolean).length;
     const status = completedCount === 10 ? 'COMPLETED' : 'IN_PROGRESS';
-    await req.db.employeeOnboarding.update({ where: { id: req.params.id }, data: { steps, status } }).catch(() => null);
+    await req.db.employeeOnboarding.update({ where: { id: req.params.id, tenantId: req.tenantId }, data: { steps, status } }).catch(() => null);
     res.json({ success: true, data: { ...record, steps, status } });
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });

@@ -260,3 +260,27 @@ regenerated on every test run — findings logged here survive reruns.
 - A "matter report" runs through the generic /definitions → /runs engine; no
   dedicated matter-report route is needed.
 - Status: VERIFIED — non-gap; no code change (certification only, if desired).
+
+### BUG-F LOW — Chat/support widget blocks content in bottom-right viewport
+- "Chat with us" button overlaps Recent Invoices section
+- Invoice amount and action buttons obscured on smaller screens
+- Affects: client profile page, matter page, any page with bottom-right content
+- Fix: add bottom padding to main content area when chat widget is present, or
+  move widget to collapsed/minimised state by default
+- File: likely apps/web/src/components/layout or a chat widget provider component
+- Status: OPEN — fix after current F-28/F-29 commit
+
+### F-30 MEDIUM — billing.routes.ts submit missing tenantId (FIXED)
+- POST /billing/invoices/:id/submit — tx.invoice.update
+  where clause missing tenantId → tenant guard 500
+- Fix: where: { id: inv.id, tenantId: req.tenantId }
+- File: billing.routes.ts:559
+- Status: FIXED — pending Render deploy verification
+
+### F-31 MEDIUM — billing.routes.ts payment missing tenantId (FIXED)
+- POST /billing/invoices/:id/payment — req.db.invoice.update
+  where clause missing tenantId → tenant guard 500
+- This means pay-invoice (debit account flow) was universally 500ing
+- Fix: where: { id: invoiceId, tenantId: req.tenantId }
+- File: billing.routes.ts:589
+- Status: FIXED — pending Render deploy verification

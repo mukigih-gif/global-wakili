@@ -685,7 +685,7 @@ router.post(
         // Remove lines so linked expenses are released (the EXPENSE double-bill guard keys off invoice lines).
         await tx.invoiceLine.deleteMany({ where: { invoiceId: inv.id, tenantId: req.tenantId } });
         await tx.invoice.update({
-          where: { id: inv.id },
+          where: { id: inv.id, tenantId: req.tenantId },
           data: {
             status: 'CANCELLED',
             cancelledAt: new Date(),
@@ -739,7 +739,7 @@ router.post(
             },
           },
         });
-        await tx.invoice.update({ where: { id: inv.id }, data: { status: 'PENDING_APPROVAL' } });
+        await tx.invoice.update({ where: { id: inv.id, tenantId: req.tenantId }, data: { status: 'PENDING_APPROVAL' } });
         return approval;
       });
 
