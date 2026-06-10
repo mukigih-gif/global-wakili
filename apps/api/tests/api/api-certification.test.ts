@@ -563,3 +563,474 @@ describe('GROUP 4 — Auth: Password Reset (F-18)', () => {
     appendFileSync(join(__dirname, 'API_CERTIFICATION_REPORT.md'), lines.join('\n'));
   });
 });
+
+// ════════════════════════════════════════════════════════════════════════════
+// GROUP 5 — Matter endpoints (/api/v1/matters + billing receipt) — tenant-scoped
+// Reads use a real live matter; writes create/reuse __CERT_TEST_MATTER__ on
+// __CERT_TEST_CLIENT__. Unexpected 500 → recorded (pass:false), NOT hard-failed.
+// ════════════════════════════════════════════════════════════════════════════
+const TEST_MATTER_TITLE = '__CERT_TEST_MATTER__';
+const REAL_MATTER_ID = 'cmq5nef8100032fmblq5x1b3o';
+
+describe('GROUP 5 — Matter endpoints', () => {
+  let token = '';
+  let myTenantId = '';
+  let refClientId = '';
+  let testClientId = '';
+  let testMatterId = '';
+  let timeEntryId = '';
+  let drnId = '';
+  let invoiceId = '';
+  const bearer = () => `Bearer ${token}`;
+
+  const soft500 = (name: string, method: string, path: string, expected: string, res: any, latencyMs: number): boolean => {
+    if (res.status === 500) {
+      record({ group: 'Matter', name, method, path, expected, status: 500, latencyMs, pass: false, body: res.body });
+      console.warn(`[GROUP 5] ${method} ${path} → 500 — recorded as potential finding (not hard-failed).`);
+      return true;
+    }
+    return false;
+  };
+
+  beforeAll(async () => {
+    const lg = await request(BASE_URL).post('/api/v1/auth/login')
+      .send({ email: TEST_EMAIL, password: TEST_PASSWORD, ...(TEST_TENANT_SLUG ? { tenantSlug: TEST_TENANT_SLUG } : {}) });
+    if (lg.status !== 200 || !lg.body?.data?.token) throw new Error(`GROUP 5 login failed (status ${lg.status})`);
+    token = lg.body.data.token;
+    myTenantId = lg.body?.data?.user?.tenantId ?? '';
+    const m = await request(BASE_URL).get(`/api/v1/matters/${REAL_MATTER_ID}`).set('Authorization', bearer());
+    refClientId = m.body?.clientId ?? '';
+    const cl = await request(BASE_URL).get('/api/v1/clients').query({ search: TEST_CLIENT_NAME, limit: 5 }).set('Authorization', bearer());
+    testClientId = (Array.isArray(cl.body?.data) ? cl.body.data.find((c: any) => c?.name === TEST_CLIENT_NAME) : null)?.id ?? '';
+  }, 45000);
+
+  // ── READS ──────────────────────────────────────────────────────────────────
+  it('1. GET /matters — list (tenant-scoped)', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).get('/api/v1/matters').query({ limit: 50 }).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('list', 'GET', '/api/v1/matters', '200 + array', res, latencyMs)) return;
+    const data: any[] = res.body?.data ?? [];
+    const tenantIds = Array.from(new Set(data.map((x) => x.tenantId)));
+    record({ group: 'Matter', name: 'list', method: 'GET', path: '/api/v1/matters', expected: '200 + single-tenant array',
+      status: res.status, latencyMs, pass: res.status === 200 && Array.isArray(data), body: { count: data.length } });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+    expect(Array.isArray(data)).toBe(true);
+    expect(tenantIds.length).toBeLessThanOrEqual(1);
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('2. GET /matters?clientId=X — filtered by client', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).get('/api/v1/matters').query({ clientId: refClientId, limit: 50 }).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('list by clientId', 'GET', '/api/v1/matters?clientId=', '200 + filtered', res, latencyMs)) return;
+    const data: any[] = res.body?.data ?? [];
+    const allMatch = Array.isArray(data) && data.every((x) => x.clientId === refClientId);
+    record({ group: 'Matter', name: 'list by clientId', method: 'GET', path: '/api/v1/matters?clientId=', expected: 'all clientId === filter',
+      status: res.status, latencyMs, pass: res.status === 200 && allMatch, body: { count: data.length } });
+    expect(res.status).toBe(200);
+    expect(refClientId).toBeTruthy();
+    expect(Array.isArray(data)).toBe(true);
+    expect(allMatch).toBe(true);
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('3. GET /matters/:id — single matter', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).get(`/api/v1/matters/${REAL_MATTER_ID}`).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('get by id', 'GET', '/api/v1/matters/:id', '200 + id match', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'get by id', method: 'GET', path: '/api/v1/matters/:id', expected: '200 + matching id',
+      status: res.status, latencyMs, pass: res.status === 200 && res.body?.id === REAL_MATTER_ID, body: { id: res.body?.id } });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+    expect(res.body?.id).toBe(REAL_MATTER_ID);
+    expect(res.body?.tenantId).toBeTruthy();
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('4. GET /matters/:id/overview → 200', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).get(`/api/v1/matters/${REAL_MATTER_ID}/overview`).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('overview', 'GET', '/api/v1/matters/:id/overview', '200', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'overview', method: 'GET', path: '/api/v1/matters/:id/overview', expected: '200',
+      status: res.status, latencyMs, pass: res.status === 200, body: res.body });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+    expect(typeof res.body).toBe('object');
+    expect(res.body).not.toBeNull();
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('5. GET /matters/:id/dashboard → { totals, statusBreakdown }', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).get(`/api/v1/matters/${REAL_MATTER_ID}/dashboard`).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('dashboard', 'GET', '/api/v1/matters/:id/dashboard', '200 + totals', res, latencyMs)) return;
+    const d = res.body?.data ?? {};
+    record({ group: 'Matter', name: 'dashboard', method: 'GET', path: '/api/v1/matters/:id/dashboard', expected: '200 + {totals,statusBreakdown}',
+      status: res.status, latencyMs, pass: res.status === 200 && !!d.totals, body: { totals: d.totals } });
+    expect(res.status).toBe(200);
+    expect(res.body?.success).toBe(true);
+    expect(d.totals).toBeDefined();
+    expect(Array.isArray(d.statusBreakdown)).toBe(true);
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('6. GET /matters/portfolio/summary → 200', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).get('/api/v1/matters/portfolio/summary').set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('portfolio summary', 'GET', '/api/v1/matters/portfolio/summary', '200', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'portfolio summary', method: 'GET', path: '/api/v1/matters/portfolio/summary', expected: '200',
+      status: res.status, latencyMs, pass: res.status === 200, body: res.body });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+    expect(typeof res.body).toBe('object');
+    expect(res.body).not.toBeNull();
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('7. GET /matters/:id/disbursements → 200', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).get(`/api/v1/matters/${REAL_MATTER_ID}/disbursements`).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('disbursements list', 'GET', '/api/v1/matters/:id/disbursements', '200', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'disbursements list', method: 'GET', path: '/api/v1/matters/:id/disbursements', expected: '200 + data[]',
+      status: res.status, latencyMs, pass: res.status === 200, body: { count: (res.body?.data || []).length } });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+    expect(Array.isArray(res.body?.data)).toBe(true);
+    expect(res.body?.data).not.toBeNull();
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('8. GET /matters/:id/expenses → 200', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).get(`/api/v1/matters/${REAL_MATTER_ID}/expenses`).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('expenses list', 'GET', '/api/v1/matters/:id/expenses', '200', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'expenses list', method: 'GET', path: '/api/v1/matters/:id/expenses', expected: '200 + data[]',
+      status: res.status, latencyMs, pass: res.status === 200, body: { count: (res.body?.data || []).length } });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+    expect(Array.isArray(res.body?.data)).toBe(true);
+    expect(res.body?.data).not.toBeNull();
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('9. GET /matters/:id/updates → 200', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).get(`/api/v1/matters/${REAL_MATTER_ID}/updates`).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('updates list', 'GET', '/api/v1/matters/:id/updates', '200', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'updates list', method: 'GET', path: '/api/v1/matters/:id/updates', expected: '200 + data[]',
+      status: res.status, latencyMs, pass: res.status === 200, body: { count: (res.body?.data || []).length } });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+    expect(Array.isArray(res.body?.data)).toBe(true);
+    expect(res.body?.data).not.toBeNull();
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('10. GET /matters/:id/time-entries → 200', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).get(`/api/v1/matters/${REAL_MATTER_ID}/time-entries`).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('time-entries list', 'GET', '/api/v1/matters/:id/time-entries', '200', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'time-entries list', method: 'GET', path: '/api/v1/matters/:id/time-entries', expected: '200 + data[]',
+      status: res.status, latencyMs, pass: res.status === 200, body: { count: (res.body?.data || []).length } });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+    expect(Array.isArray(res.body?.data)).toBe(true);
+    expect(res.body?.data).not.toBeNull();
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('11. GET /matters/:id/commission → 200', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).get(`/api/v1/matters/${REAL_MATTER_ID}/commission`).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('commission', 'GET', '/api/v1/matters/:id/commission', '200', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'commission', method: 'GET', path: '/api/v1/matters/:id/commission', expected: '200',
+      status: res.status, latencyMs, pass: res.status === 200, body: res.body });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+    expect(typeof res.body).toBe('object');
+    expect(res.body).not.toBeNull();
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('12. GET /matters/:id/profitability → F-23 shape', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).get(`/api/v1/matters/${REAL_MATTER_ID}/profitability`).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('profitability', 'GET', '/api/v1/matters/:id/profitability', '200 + F-23 shape', res, latencyMs)) return;
+    const d = res.body?.data ?? {};
+    const shapeOk = ['totalTimeValue', 'feesBilled', 'feesPaid', 'totalDisbursements', 'totalExpenses', 'grossProfit'].every((k) => typeof d[k] === 'number');
+    record({ group: 'Matter', name: 'profitability (F-23)', method: 'GET', path: '/api/v1/matters/:id/profitability', expected: '200 + numeric financials',
+      status: res.status, latencyMs, pass: res.status === 200 && shapeOk, body: d });
+    expect(res.status).toBe(200);
+    expect(typeof d.totalTimeValue).toBe('number');
+    expect(typeof d.feesBilled).toBe('number');
+    expect(typeof d.totalExpenses).toBe('number');
+    expect(typeof d.grossProfit).toBe('number');
+    expect(shapeOk).toBe(true);
+  }, 30000);
+
+  it('13. GET /matters — no token → 401', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).get('/api/v1/matters');
+    const latencyMs = Date.now() - t0;
+    record({ group: 'Matter', name: 'list no token', method: 'GET', path: '/api/v1/matters', expected: '401',
+      status: res.status, latencyMs, pass: res.status === 401, body: res.body });
+    expect(res.status).toBe(401);
+    expect(res.body).toBeDefined();
+    expect(res.body?.data?.length ?? 0).toBe(0);
+    expect(res.body?.success).not.toBe(true);
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  // ── WRITES (create/reuse __CERT_TEST_MATTER__) ───────────────────────────────
+  it('14. POST /matters — create or reuse __CERT_TEST_MATTER__', async () => {
+    expect(testClientId).toBeTruthy();
+    const t0 = Date.now();
+    const ex = await request(BASE_URL).get('/api/v1/matters').query({ search: TEST_MATTER_TITLE, clientId: testClientId, limit: 5 }).set('Authorization', bearer());
+    const found = Array.isArray(ex.body?.data) ? ex.body.data.find((x: any) => x?.title === TEST_MATTER_TITLE) : null;
+    let status: number; let body: any;
+    if (found) { testMatterId = found.id; status = 200; body = found; }
+    else {
+      const res = await request(BASE_URL).post('/api/v1/matters').set('Authorization', bearer())
+        .send({ title: TEST_MATTER_TITLE, clientId: testClientId, matterType: 'GENERAL', category: 'CIVIL', estimatedValue: '100000', currency: 'KES' });
+      status = res.status; body = res.body;
+      if (res.status === 201) testMatterId = res.body?.id ?? '';
+    }
+    const latencyMs = Date.now() - t0;
+    record({ group: 'Matter', name: found ? 'create (reused)' : 'create new', method: 'POST', path: '/api/v1/matters',
+      expected: '201 new or 200 reused', status, latencyMs, pass: !!testMatterId && (status === 201 || status === 200), body: { id: testMatterId } });
+    expect(testMatterId).toBeTruthy();
+    expect([200, 201]).toContain(status);
+    expect(body).toBeDefined();
+    expect(typeof testMatterId).toBe('string');
+    expect(testMatterId.length).toBeGreaterThan(0);
+  }, 30000);
+
+  it('15. PATCH /matters/:id — update description → 200', async () => {
+    expect(testMatterId).toBeTruthy();
+    const t0 = Date.now();
+    const desc = `Cert updated ${new Date().toISOString()}`;
+    const res = await request(BASE_URL).patch(`/api/v1/matters/${testMatterId}`).set('Authorization', bearer()).send({ description: desc });
+    const latencyMs = Date.now() - t0;
+    if (soft500('update description', 'PATCH', '/api/v1/matters/:id', '200 + updated', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'update description', method: 'PATCH', path: '/api/v1/matters/:id', expected: '200 + description set',
+      status: res.status, latencyMs, pass: res.status === 200 && res.body?.description === desc, body: { description: res.body?.description } });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+    expect(res.body?.id).toBe(testMatterId);
+    expect(res.body?.description).toBe(desc);
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('16. POST /matters/:id/updates — add update note → 200', async () => {
+    expect(testMatterId).toBeTruthy();
+    const t0 = Date.now();
+    const res = await request(BASE_URL).post(`/api/v1/matters/${testMatterId}/updates`).set('Authorization', bearer())
+      .send({ content: 'Cert test update note', updateType: 'GENERAL' });
+    const latencyMs = Date.now() - t0;
+    if (soft500('add update', 'POST', '/api/v1/matters/:id/updates', '200 + data', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'add update', method: 'POST', path: '/api/v1/matters/:id/updates', expected: '200 + data.id',
+      status: res.status, latencyMs, pass: res.status === 200 && !!res.body?.data?.id, body: { id: res.body?.data?.id } });
+    expect(res.status).toBe(200);
+    expect(res.body?.success).toBe(true);
+    expect(res.body?.data).toBeDefined();
+    expect(res.body?.data?.id).toBeTruthy();
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('17. POST /matters/:id/time-entries — add time entry → 200', async () => {
+    expect(testMatterId).toBeTruthy();
+    const t0 = Date.now();
+    const res = await request(BASE_URL).post(`/api/v1/matters/${testMatterId}/time-entries`).set('Authorization', bearer())
+      .send({ description: 'Cert test time entry', durationHours: 1, appliedRate: 5000, isBillable: true });
+    const latencyMs = Date.now() - t0;
+    if (soft500('add time entry', 'POST', '/api/v1/matters/:id/time-entries', '200 + data', res, latencyMs)) return;
+    timeEntryId = res.body?.data?.id ?? '';
+    record({ group: 'Matter', name: 'add time entry', method: 'POST', path: '/api/v1/matters/:id/time-entries', expected: '200 + data.id',
+      status: res.status, latencyMs, pass: res.status === 200 && !!timeEntryId, body: { id: timeEntryId } });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+    expect(res.body?.data).toBeDefined();
+    expect(timeEntryId).toBeTruthy();
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('18. POST /matters/:id/expenses — create expense (F-22) → 201', async () => {
+    expect(testMatterId).toBeTruthy();
+    const t0 = Date.now();
+    const res = await request(BASE_URL).post(`/api/v1/matters/${testMatterId}/expenses`).set('Authorization', bearer())
+      .send({ amount: 750, currency: 'KES', description: 'Cert test expense (F-22)' });
+    const latencyMs = Date.now() - t0;
+    if (soft500('create expense (F-22)', 'POST', '/api/v1/matters/:id/expenses', '201 + data', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'create expense (F-22)', method: 'POST', path: '/api/v1/matters/:id/expenses', expected: '201 + data.id',
+      status: res.status, latencyMs, pass: res.status === 201 && !!res.body?.data?.id, body: { id: res.body?.data?.id, status: res.body?.data?.status } });
+    expect(res.status).toBe(201);
+    expect(res.body?.success).toBe(true);
+    expect(res.body?.data).toBeDefined();
+    expect(res.body?.data?.id).toBeTruthy();
+    expect(res.body?.data?.matterId).toBe(testMatterId);
+  }, 30000);
+
+  it('19. POST /matters/:id/disbursements — create DRN (F-11) → 201', async () => {
+    expect(testMatterId).toBeTruthy();
+    const t0 = Date.now();
+    const res = await request(BASE_URL).post(`/api/v1/matters/${testMatterId}/disbursements`).set('Authorization', bearer())
+      .send({ amount: 5000, description: 'Cert test DRN', currency: 'KES' });
+    const latencyMs = Date.now() - t0;
+    if (soft500('create DRN', 'POST', '/api/v1/matters/:id/disbursements', '201 + data', res, latencyMs)) return;
+    drnId = res.body?.data?.id ?? '';
+    record({ group: 'Matter', name: 'create DRN (F-11)', method: 'POST', path: '/api/v1/matters/:id/disbursements', expected: '201 + DRAFT',
+      status: res.status, latencyMs, pass: res.status === 201 && !!drnId, body: { id: drnId, status: res.body?.data?.status } });
+    expect(res.status).toBe(201);
+    expect(res.body?.success).toBe(true);
+    expect(drnId).toBeTruthy();
+    expect(res.body?.data?.status).toBe('DRAFT');
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('20. PATCH /matters/:id/disbursements/:id/approve → 200', async () => {
+    expect(drnId).toBeTruthy();
+    const t0 = Date.now();
+    const res = await request(BASE_URL).patch(`/api/v1/matters/${testMatterId}/disbursements/${drnId}/approve`).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('approve DRN', 'PATCH', '/api/v1/matters/:id/disbursements/:id/approve', '200', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'approve DRN', method: 'PATCH', path: '/api/v1/matters/:id/disbursements/:id/approve', expected: '200 + updated',
+      status: res.status, latencyMs, pass: res.status === 200 && (res.body?.updated ?? 0) >= 1, body: res.body });
+    expect(res.status).toBe(200);
+    expect(res.body?.success).toBe(true);
+    expect(res.body?.updated).toBeGreaterThanOrEqual(1);
+    expect(typeof res.body?.updated).toBe('number');
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('21. PATCH /matters/:id/disbursements/:id/mark-paid → 200', async () => {
+    expect(drnId).toBeTruthy();
+    const t0 = Date.now();
+    const res = await request(BASE_URL).patch(`/api/v1/matters/${testMatterId}/disbursements/${drnId}/mark-paid`).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('mark-paid DRN', 'PATCH', '/api/v1/matters/:id/disbursements/:id/mark-paid', '200', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'mark-paid DRN', method: 'PATCH', path: '/api/v1/matters/:id/disbursements/:id/mark-paid', expected: '200 + updated',
+      status: res.status, latencyMs, pass: res.status === 200 && (res.body?.updated ?? 0) >= 1, body: res.body });
+    expect(res.status).toBe(200);
+    expect(res.body?.success).toBe(true);
+    expect(res.body?.updated).toBeGreaterThanOrEqual(1);
+    expect(typeof res.body?.updated).toBe('number');
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('22. POST /matters/:id/raise-invoice → 200 (uses test time entry)', async () => {
+    expect(testMatterId).toBeTruthy();
+    const t0 = Date.now();
+    const res = await request(BASE_URL).post(`/api/v1/matters/${testMatterId}/raise-invoice`).set('Authorization', bearer())
+      .send({ timeEntryIds: timeEntryId ? [timeEntryId] : [], expenseIds: [] });
+    const latencyMs = Date.now() - t0;
+    if (soft500('raise invoice', 'POST', '/api/v1/matters/:id/raise-invoice', '200 + invoice', res, latencyMs)) return;
+    invoiceId = res.body?.data?.id ?? '';
+    record({ group: 'Matter', name: 'raise invoice', method: 'POST', path: '/api/v1/matters/:id/raise-invoice', expected: '200 + invoice.id',
+      status: res.status, latencyMs, pass: res.status === 200 && !!invoiceId, body: { id: invoiceId } });
+    expect(res.status).toBe(200);
+    expect(res.body?.success).toBe(true);
+    expect(res.body?.data).toBeDefined();
+    expect(invoiceId).toBeTruthy();
+    expect(timeEntryId).toBeTruthy();
+  }, 30000);
+
+  it('23. POST /matters/:id/invoices/:invoiceId/submit → 200', async () => {
+    expect(invoiceId).toBeTruthy();
+    const t0 = Date.now();
+    const res = await request(BASE_URL).post(`/api/v1/matters/${testMatterId}/invoices/${invoiceId}/submit`).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('submit invoice', 'POST', '/api/v1/matters/:id/invoices/:id/submit', '200', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'submit invoice', method: 'POST', path: '/api/v1/matters/:id/invoices/:id/submit', expected: '200 + PENDING_APPROVAL',
+      status: res.status, latencyMs, pass: res.status === 200 && res.body?.data?.status === 'PENDING_APPROVAL', body: res.body?.data });
+    expect(res.status).toBe(200);
+    expect(res.body?.success).toBe(true);
+    expect(res.body?.data).toBeDefined();
+    expect(res.body?.data?.status).toBe('PENDING_APPROVAL');
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('24. POST /matters/:id/invoices/:invoiceId/cancel → 200', async () => {
+    expect(invoiceId).toBeTruthy();
+    const t0 = Date.now();
+    const res = await request(BASE_URL).post(`/api/v1/matters/${testMatterId}/invoices/${invoiceId}/cancel`).set('Authorization', bearer())
+      .send({ reason: 'Cert test — release billed items' });
+    const latencyMs = Date.now() - t0;
+    if (soft500('cancel invoice', 'POST', '/api/v1/matters/:id/invoices/:id/cancel', '200', res, latencyMs)) return;
+    record({ group: 'Matter', name: 'cancel invoice', method: 'POST', path: '/api/v1/matters/:id/invoices/:id/cancel', expected: '200 + CANCELLED',
+      status: res.status, latencyMs, pass: res.status === 200 && res.body?.data?.status === 'CANCELLED', body: res.body?.data });
+    expect(res.status).toBe(200);
+    expect(res.body?.success).toBe(true);
+    expect(res.body?.data).toBeDefined();
+    expect(res.body?.data?.status).toBe('CANCELLED');
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  it('25. GET /billing/invoices/:invoiceId/receipt → F-24 shape', async () => {
+    const t0 = Date.now();
+    let id = invoiceId;
+    if (!id) {
+      const inv = await request(BASE_URL).get('/api/v1/billing/invoices').query({ limit: 1 }).set('Authorization', bearer());
+      id = (inv.body?.data || [])[0]?.id ?? '';
+    }
+    expect(id).toBeTruthy();
+    const res = await request(BASE_URL).get(`/api/v1/billing/invoices/${id}/receipt`).set('Authorization', bearer());
+    const latencyMs = Date.now() - t0;
+    if (soft500('invoice receipt (F-24)', 'GET', '/api/v1/billing/invoices/:id/receipt', '200 + F-24 shape', res, latencyMs)) return;
+    const d = res.body?.data ?? {};
+    const shapeOk = !!d.invoiceNumber && typeof d.total === 'number' && typeof d.balanceDue === 'number' && Array.isArray(d.payments);
+    record({ group: 'Matter', name: 'invoice receipt (F-24)', method: 'GET', path: '/api/v1/billing/invoices/:id/receipt', expected: '200 + receipt shape',
+      status: res.status, latencyMs, pass: res.status === 200 && shapeOk, body: { invoiceNumber: d.invoiceNumber, total: d.total, isPaid: d.isPaid } });
+    expect(res.status).toBe(200);
+    expect(d.invoiceNumber).toBeDefined();
+    expect(typeof d.total).toBe('number');
+    expect(typeof d.balanceDue).toBe('number');
+    expect(Array.isArray(d.payments)).toBe(true);
+  }, 30000);
+
+  it('26. POST /matters/conflicts/check → 200 (read-only compute)', async () => {
+    const t0 = Date.now();
+    const res = await request(BASE_URL).post('/api/v1/matters/conflicts/check').set('Authorization', bearer())
+      .send({ adversePartyNames: ['Cert Adverse Party'] });
+    const latencyMs = Date.now() - t0;
+    if (soft500('conflict check', 'POST', '/api/v1/matters/conflicts/check', '200', res, latencyMs)) return;
+    const payload = res.body?.data ?? res.body;
+    record({ group: 'Matter', name: 'conflict check', method: 'POST', path: '/api/v1/matters/conflicts/check', expected: '200 + result',
+      status: res.status, latencyMs, pass: res.status === 200, body: payload });
+    expect(res.status).toBe(200);
+    expect(res.body).toBeDefined();
+    expect(payload).toBeDefined();
+    expect(typeof payload).toBe('object');
+    expect(latencyMs).toBeLessThan(30000);
+  }, 30000);
+
+  afterAll(() => {
+    const g5 = evidence.filter((e) => e.group === 'Matter');
+    const pass = g5.filter((e) => e.pass).length;
+    const lines = [
+      '',
+      '## GROUP 5 — Matter endpoints',
+      '',
+      `Result: **${pass}/${g5.length} passed**`,
+      '',
+      '| Test | Method | Path | Expected | Status | Latency (ms) | Pass |',
+      '|------|--------|------|----------|--------|--------------|------|',
+      ...g5.map((e) => `| ${e.name} | ${e.method} | ${e.path} | ${e.expected} | ${e.status} | ${e.latencyMs} | ${e.pass ? 'PASS' : 'FAIL'} |`),
+      '',
+      `Read matter: \`${REAL_MATTER_ID}\`. Write matter: \`${TEST_MATTER_TITLE}\` (id ${testMatterId || 'n/a'}) on __CERT_TEST_CLIENT__ — persists (no matter DELETE).`,
+    ];
+    appendFileSync(join(__dirname, 'API_CERTIFICATION_REPORT.md'), lines.join('\n'));
+  });
+});

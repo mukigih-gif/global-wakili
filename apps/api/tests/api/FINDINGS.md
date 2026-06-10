@@ -267,8 +267,9 @@ regenerated on every test run — findings logged here survive reruns.
 - Affects: client profile page, matter page, any page with bottom-right content
 - Fix: add bottom padding to main content area when chat widget is present, or
   move widget to collapsed/minimised state by default
-- File: likely apps/web/src/components/layout or a chat widget provider component
-- Status: OPEN — fix after current F-28/F-29 commit
+- File: ChatBolt mounted in app/layout.tsx; fix applied in app/(app)/layout.tsx <main>
+- Status: FIXED — added pb-24 (96px) bottom clearance to the app <main> so bottom-right
+  content (Recent Invoices, action buttons) scrolls clear of the fixed widget
 
 ### F-30 MEDIUM — billing.routes.ts submit missing tenantId (FIXED)
 - POST /billing/invoices/:id/submit — tx.invoice.update
@@ -284,3 +285,22 @@ regenerated on every test run — findings logged here survive reruns.
 - Fix: where: { id: invoiceId, tenantId: req.tenantId }
 - File: billing.routes.ts:589
 - Status: FIXED — pending Render deploy verification
+
+### F-32 MEDIUM — Conflict-of-interest check field mismatch (schema/handler/UI)
+- runMatterConflictCheck (matter.dashboard.controller.ts) builds search terms from
+  body fields: clientName, counterpartyName, opposingPartyName, matterTitle,
+  matterCode, caseNumber, kraPin, email, phoneNumber (via buildConflictSearchTerms).
+- BUT conflictBodySchema (matter.routes.ts:41) documents different fields: clientId,
+  matterId, adversePartyNames, relatedEntityNames — none of which the handler reads.
+- AND the New Matter UI posts { clientId, title } → handler reads clientName/
+  matterTitle, finds nothing → returns 400 "no search term" / no matches.
+- Impact: the conflict-of-interest check (a compliance control) is effectively
+  non-functional from the UI — it never surfaces real conflicts.
+- Root cause confirmed: validate.ts:23 (`req.body = parseAsync(req.body)`) strips
+  unknown keys, so the handler's fields (clientName/counterpartyName/…) never arrive —
+  the check was 400-ing for ALL inputs (total non-functionality).
+- Fix APPLIED (handler): buildConflictSearchTerms now also reads adversePartyNames +
+  relatedEntityNames (the schema array fields that survive validation).
+- Status: PARTIAL — API now works for adversePartyNames/relatedEntityNames; the New
+  Matter UI still posts { clientId, title } (neither read) — UI alignment OPEN before
+  go-live (Gate 6 security review).

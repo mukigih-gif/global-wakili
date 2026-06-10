@@ -144,6 +144,8 @@ function buildConflictSearchTerms(req: Request): string[] {
     asString(req.body?.kraPin),
     asString(req.body?.email),
     asString(req.body?.phoneNumber),
+    ...(Array.isArray(req.body?.adversePartyNames) ? req.body.adversePartyNames.map(asString) : []),
+    ...(Array.isArray(req.body?.relatedEntityNames) ? req.body.relatedEntityNames.map(asString) : []),
   ];
 
   const seen = new Set<string>();
