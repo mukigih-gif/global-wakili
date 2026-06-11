@@ -152,7 +152,8 @@ Final verification sweep.
 | Phase 0 | Schema & Seed Validation | COMPLETE |
 | Phase 1 Groups 1-5 | API Certification (Auth/Clients/Users/Password Reset/Matters) | COMPLETE — 50/50 |
 | Phase 1 Group 6 Wave A | API Certification (Billing reads) | COMPLETE — 16/16 billing reads passing |
-| Phase 1 Group 6 Wave B + Groups 7-9 | API Certification (Billing writes, Trust, HR, Reporting) | NEXT |
+| Phase 1 Group 6 Wave B | API Certification (Billing writes) | COMPLETE — 19/19 billing writes passing |
+| Phase 1 Groups 7-9 | Trust, HR, Reporting | NEXT |
 | Phase 2 | Playwright E2E | PENDING |
 | Phase 3 | Finance/Trust/Payroll Compliance | PENDING |
 | Phase 4 | Multi-Tenant Breach | PENDING |
@@ -162,12 +163,14 @@ Final verification sweep.
 
 * Backend: ~82%
 * Frontend: ~35%
-* Tests: Phase 1 API 66/66
+* Tests: Phase 1 API 85/85
 * Overall: ~58%
 
 ## Recent Fixes
 
 * FINDING-006-002: billing schema delegates added, migration applied, dashboard fix deployed
+* FIX D: drop Invoice.createdById in proforma convert
+* FIX E: add CreditNote void fields + migration
 
 ---
 
