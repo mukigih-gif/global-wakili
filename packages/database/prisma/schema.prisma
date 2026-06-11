@@ -220,6 +220,7 @@ model Tenant {
   billingNotifications BillingNotification[]
   billingExports       BillingExport[]
   creditNoteLines      CreditNoteLine[]
+  numberSequences      NumberSequence[]
 
   @@index([subscriptionStatus])
   @@index([createdAt])
@@ -3945,6 +3946,21 @@ model InvoiceSequence {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
 
   @@unique([tenantId, prefix, year])
+  @@index([tenantId])
+}
+
+model NumberSequence {
+  id        String   @id @default(cuid())
+  tenantId  String
+  key       String
+  year      Int
+  nextValue Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, key, year])
   @@index([tenantId])
 }
 
