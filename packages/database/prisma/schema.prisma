@@ -4248,6 +4248,9 @@ model CreditNote {
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
   metadata         Json?
+  voidedAt         DateTime?
+  voidedById       String?
+  voidReason       String?
   tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   invoice          Invoice               @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
   matter           Matter?               @relation(fields: [matterId], references: [id])
