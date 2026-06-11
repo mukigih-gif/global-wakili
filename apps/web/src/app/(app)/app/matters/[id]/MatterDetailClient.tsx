@@ -689,6 +689,17 @@ function MatterExpensesTab({ matterId, currency }: { matterId: string; currency:
     } finally { setSaving(false); }
   };
 
+  const voidExpense = async (id: string) => {
+    const reason = window.prompt('Reason for voiding this expense?');
+    if (!reason || !reason.trim()) return;
+    try {
+      await api.patch(`/matters/${matterId}/expenses/${id}/void`, { reason: reason.trim() });
+      load();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to void expense');
+    }
+  };
+
   const totalAmt = expenses.reduce((s, e) => s + (parseFloat(e.amount) || 0), 0);
 
   return (
@@ -741,17 +752,20 @@ function MatterExpensesTab({ matterId, currency }: { matterId: string; currency:
       )}
 
       <Table>
-        <thead><tr><Th>Date</Th><Th>Description</Th><Th>Amount</Th><Th>Recorded By</Th><Th>Status</Th></tr></thead>
+        <thead><tr><Th>Date</Th><Th>Description</Th><Th>Amount</Th><Th>Recorded By</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
         <tbody>
-          {loading ? <LoadingRow colSpan={5} /> :
-           !expenses.length ? <EmptyRow colSpan={5} message="No expenses recorded for this matter" /> :
+          {loading ? <LoadingRow colSpan={6} /> :
+           !expenses.length ? <EmptyRow colSpan={6} message="No expenses recorded for this matter" /> :
            expenses.map((exp) => (
-             <tr key={exp.id}>
+             <tr key={exp.id} className={exp.status === 'VOIDED' ? 'line-through text-gray-400' : ''}>
                <Td className="text-xs text-gray-500">{formatDate(exp.expenseDate ?? exp.createdAt)}</Td>
                <Td className="text-sm text-gray-900">{exp.description ?? '—'}</Td>
                <Td className="font-medium text-gray-900">{formatCurrency(exp.amount, exp.currency)}</Td>
                <Td className="text-xs text-gray-500">{exp.user?.name ?? '—'}</Td>
                <Td><StatusBadge status={exp.status ?? 'DRAFT'} /></Td>
+               <Td>{exp.status !== 'VOIDED' && !exp.isInvoiced && (
+                 <button onClick={() => voidExpense(exp.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Void</button>
+               )}</Td>
              </tr>
            ))}
         </tbody>
@@ -1059,6 +1073,17 @@ function MatterTimeTab({ matterId, currency }: { matterId: string; currency: str
     } finally { setSaving(false); }
   };
 
+  const voidEntry = async (id: string) => {
+    const reason = window.prompt('Reason for voiding this time entry?');
+    if (!reason || !reason.trim()) return;
+    try {
+      await api.patch(`/matters/${matterId}/time-entries/${id}/void`, { reason: reason.trim() });
+      load();
+    } catch (err: unknown) {
+      alert(err instanceof Error ? err.message : 'Failed to void time entry');
+    }
+  };
+
   const unbilled = entries.filter((e) => !e.isInvoiced);
   const billed   = entries.filter((e) =>  e.isInvoiced);
   const totalUnbilled = unbilled.reduce((s, e) => s + parseFloat(String(e.billableAmount ?? 0)), 0);
@@ -1122,21 +1147,24 @@ function MatterTimeTab({ matterId, currency }: { matterId: string; currency: str
       )}
 
       <Table>
-        <thead><tr><Th>Date</Th><Th>Description</Th><Th>Advocate</Th><Th>Hours</Th><Th>Rate</Th><Th>Amount</Th><Th>Status</Th></tr></thead>
+        <thead><tr><Th>Date</Th><Th>Description</Th><Th>Advocate</Th><Th>Hours</Th><Th>Rate</Th><Th>Amount</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
         <tbody>
-          {loading ? <LoadingRow colSpan={7} /> :
-           !entries.length ? <EmptyRow colSpan={7} message="No time entries for this matter. Record time via Time Capture." /> :
+          {loading ? <LoadingRow colSpan={8} /> :
+           !entries.length ? <EmptyRow colSpan={8} message="No time entries for this matter. Record time via Time Capture." /> :
            entries.map((e) => {
              const hrs = parseFloat(String(e.durationHours ?? 0)) + parseFloat(String(e.durationMinutes ?? 0)) / 60;
              return (
-               <tr key={e.id}>
+               <tr key={e.id} className={e.status === 'VOIDED' ? 'line-through text-gray-400' : ''}>
                  <Td className="text-xs text-gray-500">{formatDate(e.entryDate ?? e.createdAt)}</Td>
                  <Td className="text-sm text-gray-900">{e.description ?? '—'}</Td>
                  <Td className="text-xs text-gray-500">{e.advocate?.name ?? '—'}</Td>
                  <Td className="text-xs text-gray-600">{hrs.toFixed(2)}h</Td>
                  <Td className="text-xs text-gray-600">{formatCurrency(e.appliedRate ?? 0, currency)}/hr</Td>
                  <Td className="font-medium text-gray-900">{formatCurrency(e.billableAmount ?? 0, currency)}</Td>
-                 <Td>{e.isInvoiced ? <span className="badge-green text-xs">Billed</span> : <span className="badge-yellow text-xs">Unbilled</span>}</Td>
+                 <Td>{e.status === 'VOIDED' ? <StatusBadge status="VOIDED" /> : e.isInvoiced ? <span className="badge-green text-xs">Billed</span> : <span className="badge-yellow text-xs">Unbilled</span>}</Td>
+                 <Td>{!e.isInvoiced && e.status !== 'VOIDED' && (
+                   <button onClick={() => voidEntry(e.id)} className="text-xs text-red-500 hover:text-red-700 font-medium">Void</button>
+                 )}</Td>
                </tr>
              );
            })}
