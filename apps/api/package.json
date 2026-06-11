@@ -9,7 +9,7 @@
     "start": "node --require tsx/cjs src/server.ts",
     "start:compiled": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "build": "prisma generate --schema=../../packages/database/prisma/schema.prisma && tsc",
+    "build": "prisma generate --schema=../../packages/database/prisma/schema.prisma",
     "test": "node --require tsx/cjs --test src/**/__tests__/*.test.ts",
     "test:tenant": "node --require tsx/cjs --test src/__tests__/tenant-isolation.test.ts",
     "test:integration": "node --require tsx/cjs --test src/__tests__/integration/*.integration.test.ts",
