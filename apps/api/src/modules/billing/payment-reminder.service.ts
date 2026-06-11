@@ -272,7 +272,7 @@ export class PaymentReminderService {
           lt: asOf,
         },
         status: {
-          notIn: ['PAID', 'CANCELLED', 'VOID'],
+          notIn: ['PAID', 'CANCELLED'],
         },
         balanceDue: {
           gt: ZERO,
