@@ -187,7 +187,7 @@ export class BillingDashboardService {
           ...baseWhere,
           dueDate: { lt: new Date() },
           status: {
-            notIn: ['PAID', 'CANCELLED', 'VOID'],
+            notIn: ['PAID', 'CANCELLED'],
           },
         },
         orderBy: { dueDate: 'asc' },
