@@ -1113,6 +1113,9 @@ model ExpenseEntry {
   etimsInvoiceUrl     String?
   etimsValidated      Boolean       @default(false)
   status              ExpenseStatus @default(DRAFT)
+  voidedAt            DateTime?
+  voidReason          String?
+  voidedById          String?
   createdAt           DateTime      @default(now())
   updatedAt           DateTime      @default(now()) @updatedAt
 
@@ -1687,6 +1690,9 @@ model TimeEntry {
   isBillable      Boolean         @default(true)
   isInvoiced      Boolean         @default(false)
   status          TimeEntryStatus @default(DRAFT)
+  voidedAt        DateTime?
+  voidReason      String?
+  voidedById      String?
   billingModel    BillingModel    @default(HOURLY)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @default(now()) @updatedAt
@@ -5210,6 +5216,7 @@ enum TimeEntryStatus {
   REJECTED
   BILLED
   WRITTEN_OFF
+  VOIDED
 }
 
 enum BillingModel {
@@ -5225,6 +5232,7 @@ enum ExpenseStatus {
   APPROVED
   PAID
   REJECTED
+  VOIDED
 }
 
 enum SupplierStatus {
