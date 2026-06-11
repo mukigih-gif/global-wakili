@@ -26,7 +26,7 @@ The objective is to verify, preserve, harden, complete, test, document, and depl
 
 # 2. NON-NEGOTIABLE EXECUTION PRINCIPLES
 
-## Principle 1 — Preserve Before Replacing
+## Principle 1 ï¿½ Preserve Before Replacing
 
 Existing functionality must never be replaced without evidence.
 
@@ -41,7 +41,7 @@ Working systems are enhanced, not rewritten.
 
 ---
 
-## Principle 2 — One Bounded Context At A Time
+## Principle 2 ï¿½ One Bounded Context At A Time
 
 Work must remain inside a single bounded context.
 
@@ -62,7 +62,7 @@ Do not jump across domains.
 
 ---
 
-## Principle 3 — Verify Before Coding
+## Principle 3 ï¿½ Verify Before Coding
 
 No code changes are permitted before analysis.
 
@@ -78,7 +78,7 @@ Every task begins with:
 
 ---
 
-## Principle 4 — Approval Before Destructive Action
+## Principle 4 ï¿½ Approval Before Destructive Action
 
 Never:
 
@@ -140,6 +140,29 @@ Substantially Complete
 
 Requires:
 Final verification sweep.
+
+---
+
+# 3A. CURRENT GATE STATUS
+
+(updated 11 Jun 2026)
+
+| Gate | Name | Status |
+|------|------|--------|
+| Phase 0 | Schema & Seed Validation | COMPLETE |
+| Phase 1 Groups 1-5 | API Certification (Auth/Clients/Users/Password Reset/Matters) | COMPLETE â€” 50/50 |
+| Phase 1 Groups 6-9 | API Certification (Billing/Trust/HR/Reporting) | NEXT SESSION |
+| Phase 2 | Playwright E2E | PENDING |
+| Phase 3 | Finance/Trust/Payroll Compliance | PENDING |
+| Phase 4 | Multi-Tenant Breach | PENDING |
+| Phase 5 | Production Readiness | PENDING |
+
+## Completion Estimates
+
+* Backend: ~82%
+* Frontend: ~35%
+* Tests: Phase 1 API 50/50
+* Overall: ~58%
 
 ---
 
@@ -267,6 +290,78 @@ Required:
 
 Status:
 Partial
+
+---
+
+## WIP-014
+
+Invoice payment â†’ journal entry posting (accounting gap #7)
+
+Status:
+Open
+
+---
+
+## WIP-015
+
+VAT â†’ tax compliance posting
+
+Status:
+Open
+
+---
+
+## WIP-016
+
+Payment receipt generation
+
+Status:
+Open
+
+---
+
+## WIP-017
+
+Matter progress/workflow status UI
+
+Status:
+Open
+
+---
+
+## WIP-018
+
+Disbursement detail view
+
+Status:
+Open
+
+---
+
+## WIP-019
+
+Global search expansion (invoices, DRNs, documents)
+
+Status:
+Open
+
+---
+
+## WIP-020
+
+Summary tabs linking
+
+Status:
+Open
+
+---
+
+## WIP-021
+
+Invoice estimate vs actual alert
+
+Status:
+Open
 
 ---
 
