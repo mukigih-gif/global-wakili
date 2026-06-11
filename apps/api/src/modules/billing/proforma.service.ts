@@ -474,8 +474,6 @@ export class ProformaService {
           total: money(proforma.totalAmount),
           netAmount: money(proforma.totalAmount),
           balanceDue: money(proforma.totalAmount),
-          notes: proforma.notes ?? null,
-          terms: proforma.terms ?? null,
           createdById: input.actorId,
           metadata: {
             convertedFromProformaId: proforma.id,
