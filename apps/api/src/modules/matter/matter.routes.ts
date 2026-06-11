@@ -314,6 +314,41 @@ router.post(
   }
 );
 
+// Void an expense (soft-delete, audit-tracked) — G2. Never hard-deleted.
+router.patch(
+  '/:matterId/expenses/:expenseId/void',
+  requirePermissions(PERMISSIONS.matter.updateMatter),
+  async (req, res) => {
+    try {
+      const { matterId, expenseId } = req.params;
+      if (!req.tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
+      if (!req.user?.sub) { res.status(401).json({ error: 'Authenticated user required' }); return; }
+      const reason = String(req.body?.reason ?? '').trim();
+      if (!reason) { res.status(400).json({ error: 'A void reason is required', code: 'VOID_REASON_REQUIRED' }); return; }
+
+      const expense = await req.db.expenseEntry.findFirst({
+        where: { id: expenseId, tenantId: req.tenantId, matterId },
+        select: { id: true, status: true },
+      });
+      if (!expense) { res.status(404).json({ error: 'Expense not found' }); return; }
+      if (expense.status === 'VOIDED') { res.status(409).json({ error: 'Expense is already voided', code: 'ALREADY_VOIDED' }); return; }
+
+      // Expenses link to invoices via InvoiceLine (sourceType EXPENSE) — mirror the GET/raise-invoice guard.
+      const billed = await req.db.invoiceLine.findFirst({
+        where: { tenantId: req.tenantId, sourceType: 'EXPENSE', sourceId: expenseId },
+        select: { id: true },
+      });
+      if (billed) { res.status(409).json({ error: 'Cannot void an invoiced expense; cancel the invoice first', code: 'EXPENSE_INVOICED' }); return; }
+
+      const updated = await req.db.expenseEntry.update({
+        where: { id: expenseId, tenantId: req.tenantId },
+        data: { status: 'VOIDED' as any, voidedAt: new Date(), voidedById: req.user.sub, voidReason: reason },
+      });
+      res.json({ success: true, data: updated });
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
+  }
+);
+
 // ── Profitability ───────────────────────────────────────────────────────────
 router.get(
   '/:matterId/profitability',
@@ -331,7 +366,7 @@ router.get(
 
       const [time, invoices, disbursements, expenses] = await Promise.all([
         req.db.timeEntry.aggregate({
-          where: { tenantId: req.tenantId, matterId, isBillable: true },
+          where: { tenantId: req.tenantId, matterId, isBillable: true, status: { not: 'VOIDED' } },
           _sum: { billableAmount: true },
         }),
         req.db.invoice.aggregate({
@@ -343,7 +378,7 @@ router.get(
           _sum: { amount: true },
         }),
         req.db.expenseEntry.aggregate({
-          where: { tenantId: req.tenantId, matterId },
+          where: { tenantId: req.tenantId, matterId, status: { not: 'VOIDED' } },
           _sum: { amount: true },
         }),
       ]);
@@ -524,6 +559,35 @@ router.post(
   }
 );
 
+// Void a time entry (soft-delete, audit-tracked) — G1. Never hard-deleted.
+router.patch(
+  '/:matterId/time-entries/:timeEntryId/void',
+  requirePermissions(PERMISSIONS.matter.updateMatter),
+  async (req, res) => {
+    try {
+      const { matterId, timeEntryId } = req.params;
+      if (!req.tenantId) { res.status(400).json({ error: 'Tenant context required' }); return; }
+      if (!req.user?.sub) { res.status(401).json({ error: 'Authenticated user required' }); return; }
+      const reason = String(req.body?.reason ?? '').trim();
+      if (!reason) { res.status(400).json({ error: 'A void reason is required', code: 'VOID_REASON_REQUIRED' }); return; }
+
+      const entry = await req.db.timeEntry.findFirst({
+        where: { id: timeEntryId, tenantId: req.tenantId, matterId },
+        select: { id: true, isInvoiced: true, status: true },
+      });
+      if (!entry) { res.status(404).json({ error: 'Time entry not found' }); return; }
+      if (entry.isInvoiced) { res.status(409).json({ error: 'Cannot void an invoiced time entry; cancel the invoice first', code: 'TIME_ENTRY_INVOICED' }); return; }
+      if (entry.status === 'VOIDED') { res.status(409).json({ error: 'Time entry is already voided', code: 'ALREADY_VOIDED' }); return; }
+
+      const updated = await req.db.timeEntry.update({
+        where: { id: timeEntryId, tenantId: req.tenantId },
+        data: { status: 'VOIDED' as any, voidedAt: new Date(), voidedById: req.user.sub, voidReason: reason },
+      });
+      res.json({ success: true, data: updated });
+    } catch (e) { console.error('MATTER_ROUTE_ERROR', { path: req.path, err: e }); res.status(500).json({ error: 'Internal Server Error' }); }
+  }
+);
+
 // ── Raise Invoice from billable items ────────────────────────────────────────
 router.post(
   '/:matterId/raise-invoice',
@@ -550,12 +614,12 @@ router.post(
       const [timeEntries, expenses] = await Promise.all([
         timeEntryIds.length
           ? req.db.timeEntry.findMany({
-              where: { id: { in: timeEntryIds }, tenantId: req.tenantId, matterId, isInvoiced: false },
+              where: { id: { in: timeEntryIds }, tenantId: req.tenantId, matterId, isInvoiced: false, status: { not: 'VOIDED' } },
             })
           : Promise.resolve([]),
         expenseIds.length
           ? req.db.expenseEntry.findMany({
-              where: { id: { in: expenseIds }, tenantId: req.tenantId, matterId },
+              where: { id: { in: expenseIds }, tenantId: req.tenantId, matterId, status: { not: 'VOIDED' } },
             })
           : Promise.resolve([]),
       ]);
