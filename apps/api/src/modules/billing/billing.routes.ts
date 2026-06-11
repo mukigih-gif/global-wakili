@@ -647,6 +647,38 @@ router.get(
   }
 );
 
+// ── Single invoice (full detail: lines, parties, payments) — for the detail page
+router.get(
+  '/invoices/:invoiceId',
+  billingPermission('viewInvoice'),
+  async (req: Request, res: Response) => {
+    try {
+      const { invoiceId } = req.params;
+      const invoice = await req.db.invoice.findFirst({
+        where: { id: invoiceId, tenantId: req.tenantId },
+        include: {
+          lines: {
+            orderBy: { createdAt: 'asc' },
+            select: {
+              id: true, description: true, quantity: true, unitPrice: true, subTotal: true,
+              taxRate: true, taxAmount: true, whtRate: true, whtAmount: true, total: true,
+              sourceType: true, sourceId: true,
+            },
+          },
+          matter: { select: { id: true, title: true, matterCode: true } },
+          client: { select: { id: true, name: true, email: true, kraPin: true } },
+          paymentReceipts: {
+            orderBy: { receivedAt: 'desc' },
+            select: { id: true, receiptNumber: true, amount: true, currency: true, method: true, reference: true, status: true, receivedAt: true },
+          },
+        },
+      });
+      if (!invoice) { res.status(404).json({ error: 'Invoice not found' }); return; }
+      res.json({ success: true, data: invoice });
+    } catch (e) { res.status(500).json({ success: false, error: String(e) }); }
+  }
+);
+
 // ── Quotations (client billing fee estimates / proformas) ─────────────────────
 // The system uses "quotations" as pre-invoice fee proposals sent to clients.
 // These are backed by the ProformaInvoice model when available; otherwise

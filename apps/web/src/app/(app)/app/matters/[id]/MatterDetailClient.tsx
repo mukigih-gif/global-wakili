@@ -382,7 +382,7 @@ function MatterOverviewTab({ matter, matterId }: { matter: Matter; matterId: str
           <div className="divide-y divide-gray-50">
             {matter.recentInvoices.map((inv) => (
               <div key={inv.id} className="flex items-center justify-between py-2">
-                <span className="font-mono text-xs text-gray-600">{inv.invoiceNumber}</span>
+                <Link href={`/app/billing/invoices/${inv.id}`}><span className="font-mono text-xs text-primary-600 hover:underline">{inv.invoiceNumber}</span></Link>
                 <StatusBadge status={inv.status} />
                 {inv.total != null && (
                   <span className="text-gray-700 font-medium text-xs">{formatCurrency(inv.total)}</span>
@@ -454,7 +454,7 @@ function MatterInvoicesTab({ matterId }: { matterId: string }) {
              const canCancel = paid <= 0 && !['PAID', 'PARTIALLY_PAID', 'CANCELLED'].includes(inv.status);
              return (
                <tr key={inv.id}>
-                 <Td><span className="font-mono text-xs">{inv.invoiceNumber}</span></Td>
+                 <Td><Link href={`/app/billing/invoices/${inv.id}`} className="font-mono text-xs text-primary-600 hover:underline">{inv.invoiceNumber}</Link></Td>
                  <Td className="font-medium text-gray-900">{formatCurrency(total)}</Td>
                  <Td className="font-medium text-green-700">{formatCurrency(paid)}</Td>
                  <Td className={`font-medium ${total - paid > 0 ? 'text-amber-700' : 'text-gray-400'}`}>{formatCurrency(total - paid)}</Td>
