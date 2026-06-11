@@ -1,6 +1,6 @@
 {
   "installCommand": "npm install",
-  "buildCommand": "next build",
+  "buildCommand": "rm -rf .next/cache && next build",
   "outputDirectory": ".next",
   "framework": "nextjs",
   "rewrites": [
