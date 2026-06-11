@@ -212,10 +212,20 @@ model Tenant {
   notificationTemplates        NotificationTemplate[]
   notificationPreferences      NotificationPreference[]
 
+  proformaInvoices     ProformaInvoice[]
+  proformaLines        ProformaLine[]
+  retainers            Retainer[]
+  retainerApplications RetainerApplication[]
+  paymentReminders     PaymentReminder[]
+  billingNotifications BillingNotification[]
+  billingExports       BillingExport[]
+  creditNoteLines      CreditNoteLine[]
+
   @@index([subscriptionStatus])
   @@index([createdAt])
   @@index([dataResidencyRegion])
 }
+
 model TenantMembership {
   id       String  @id @default(cuid())
   tenantId String
@@ -515,12 +525,29 @@ model User {
 
   notificationPreferenceRecords NotificationPreference[] @relation("NotificationPreferenceUser")
 
+  proformasCreated            ProformaInvoice[]     @relation("ProformaCreatedBy")
+  proformasSent               ProformaInvoice[]     @relation("ProformaSentBy")
+  proformasApproved           ProformaInvoice[]     @relation("ProformaApprovedBy")
+  proformasCancelled          ProformaInvoice[]     @relation("ProformaCancelledBy")
+  proformasConverted          ProformaInvoice[]     @relation("ProformaConvertedBy")
+  proformasUpdated            ProformaInvoice[]     @relation("ProformaUpdatedBy")
+  retainersCreated            Retainer[]            @relation("RetainerCreatedBy")
+  retainersReleased           Retainer[]            @relation("RetainerReleasedBy")
+  retainerApplicationsApplied RetainerApplication[] @relation("RetainerAppliedBy")
+  paymentRemindersCreated     PaymentReminder[]     @relation("PaymentReminderCreatedBy")
+  paymentRemindersSent        PaymentReminder[]     @relation("PaymentReminderSentBy")
+  paymentRemindersCancelled   PaymentReminder[]     @relation("PaymentReminderCancelledBy")
+  billingNotificationsCreated BillingNotification[] @relation("BillingNotificationCreatedBy")
+  billingNotificationsSent    BillingNotification[] @relation("BillingNotificationSentBy")
+  billingExportsGenerated     BillingExport[]       @relation("BillingExportGeneratedBy")
+
   @@index([tenantId])
   @@index([email])
   @@index([status])
   @@index([branchId])
   @@index([lastActivityAt])
 }
+
 model Role {
   id                String             @id @default(cuid())
   tenantId          String?
@@ -749,20 +776,20 @@ model GlobalAuditLog {
 }
 
 model AuditLog {
-  id            String        @id @default(cuid())
-  tenantId      String
-  userId        String?
-  deviceId      String?
-  action        AuditAction
-  severity      AuditSeverity @default(INFO)
-  entityType    String
-  entityId      String
-  beforeData    Json?
-  afterData     Json?
-  changedFields String[]      @default([])
-  ipAddress     String?
-  userAgent     String?
-  location      String?
+  id             String        @id @default(cuid())
+  tenantId       String
+  userId         String?
+  deviceId       String?
+  action         AuditAction
+  severity       AuditSeverity @default(INFO)
+  entityType     String
+  entityId       String
+  beforeData     Json?
+  afterData      Json?
+  changedFields  String[]      @default([])
+  ipAddress      String?
+  userAgent      String?
+  location       String?
   hash           String        @unique
   previousHash   String?
   sequenceNumber BigInt        @default(autoincrement()) // total-order guarantee for race-condition-free chain fetch
@@ -1091,6 +1118,7 @@ model ExpressService {
   mpesaRef    String?
   createdAt   DateTime @default(now())
   tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
   @@index([tenantId])
 }
 
@@ -1208,6 +1236,13 @@ model Matter {
   withholdingTaxCertificates WithholdingTaxCertificate[]
   updates                    MatterUpdate[]
 
+  proformaInvoices     ProformaInvoice[]
+  proformaLines        ProformaLine[]
+  retainers            Retainer[]
+  retainerApplications RetainerApplication[]
+  paymentReminders     PaymentReminder[]
+  billingNotifications BillingNotification[]
+
   @@index([tenantId])
   @@index([tenantId, status])
   @@index([tenantId, matterCode])
@@ -1230,9 +1265,9 @@ model MatterUpdate {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
-  tenant  Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  matter  Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
-  author  User   @relation("MatterUpdateAuthor", fields: [userId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  matter Matter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  author User   @relation("MatterUpdateAuthor", fields: [userId], references: [id])
 
   @@index([tenantId])
   @@index([matterId])
@@ -1400,29 +1435,29 @@ model CourtHearing {
 // Supports scan URL, document linkage, and filing receipts.
 
 model CourtFiling {
-  id             String            @id @default(cuid())
-  tenantId       String
-  matterId       String
-  hearingId      String?           // optional: linked to a specific hearing
-  filingType     CourtFilingType   @default(OTHER)
-  status         CourtFilingStatus @default(PREPARED)
-  title          String            // e.g. "Notice of Motion — Stay of Execution"
-  courtRef       String?           // court-issued reference/stamp number
-  filedAt        DateTime?
-  filedById      String?           // user who filed (clerk/advocate)
-  receivedAt     DateTime?         // when court stamps receipt
-  dueDate        DateTime?         // deadline for filing
-  documentId     String?           // link to Document Management
-  scanUrl        String?           // URL of scanned filed copy
-  notes          String?
-  metadata       Json?
-  createdAt      DateTime          @default(now())
-  updatedAt      DateTime          @default(now()) @updatedAt
+  id         String            @id @default(cuid())
+  tenantId   String
+  matterId   String
+  hearingId  String? // optional: linked to a specific hearing
+  filingType CourtFilingType   @default(OTHER)
+  status     CourtFilingStatus @default(PREPARED)
+  title      String // e.g. "Notice of Motion — Stay of Execution"
+  courtRef   String? // court-issued reference/stamp number
+  filedAt    DateTime?
+  filedById  String? // user who filed (clerk/advocate)
+  receivedAt DateTime? // when court stamps receipt
+  dueDate    DateTime? // deadline for filing
+  documentId String? // link to Document Management
+  scanUrl    String? // URL of scanned filed copy
+  notes      String?
+  metadata   Json?
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @default(now()) @updatedAt
 
-  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  matter    Matter        @relation(fields: [matterId], references: [id], onDelete: Cascade)
-  hearing   CourtHearing? @relation(fields: [hearingId], references: [id], onDelete: SetNull)
-  filedBy   User?         @relation("FilingClerk", fields: [filedById], references: [id], onDelete: SetNull)
+  tenant  Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  matter  Matter        @relation(fields: [matterId], references: [id], onDelete: Cascade)
+  hearing CourtHearing? @relation(fields: [hearingId], references: [id], onDelete: SetNull)
+  filedBy User?         @relation("FilingClerk", fields: [filedById], references: [id], onDelete: SetNull)
 
   @@index([tenantId])
   @@index([matterId])
@@ -1437,33 +1472,33 @@ model CourtFiling {
 // documents used, deadlines, submissions, outcomes.
 
 model TenderRecord {
-  id               String          @id @default(cuid())
-  tenantId         String
-  matterId         String?         // optional matter linkage
-  tenderNumber     String?         // official tender number
-  tenderName       String
-  issuedBy         String?         // procuring entity
-  category         TenderCategory  @default(GOODS)
-  status           TenderStatus    @default(IDENTIFIED)
-  estimatedValue   Decimal?        @db.Decimal(18, 2)
-  currency         String          @default("KES")
-  openingDate      DateTime?       // tender opening date
-  deadline         DateTime?       // submission deadline
-  submittedAt      DateTime?
-  outcomeDate      DateTime?
-  outcome          TenderOutcome?
-  outcomeNotes     String?
-  assignedToId     String?
-  clientId         String?
-  metadata         Json?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @default(now()) @updatedAt
+  id             String         @id @default(cuid())
+  tenantId       String
+  matterId       String? // optional matter linkage
+  tenderNumber   String? // official tender number
+  tenderName     String
+  issuedBy       String? // procuring entity
+  category       TenderCategory @default(GOODS)
+  status         TenderStatus   @default(IDENTIFIED)
+  estimatedValue Decimal?       @db.Decimal(18, 2)
+  currency       String         @default("KES")
+  openingDate    DateTime? // tender opening date
+  deadline       DateTime? // submission deadline
+  submittedAt    DateTime?
+  outcomeDate    DateTime?
+  outcome        TenderOutcome?
+  outcomeNotes   String?
+  assignedToId   String?
+  clientId       String?
+  metadata       Json?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @default(now()) @updatedAt
 
-  tenant      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  matter      Matter?           @relation(fields: [matterId], references: [id], onDelete: SetNull)
-  assignedTo  User?             @relation("TenderAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
-  activities  TenderActivity[]
-  documents   TenderDocument[]
+  tenant     Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  matter     Matter?          @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  assignedTo User?            @relation("TenderAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  activities TenderActivity[]
+  documents  TenderDocument[]
 
   @@index([tenantId])
   @@index([matterId])
@@ -1473,7 +1508,7 @@ model TenderRecord {
 }
 
 model TenderActivity {
-  id           String              @id @default(cuid())
+  id           String             @id @default(cuid())
   tenantId     String
   tenderId     String
   userId       String
@@ -1483,11 +1518,11 @@ model TenderActivity {
   documentId   String?
   completedAt  DateTime?
   metadata     Json?
-  createdAt    DateTime            @default(now())
+  createdAt    DateTime           @default(now())
 
-  tenant  Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  tender  TenderRecord @relation(fields: [tenderId], references: [id], onDelete: Cascade)
-  user    User         @relation("TenderActivityUser", fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  tender TenderRecord @relation(fields: [tenderId], references: [id], onDelete: Cascade)
+  user   User         @relation("TenderActivityUser", fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([tenantId])
   @@index([tenderId])
@@ -1497,9 +1532,9 @@ model TenderDocument {
   id         String   @id @default(cuid())
   tenantId   String
   tenderId   String
-  documentId String?  // link to Document Management
+  documentId String? // link to Document Management
   title      String
-  docType    String   // e.g. "Technical Proposal", "Financial Bid", "Certificate"
+  docType    String // e.g. "Technical Proposal", "Financial Bid", "Certificate"
   scanUrl    String?
   uploadedAt DateTime @default(now())
 
@@ -1904,6 +1939,16 @@ model Invoice {
   timeEntries             TimeEntry[]
   clientId                String?
   withholdingCertificates WithholdingTaxCertificate[]
+
+  creditedAmount       Decimal               @default(0) @db.Decimal(18, 2)
+  metadata             Json?
+  lastReminderAt       DateTime?
+  reminderCount        Int                   @default(0)
+  proformaInvoices     ProformaInvoice[]
+  retainerApplications RetainerApplication[]
+  paymentReminders     PaymentReminder[]
+  billingNotifications BillingNotification[]
+  billingExports       BillingExport[]
 
   @@index([tenantId])
   @@index([status])
@@ -2402,8 +2447,8 @@ model AnalyticsInsight {
 
 model Document {
   id          String         @id @default(cuid())
-  caseNumber String?
-  matterCode String?
+  caseNumber  String?
+  matterCode  String?
   createdAt   DateTime       @default(now())
   deletedAt   DateTime?
   description String?
@@ -2526,6 +2571,13 @@ model Client {
   disbursementRequestNotes DisbursementRequestNote[]
   clientIssues             ClientIssue[]
 
+  creditNotes          CreditNote[]
+  proformaInvoices     ProformaInvoice[]
+  retainers            Retainer[]
+  retainerApplications RetainerApplication[]
+  paymentReminders     PaymentReminder[]
+  billingNotifications BillingNotification[]
+
   @@unique([tenantId, clientCode])
   @@unique([tenantId, email])
   @@unique([tenantId, kraPin])
@@ -2545,13 +2597,13 @@ model Client {
 // Separate from PlatformSupportTicket (Super Admin → law firm support).
 
 model ClientIssue {
-  id              String            @id @default(cuid())
+  id              String              @id @default(cuid())
   tenantId        String
   clientId        String
   matterId        String?
-  raisedByUserId  String?           // portal user or firm user on behalf of client
-  assignedToId    String?           // firm staff member assigned to handle
-  status          ClientIssueStatus @default(OPEN)
+  raisedByUserId  String? // portal user or firm user on behalf of client
+  assignedToId    String? // firm staff member assigned to handle
+  status          ClientIssueStatus   @default(OPEN)
   priority        ClientIssuePriority @default(NORMAL)
   category        ClientIssueCategory @default(GENERAL)
   subject         String
@@ -2560,15 +2612,15 @@ model ClientIssue {
   closedAt        DateTime?
   firstResponseAt DateTime?
   metadata        Json?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @default(now()) @updatedAt
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @default(now()) @updatedAt
 
-  tenant      Tenant        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  client      Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  matter      Matter?       @relation(fields: [matterId], references: [id], onDelete: SetNull)
-  assignedTo  User?         @relation("IssueAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
-  raisedBy    User?         @relation("IssueRaisedBy", fields: [raisedByUserId], references: [id], onDelete: SetNull)
-  comments    ClientIssueComment[]
+  tenant     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  client     Client               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  matter     Matter?              @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  assignedTo User?                @relation("IssueAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  raisedBy   User?                @relation("IssueRaisedBy", fields: [raisedByUserId], references: [id], onDelete: SetNull)
+  comments   ClientIssueComment[]
 
   @@index([tenantId])
   @@index([clientId])
@@ -2579,13 +2631,13 @@ model ClientIssue {
 }
 
 model ClientIssueComment {
-  id         String    @id @default(cuid())
+  id         String   @id @default(cuid())
   tenantId   String
   issueId    String
   userId     String
   body       String
-  isInternal Boolean   @default(false)  // false = visible to client; true = internal note
-  createdAt  DateTime  @default(now())
+  isInternal Boolean  @default(false) // false = visible to client; true = internal note
+  createdAt  DateTime @default(now())
 
   tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   issue  ClientIssue @relation(fields: [issueId], references: [id], onDelete: Cascade)
@@ -2599,33 +2651,33 @@ model ClientIssueComment {
 // Tracks potential clients through a sales pipeline before they become clients.
 
 model ClientProspect {
-  id              String              @id @default(cuid())
-  tenantId        String
-  branchId        String?
-  name            String
-  email           String?
-  phoneNumber     String?
-  company         String?
-  source          ProspectSource      @default(REFERRAL)
-  stage           PipelineStage       @default(INITIAL_CONTACT)
-  status          ProspectStatus      @default(ACTIVE)
-  estimatedValue  Decimal?            @db.Decimal(18, 2)
-  currency        String              @default("KES")
-  practiceArea    String?
-  notes           String?
-  assignedToId    String?
+  id                String         @id @default(cuid())
+  tenantId          String
+  branchId          String?
+  name              String
+  email             String?
+  phoneNumber       String?
+  company           String?
+  source            ProspectSource @default(REFERRAL)
+  stage             PipelineStage  @default(INITIAL_CONTACT)
+  status            ProspectStatus @default(ACTIVE)
+  estimatedValue    Decimal?       @db.Decimal(18, 2)
+  currency          String         @default("KES")
+  practiceArea      String?
+  notes             String?
+  assignedToId      String?
   expectedCloseDate DateTime?
-  convertedClientId String?           // set when prospect converts to client
-  convertedAt     DateTime?
-  lostReason      String?
-  metadata        Json?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @default(now()) @updatedAt
+  convertedClientId String? // set when prospect converts to client
+  convertedAt       DateTime?
+  lostReason        String?
+  metadata          Json?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @default(now()) @updatedAt
 
-  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  branch          Branch?  @relation(fields: [branchId], references: [id])
-  assignedTo      User?    @relation("ProspectAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
-  activities      ProspectActivity[]
+  tenant     Tenant             @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch     Branch?            @relation(fields: [branchId], references: [id])
+  assignedTo User?              @relation("ProspectAssignee", fields: [assignedToId], references: [id], onDelete: SetNull)
+  activities ProspectActivity[]
 
   @@index([tenantId])
   @@index([stage])
@@ -2635,7 +2687,7 @@ model ClientProspect {
 }
 
 model ProspectActivity {
-  id           String              @id @default(cuid())
+  id           String               @id @default(cuid())
   tenantId     String
   prospectId   String
   userId       String
@@ -2646,7 +2698,7 @@ model ProspectActivity {
   scheduledAt  DateTime?
   completedAt  DateTime?
   metadata     Json?
-  createdAt    DateTime            @default(now())
+  createdAt    DateTime             @default(now())
 
   tenant   Tenant         @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   prospect ClientProspect @relation(fields: [prospectId], references: [id], onDelete: Cascade)
@@ -3486,9 +3538,9 @@ model PerformanceReview {
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
 
-  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  employee User    @relation("PerformanceReviewEmployee", fields: [employeeId], references: [id])
-  reviewer User?   @relation("PerformanceReviewReviewer", fields: [reviewerId], references: [id])
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  employee User              @relation("PerformanceReviewEmployee", fields: [employeeId], references: [id])
+  reviewer User?             @relation("PerformanceReviewReviewer", fields: [reviewerId], references: [id])
   goals    PerformanceGoal[]
 
   @@index([tenantId])
@@ -3499,25 +3551,25 @@ model PerformanceReview {
 }
 
 model PerformanceGoal {
-  id                  String    @id @default(cuid())
+  id                  String   @id @default(cuid())
   tenantId            String
   performanceReviewId String
   employeeId          String
   title               String
   description         String?
-  weight              Decimal?  @db.Decimal(5, 2)
+  weight              Decimal? @db.Decimal(5, 2)
   target              String?
   metric              String?
-  status              String    @default("ACTIVE")
-  selfScore           Decimal?  @db.Decimal(5, 2)
-  managerScore        Decimal?  @db.Decimal(5, 2)
+  status              String   @default("ACTIVE")
+  selfScore           Decimal? @db.Decimal(5, 2)
+  managerScore        Decimal? @db.Decimal(5, 2)
   createdById         String?
-  createdAt           DateTime  @default(now())
-  updatedAt           DateTime  @updatedAt
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
-  tenant  Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  review  PerformanceReview @relation(fields: [performanceReviewId], references: [id], onDelete: Cascade)
-  employee User             @relation("PerformanceGoalEmployee", fields: [employeeId], references: [id])
+  tenant   Tenant            @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  review   PerformanceReview @relation(fields: [performanceReviewId], references: [id], onDelete: Cascade)
+  employee User              @relation("PerformanceGoalEmployee", fields: [employeeId], references: [id])
 
   @@index([tenantId])
   @@index([performanceReviewId])
@@ -4159,29 +4211,304 @@ model PaymentReceipt {
 }
 
 model CreditNote {
-  id             String           @id @default(cuid())
-  tenantId       String
-  invoiceId      String
-  matterId       String?
-  noteNumber     String           @unique
-  amount         Decimal          @db.Decimal(18, 2)
-  reason         String
-  status         CreditNoteStatus @default(DRAFT)
-  etimsReference String?
-  createdById    String?
-  issuedAt       DateTime?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
-  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  invoice        Invoice          @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
-  matter         Matter?          @relation(fields: [matterId], references: [id])
-  createdBy      User?            @relation("CreditNoteCreatedBy", fields: [createdById], references: [id])
+  id               String                @id @default(cuid())
+  tenantId         String
+  invoiceId        String
+  matterId         String?
+  clientId         String?
+  noteNumber       String?               @unique
+  creditNoteNumber String?               @unique
+  amount           Decimal               @default(0) @db.Decimal(18, 2)
+  currency         String                @default("KES")
+  subTotal         Decimal               @default(0) @db.Decimal(18, 2)
+  taxAmount        Decimal               @default(0) @db.Decimal(18, 2)
+  totalAmount      Decimal               @default(0) @db.Decimal(18, 2)
+  creditDate       DateTime              @default(now())
+  reason           String
+  status           CreditNoteStatus      @default(DRAFT)
+  etimsReference   String?
+  createdById      String?
+  issuedAt         DateTime?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  tenant           Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoice          Invoice               @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  matter           Matter?               @relation(fields: [matterId], references: [id])
+  client           Client?               @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  createdBy        User?                 @relation("CreditNoteCreatedBy", fields: [createdById], references: [id])
+  lines            CreditNoteLine[]
+  notifications    BillingNotification[]
 
   @@index([tenantId])
   @@index([invoiceId])
   @@index([matterId])
+  @@index([clientId])
   @@index([status])
   @@index([createdById])
+}
+
+model CreditNoteLine {
+  id           String     @id @default(cuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  creditNoteId String
+  creditNote   CreditNote @relation(fields: [creditNoteId], references: [id], onDelete: Cascade)
+  lineNumber   Int
+  description  String
+  quantity     Decimal    @db.Decimal(10, 4)
+  unitPrice    Decimal    @db.Decimal(18, 2)
+  taxRate      Decimal    @default(0) @db.Decimal(5, 2)
+  subTotal     Decimal    @db.Decimal(18, 2)
+  taxAmount    Decimal    @db.Decimal(18, 2)
+  totalAmount  Decimal    @db.Decimal(18, 2)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([tenantId])
+  @@index([creditNoteId])
+}
+
+model ProformaLine {
+  id                String          @id @default(cuid())
+  tenantId          String
+  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  proformaInvoiceId String
+  proformaInvoice   ProformaInvoice @relation(fields: [proformaInvoiceId], references: [id], onDelete: Cascade)
+  lineNumber        Int
+  description       String
+  quantity          Decimal         @db.Decimal(10, 4)
+  unitPrice         Decimal         @db.Decimal(18, 2)
+  taxRate           Decimal         @default(0) @db.Decimal(5, 2)
+  subTotal          Decimal         @db.Decimal(18, 2)
+  taxAmount         Decimal         @db.Decimal(18, 2)
+  totalAmount       Decimal         @db.Decimal(18, 2)
+  matterId          String?
+  matter            Matter?         @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  timeEntryId       String?
+  expenseId         String?
+  metadata          Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  @@index([tenantId])
+  @@index([proformaInvoiceId])
+  @@index([matterId])
+}
+
+model ProformaInvoice {
+  id                 String                @id @default(cuid())
+  tenantId           String
+  tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  proformaNumber     String                @unique
+  clientId           String
+  client             Client                @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  matterId           String?
+  matter             Matter?               @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  currency           String                @default("KES")
+  issueDate          DateTime              @default(now())
+  expiryDate         DateTime?
+  status             ProformaStatus        @default(DRAFT)
+  subTotal           Decimal               @default(0) @db.Decimal(18, 2)
+  taxAmount          Decimal               @default(0) @db.Decimal(18, 2)
+  totalAmount        Decimal               @default(0) @db.Decimal(18, 2)
+  balanceDue         Decimal               @default(0) @db.Decimal(18, 2)
+  notes              String?
+  terms              String?
+  metadata           Json?
+  createdById        String
+  createdBy          User                  @relation("ProformaCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  sentAt             DateTime?
+  sentById           String?
+  sentBy             User?                 @relation("ProformaSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+  approvedAt         DateTime?
+  approvedById       String?
+  approvedBy         User?                 @relation("ProformaApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  cancelledAt        DateTime?
+  cancelledById      String?
+  cancelledBy        User?                 @relation("ProformaCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancellationReason String?
+  convertedAt        DateTime?
+  convertedById      String?
+  convertedBy        User?                 @relation("ProformaConvertedBy", fields: [convertedById], references: [id], onDelete: SetNull)
+  invoiceId          String?
+  invoice            Invoice?              @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  updatedById        String?
+  updatedBy          User?                 @relation("ProformaUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  lines              ProformaLine[]
+  notifications      BillingNotification[]
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([matterId])
+  @@index([status])
+  @@index([invoiceId])
+  @@index([createdById])
+}
+
+model Retainer {
+  id              String                @id @default(cuid())
+  tenantId        String
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  retainerNumber  String                @unique
+  clientId        String
+  client          Client                @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  matterId        String?
+  matter          Matter?               @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  amount          Decimal               @db.Decimal(18, 2)
+  unappliedAmount Decimal               @db.Decimal(18, 2)
+  appliedAmount   Decimal               @default(0) @db.Decimal(18, 2)
+  currency        String                @default("KES")
+  receivedAt      DateTime
+  reference       String?
+  description     String?
+  status          RetainerStatus        @default(ACTIVE)
+  createdById     String
+  createdBy       User                  @relation("RetainerCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  releasedAt      DateTime?
+  releasedById    String?
+  releasedBy      User?                 @relation("RetainerReleasedBy", fields: [releasedById], references: [id], onDelete: SetNull)
+  releaseReason   String?
+  metadata        Json?
+  applications    RetainerApplication[]
+  notifications   BillingNotification[]
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  @@index([tenantId])
+  @@index([clientId])
+  @@index([matterId])
+  @@index([status])
+  @@index([createdById])
+}
+
+model RetainerApplication {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  retainerId  String
+  retainer    Retainer @relation(fields: [retainerId], references: [id], onDelete: Restrict)
+  invoiceId   String
+  invoice     Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Restrict)
+  clientId    String
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Restrict)
+  matterId    String?
+  matter      Matter?  @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  amount      Decimal  @db.Decimal(18, 2)
+  appliedAt   DateTime @default(now())
+  appliedById String
+  appliedBy   User     @relation("RetainerAppliedBy", fields: [appliedById], references: [id], onDelete: Restrict)
+  notes       String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([retainerId])
+  @@index([invoiceId])
+  @@index([clientId])
+  @@index([matterId])
+}
+
+model PaymentReminder {
+  id                 String          @id @default(cuid())
+  tenantId           String
+  tenant             Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoiceId          String
+  invoice            Invoice         @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  clientId           String?
+  client             Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  matterId           String?
+  matter             Matter?         @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  reminderNumber     String          @unique
+  channel            ReminderChannel @default(EMAIL)
+  tone               ReminderTone    @default(STANDARD)
+  status             ReminderStatus  @default(DRAFT)
+  scheduledFor       DateTime?
+  message            String
+  outstandingAmount  Decimal         @default(0) @db.Decimal(18, 2)
+  dueDate            DateTime?
+  createdById        String
+  createdBy          User            @relation("PaymentReminderCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  sentAt             DateTime?
+  sentById           String?
+  sentBy             User?           @relation("PaymentReminderSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+  deliveryReference  String?
+  cancelledAt        DateTime?
+  cancelledById      String?
+  cancelledBy        User?           @relation("PaymentReminderCancelledBy", fields: [cancelledById], references: [id], onDelete: SetNull)
+  cancellationReason String?
+  metadata           Json?
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@index([tenantId])
+  @@index([invoiceId])
+  @@index([status])
+}
+
+model BillingNotification {
+  id                String                    @id @default(cuid())
+  tenantId          String
+  tenant            Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  type              BillingNotificationType
+  channel           ReminderChannel           @default(PORTAL)
+  clientId          String?
+  client            Client?                   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  matterId          String?
+  matter            Matter?                   @relation(fields: [matterId], references: [id], onDelete: SetNull)
+  invoiceId         String?
+  invoice           Invoice?                  @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  proformaId        String?
+  proforma          ProformaInvoice?          @relation(fields: [proformaId], references: [id], onDelete: SetNull)
+  creditNoteId      String?
+  creditNote        CreditNote?               @relation(fields: [creditNoteId], references: [id], onDelete: SetNull)
+  retainerId        String?
+  retainer          Retainer?                 @relation(fields: [retainerId], references: [id], onDelete: SetNull)
+  recipientName     String?
+  recipientEmail    String?
+  recipientPhone    String?
+  subject           String
+  message           String
+  status            BillingNotificationStatus @default(DRAFT)
+  scheduledFor      DateTime?
+  sentAt            DateTime?
+  sentById          String?
+  sentBy            User?                     @relation("BillingNotificationSentBy", fields: [sentById], references: [id], onDelete: SetNull)
+  deliveryReference String?
+  failedAt          DateTime?
+  failureReason     String?
+  createdById       String
+  createdBy         User                      @relation("BillingNotificationCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  metadata          Json?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  @@index([tenantId])
+  @@index([type])
+  @@index([status])
+}
+
+model BillingExport {
+  id            String              @id @default(cuid())
+  tenantId      String
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  invoiceId     String
+  invoice       Invoice             @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  exportType    String
+  format        LedesFormat
+  fileName      String
+  content       String              @db.Text
+  status        BillingExportStatus @default(GENERATED)
+  generatedById String
+  generatedBy   User                @relation("BillingExportGeneratedBy", fields: [generatedById], references: [id], onDelete: Restrict)
+  generatedAt   DateTime            @default(now())
+  metadata      Json?
+  createdAt     DateTime            @default(now())
+
+  @@index([tenantId])
+  @@index([invoiceId])
 }
 
 model ComplianceReport {
@@ -4384,18 +4711,18 @@ model BankTransaction {
 }
 
 model ReconciliationRun {
-  id          String                @id @default(cuid())
-  tenantId    String
+  id             String                @id @default(cuid())
+  tenantId       String
   trustAccountId String?
-  type        ReconciliationRunType
-  periodStart DateTime
-  periodEnd   DateTime
-  status      ReconciliationStatus  @default(PENDING)
-  createdById String?
-  createdAt   DateTime              @default(now())
-  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  type           ReconciliationRunType
+  periodStart    DateTime
+  periodEnd      DateTime
+  status         ReconciliationStatus  @default(PENDING)
+  createdById    String?
+  createdAt      DateTime              @default(now())
+  tenant         Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   trustAccount   TrustAccount?         @relation(fields: [trustAccountId], references: [id], onDelete: Restrict)
-  matches     ReconciliationMatch[]
+  matches        ReconciliationMatch[]
 
   @@index([tenantId])
   @@index([trustAccountId])
@@ -4408,7 +4735,7 @@ model ReconciliationMatch {
   tenantId String
   runId    String
 
-  trustAccountId       String?
+  trustAccountId String?
 
   bankTransactionId   String?
   trustTransactionId  String?
@@ -4423,8 +4750,8 @@ model ReconciliationMatch {
   varianceApprovedBy  String?
   varianceApprovedAt  DateTime?
 
-  status ReconciliationStatus @default(PENDING)
-  notes  String?
+  status     ReconciliationStatus @default(PENDING)
+  notes      String?
   caseNumber String?
   matterCode String?
 
@@ -4473,21 +4800,21 @@ model TimerSession {
 }
 
 model PassiveCaptureEvent {
-  id                  String   @id @default(cuid())
-  tenantId            String
-  userId              String
-  matterId            String?
-  activityType        String   // EMAIL | CALENDAR | DOCUMENT | MATTER_API
-  activitySource      String   // e.g. "email:thread-id", "calendar:event-id"
-  activityAt          DateTime
-  durationMinutes     Int
+  id                   String   @id @default(cuid())
+  tenantId             String
+  userId               String
+  matterId             String?
+  activityType         String // EMAIL | CALENDAR | DOCUMENT | MATTER_API
+  activitySource       String // e.g. "email:thread-id", "calendar:event-id"
+  activityAt           DateTime
+  durationMinutes      Int
   suggestedDescription String?
-  status              String   @default("PENDING_REVIEW")
+  status               String   @default("PENDING_REVIEW")
   // PENDING_REVIEW | APPROVED | DISCARDED | CONVERTED
   convertedTimeEntryId String?
-  metadata            Json?
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @default(now()) @updatedAt
+  metadata             Json?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @default(now()) @updatedAt
 
   tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -4850,6 +5177,7 @@ enum InvoiceStatus {
   PAID
   CANCELLED
   ETIMS_REJECTED
+  CREDITED
 }
 
 enum MatterStatus {
@@ -5113,6 +5441,76 @@ enum CreditNoteStatus {
   ETIMS_SUBMITTED
   ETIMS_REJECTED
   CANCELLED
+  VOID
+}
+
+enum ProformaStatus {
+  DRAFT
+  SENT
+  APPROVED
+  CANCELLED
+  CONVERTED
+}
+
+enum RetainerStatus {
+  ACTIVE
+  PARTIALLY_APPLIED
+  FULLY_APPLIED
+  RELEASED
+}
+
+enum ReminderChannel {
+  EMAIL
+  SMS
+  WHATSAPP
+  PORTAL
+  MANUAL
+}
+
+enum ReminderTone {
+  GENTLE
+  STANDARD
+  FIRM
+  FINAL_NOTICE
+}
+
+enum ReminderStatus {
+  DRAFT
+  SCHEDULED
+  SENT
+  CANCELLED
+}
+
+enum BillingNotificationType {
+  INVOICE_ISSUED
+  INVOICE_OVERDUE
+  INVOICE_PAID
+  PROFORMA_SENT
+  PROFORMA_APPROVED
+  CREDIT_NOTE_ISSUED
+  RETAINER_RECEIVED
+  RETAINER_APPLIED
+  PAYMENT_REMINDER
+  LEDES_EXPORT_READY
+}
+
+enum BillingNotificationStatus {
+  DRAFT
+  SCHEDULED
+  SENT
+  FAILED
+}
+
+enum BillingExportStatus {
+  GENERATED
+  DELIVERED
+  FAILED
+}
+
+enum LedesFormat {
+  LEDES_1998B
+  LEDES_1998BI
+  LEDES_2000
 }
 
 enum AmlReportType {
@@ -5681,8 +6079,8 @@ model AIReviewTask {
   dueAt              DateTime?
   resolvedAt         DateTime?
   metadata           Json?
-  caseNumber String?
-  matterCode String?
+  caseNumber         String?
+  matterCode         String?
   createdAt          DateTime         @default(now())
   updatedAt          DateTime         @updatedAt
 
@@ -5852,8 +6250,8 @@ model ReportRun {
   completedAt        DateTime?
   errorMessage       String?
   metadata           Json?
-  caseNumber String?
-  matterCode String?
+  caseNumber         String?
+  matterCode         String?
   createdAt          DateTime          @default(now())
   updatedAt          DateTime          @updatedAt
 
@@ -5887,8 +6285,8 @@ model ReportExport {
   deliveredAt        DateTime?
   errorMessage       String?
   metadata           Json?
-  caseNumber String?
-  matterCode String?
+  caseNumber         String?
+  matterCode         String?
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
 
