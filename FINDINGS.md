@@ -61,3 +61,23 @@ deployment issue, separate from the missing-models problem.
   is supplied, or is null-on-missing-param the correct contract?
 - **Status:** OPEN — needs clarification, not a bug per se
 - **Logged:** 2026-06-16
+
+---
+
+## FINDING-009-001 — CLOSED
+
+**Reporting audit writes bypassed hash-chain utility, causing 500s on all logging handlers**
+
+- **Affected:** apps/api/src/modules/reporting/ReportingAuditService.ts (logAction)
+- **Symptom:** 17/21 Group 9 Reporting cert tests skipped — handlers 500'd on audit write
+- **Root cause:** Direct db.auditLog.create() call omitted required hash-chain fields
+  (AuditLog.hash, AuditLog.previousHash — @unique, no default, per ADR-003) and wrote
+  to a non-existent AuditLog.metadata column (correct field is afterData)
+- **Fix commit:** 2e7e70a — routed logAction through shared logSecurityEvent utility
+  (same writer used by billing module)
+- **Scope of fix:** Additive/corrective only — no schema change, no signature change,
+  no enum removed, no existing behavior altered
+- **Verified:** Live re-run against Render — 21/21 passing, 0 skipped
+- **Follow-up flag:** Check Group 8 HR and Group 7 Trust writes for the same anti-pattern
+  (raw auditLog.create bypassing logSecurityEvent) during reconnaissance
+- **Logged:** 2026-06-11
