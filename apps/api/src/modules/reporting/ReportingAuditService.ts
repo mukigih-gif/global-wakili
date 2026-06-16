@@ -32,10 +32,11 @@ export class ReportingAuditService {
       data: {
         tenantId: params.tenantId,
         userId: params.userId ?? null,
-        action: `REPORTING_${params.action}`,
-        entityId: params.entityId ?? null,
+        action: 'VIEW',
+        entityId: params.entityId ?? 'N/A',
         entityType: params.entityType ?? 'REPORTING',
         metadata: {
+          reportingAction: `REPORTING_${params.action}`,
           requestId: params.requestId ?? null,
           ip: params.ipAddress ?? null,
           userAgent: params.userAgent ?? null,
