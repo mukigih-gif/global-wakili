@@ -688,18 +688,6 @@ router.post(
   revokeHrDocument,
 );
 
-router.use((req: Request, res: Response) => {
-  res.status(404).json({
-    success: false,
-    module: 'hr',
-    error: 'HR route not found',
-    code: 'HR_ROUTE_NOT_FOUND',
-    path: req.originalUrl,
-    requestId: req.id,
-    timestamp: new Date().toISOString(),
-  });
-});
-
 // ── Onboarding ────────────────────────────────────────────────────────────────
 router.get('/onboarding', requireHrPermission(HR_PERMISSIONS.viewEmployee), async (req: Request, res: Response) => {
   try {
@@ -792,6 +780,18 @@ router.get('/payroll/deductions', requireHrPermission(HR_PERMISSIONS.viewEmploye
       employeeCount: (payslips as any[]).length,
     });
   } catch (e) { res.status(500).json({ error: String(e) }); }
+});
+
+router.use((req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    module: 'hr',
+    error: 'HR route not found',
+    code: 'HR_ROUTE_NOT_FOUND',
+    path: req.originalUrl,
+    requestId: req.id,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 export default router;
