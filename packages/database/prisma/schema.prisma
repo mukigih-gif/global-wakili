@@ -153,6 +153,15 @@ model Tenant {
   departments                  Department[]
   jobTitles                    JobTitle[]
   employeeProfiles             EmployeeProfile[]
+  hrEmployees                  Employee[]
+  hrEmployeeContracts          EmployeeContract[]
+  hrAttendanceRecords          AttendanceRecord[]
+  hrGeoFences                  GeoFence[]
+  hrLeavePolicies              LeavePolicy[]
+  hrDisciplinaryCases          DisciplinaryCase[]
+  hrDisciplinaryActions        DisciplinaryAction[]
+  hrDocuments                  HrDocument[]
+  hrDocumentSignatures         HrDocumentSignature[]
   statutoryDeductionRecords    StatutoryDeductionRecord[]
   calendarReminders            CalendarReminder[]
   calendarRecurrenceRules      CalendarRecurrenceRule[]
@@ -456,6 +465,7 @@ model User {
   goals                               EmployeeGoal[]
   performance                         EmployeePerformance[]
   managedEmployees                    EmployeeProfile[]             @relation("EmployeeReportingManager")
+  hrEmployees                         Employee[]                    @relation("HrEmployeeUser")
   expenseEntries                      ExpenseEntry[]
   leaveRequests                       LeaveRequest[]
   approvedLeaves                      LeaveRequest[]                @relation("LeaveApprovedBy")
@@ -3487,27 +3497,39 @@ model LeaveRequest {
 model LeaveBalance {
   id                String    @id @default(cuid())
   tenantId          String
-  employeeProfileId String
-  leaveType         LeaveType
-  year              Int
+  employeeProfileId String?
+  employeeId        String?
+  leavePolicyId     String?
+  leaveType         String
+  year              Int?
 
-  openingBalance Decimal @default(0) @db.Decimal(10, 2)
-  accruedDays    Decimal @default(0) @db.Decimal(10, 2)
-  usedDays       Decimal @default(0) @db.Decimal(10, 2)
-  adjustedDays   Decimal @default(0) @db.Decimal(10, 2)
-  closingBalance Decimal @default(0) @db.Decimal(10, 2)
+  openingBalance     Decimal  @default(0) @db.Decimal(10, 2)
+  accruedDays        Decimal  @default(0) @db.Decimal(10, 2)
+  usedDays           Decimal  @default(0) @db.Decimal(10, 2)
+  adjustedDays       Decimal  @default(0) @db.Decimal(10, 2)
+  closingBalance     Decimal  @default(0) @db.Decimal(10, 2)
+  entitledDays       Decimal  @default(0) @db.Decimal(10, 2)
+  pendingDays        Decimal  @default(0) @db.Decimal(10, 2)
+  carriedForwardDays Decimal  @default(0) @db.Decimal(10, 2)
+  availableDays      Decimal  @default(0) @db.Decimal(10, 2)
+
+  effectiveFrom DateTime?
+  lastAccruedAt DateTime?
 
   metadata Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @default(now()) @updatedAt
 
-  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  employeeProfile EmployeeProfile @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  employeeProfile EmployeeProfile? @relation(fields: [employeeProfileId], references: [id], onDelete: Cascade)
 
   @@unique([tenantId, employeeProfileId, leaveType, year])
+  @@unique([tenantId, employeeId, leavePolicyId])
   @@index([tenantId])
   @@index([employeeProfileId])
+  @@index([employeeId])
+  @@index([leavePolicyId])
 }
 
 model PerformanceReview {
@@ -3653,6 +3675,350 @@ model EmployeeDocument {
   @@index([documentType])
   @@index([employeeProfileId])
   @@index([verifiedById])
+}
+
+model Employee {
+  id                           String    @id @default(cuid())
+  tenantId                     String
+  userId                       String?
+  staffNumber                  String?
+  firstName                    String
+  middleName                   String?
+  lastName                     String
+  displayName                  String
+  email                        String?
+  phone                        String?
+  personalEmail                String?
+  gender                       String?
+  maritalStatus                String?
+  dateOfBirth                  DateTime?
+  nationalId                   String?
+  passportNumber               String?
+  kraPin                       String?
+  nssfNumber                   String?
+  shaNumber                    String?
+  nhifNumber                   String?
+  branchId                     String?
+  departmentId                 String?
+  roleId                       String?
+  jobTitle                     String?
+  employmentType               String    @default("PERMANENT")
+  status                       String    @default("ACTIVE")
+  startDate                    DateTime  @default(now())
+  probationEndDate             DateTime?
+  reportingManagerId           String?
+  basicPay                     Decimal   @default(0) @db.Decimal(18, 2)
+  salary                       Decimal   @default(0) @db.Decimal(18, 2)
+  currency                     String    @default("KES")
+  payrollEligible              Boolean   @default(true)
+  emergencyContactName         String?
+  emergencyContactPhone        String?
+  emergencyContactRelationship String?
+  addressLine1                 String?
+  addressLine2                 String?
+  city                         String?
+  county                       String?
+  country                      String?   @default("Kenya")
+  postalCode                   String?
+  statusChangedAt              DateTime?
+  statusChangeReason           String?
+  terminationDate              DateTime?
+  terminationReason            String?
+  eligibleForRehire            Boolean   @default(false)
+  finalPayNotes                String?
+  createdById                  String?
+  updatedById                  String?
+  metadata                     Json?
+  createdAt                    DateTime  @default(now())
+  updatedAt                    DateTime  @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  user   User?  @relation("HrEmployeeUser", fields: [userId], references: [id])
+
+  @@unique([tenantId, staffNumber])
+  @@index([tenantId])
+  @@index([tenantId, status])
+  @@index([userId])
+  @@index([departmentId])
+  @@index([branchId])
+  @@index([reportingManagerId])
+}
+
+model EmployeeContract {
+  id                      String    @id @default(cuid())
+  tenantId                String
+  employeeId              String
+  contractNumber          String
+  title                   String
+  employmentType          String
+  status                  String    @default("DRAFT")
+  startDate               DateTime
+  endDate                 DateTime?
+  probationEndDate        DateTime?
+  jobTitle                String?
+  departmentId            String?
+  branchId                String?
+  reportingManagerId      String?
+  basicPay                Decimal   @default(0) @db.Decimal(18, 2)
+  currency                String    @default("KES")
+  workingHoursPerWeek     Decimal   @default(0) @db.Decimal(8, 2)
+  leaveDaysPerYear        Decimal   @default(0) @db.Decimal(8, 2)
+  noticePeriodDays        Int?
+  confidentialityRequired Boolean   @default(true)
+  nonCompeteRequired      Boolean   @default(false)
+  documentId              String?
+  signedByEmployeeAt      DateTime?
+  signedByEmployerAt      DateTime?
+  terms                   Json?
+  metadata                Json?
+  createdById             String?
+  updatedById             String?
+  activatedAt             DateTime?
+  activatedById           String?
+  terminatedAt            DateTime?
+  terminatedById          String?
+  terminationReason       String?
+  supersededAt            DateTime?
+  supersededById          String?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, contractNumber])
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([status])
+}
+
+model AttendanceRecord {
+  id                             String    @id @default(cuid())
+  tenantId                       String
+  employeeId                     String
+  branchId                       String?
+  attendanceDate                 DateTime
+  clockInAt                      DateTime
+  clockInMethod                  String    @default("WEB")
+  clockInLatitude                Decimal?  @db.Decimal(10, 7)
+  clockInLongitude               Decimal?  @db.Decimal(10, 7)
+  clockInGeoFenceId              String?
+  clockInGeoFenceValid           Boolean   @default(true)
+  clockInGeoFenceDistanceMeters  Decimal?  @db.Decimal(10, 2)
+  clockInDeviceId                String?
+  clockInIpAddress               String?
+  clockInUserAgent               String?
+  clockOutAt                     DateTime?
+  clockOutMethod                 String?
+  clockOutLatitude               Decimal?  @db.Decimal(10, 7)
+  clockOutLongitude              Decimal?  @db.Decimal(10, 7)
+  clockOutGeoFenceId             String?
+  clockOutGeoFenceValid          Boolean?
+  clockOutGeoFenceDistanceMeters Decimal?  @db.Decimal(10, 2)
+  clockOutDeviceId               String?
+  clockOutIpAddress              String?
+  clockOutUserAgent              String?
+  hoursWorked                    Decimal   @default(0) @db.Decimal(8, 2)
+  status                         String    @default("CLOCKED_IN")
+  notes                          String?
+  metadata                       Json?
+  createdById                    String?
+  updatedById                    String?
+  createdAt                      DateTime  @default(now())
+  updatedAt                      DateTime  @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([attendanceDate])
+  @@index([status])
+}
+
+model GeoFence {
+  id           String   @id @default(cuid())
+  tenantId     String
+  name         String
+  branchId     String?
+  latitude     Decimal  @db.Decimal(10, 7)
+  longitude    Decimal  @db.Decimal(10, 7)
+  radiusMeters Int
+  active       Boolean  @default(true)
+  createdById  String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId])
+  @@index([active])
+}
+
+model LeavePolicy {
+  id                       String    @id @default(cuid())
+  tenantId                 String
+  name                     String
+  code                     String?
+  description              String?
+  leaveType                String
+  annualEntitlementDays    Decimal   @default(0) @db.Decimal(8, 2)
+  accrualFrequency         String    @default("MONTHLY")
+  carryForwardAllowed      Boolean   @default(true)
+  maxCarryForwardDays      Decimal   @default(0) @db.Decimal(8, 2)
+  encashmentAllowed        Boolean   @default(false)
+  requiresApproval         Boolean   @default(true)
+  approvalLevels           Int       @default(1)
+  appliesToEmploymentTypes String[]  @default([])
+  appliesToDepartmentIds   String[]  @default([])
+  appliesToBranchIds       String[]  @default([])
+  effectiveFrom            DateTime
+  effectiveTo              DateTime?
+  status                   String    @default("ACTIVE")
+  createdById              String?
+  updatedById              String?
+  metadata                 Json?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @default(now()) @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, name])
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([status])
+}
+
+model DisciplinaryCase {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  employeeId         String
+  reportedById       String
+  title              String
+  description        String
+  incidentDate       DateTime
+  severity           String    @default("MEDIUM")
+  category           String?
+  status             String    @default("OPEN")
+  witnessEmployeeIds String[]  @default([])
+  documentIds        String[]  @default([])
+  hearingAt          DateTime?
+  hearingLocation    String?
+  panelEmployeeIds   String[]  @default([])
+  hearingNotes       String?
+  latestActionType   String?
+  resolution         String?
+  closureNotes       String?
+  closedById         String?
+  closedAt           DateTime?
+  cancellationReason String?
+  cancelledById      String?
+  cancelledAt        DateTime?
+  createdById        String?
+  updatedById        String?
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
+
+  tenant  Tenant               @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  actions DisciplinaryAction[]
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([status])
+  @@index([incidentDate])
+}
+
+model DisciplinaryAction {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  disciplinaryCaseId String
+  employeeId         String
+  actionType         String
+  actionDate         DateTime  @default(now())
+  effectiveFrom      DateTime?
+  effectiveTo        DateTime?
+  notes              String?
+  issuedById         String?
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
+
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  case   DisciplinaryCase @relation(fields: [disciplinaryCaseId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([disciplinaryCaseId])
+  @@index([employeeId])
+}
+
+model HrDocument {
+  id                String    @id @default(cuid())
+  tenantId          String
+  employeeId        String
+  title             String
+  category          String
+  description       String?
+  documentId        String?
+  storageKey        String?
+  fileName          String?
+  mimeType          String?
+  fileSizeBytes     Int?
+  contentHash       String
+  requiresSignature Boolean   @default(false)
+  status            String    @default("ACTIVE")
+  expiresAt         DateTime?
+  signedAt          DateTime?
+  revokedAt         DateTime?
+  revokedById       String?
+  revocationReason  String?
+  createdById       String?
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @default(now()) @updatedAt
+
+  tenant     Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  signatures HrDocumentSignature[]
+
+  @@index([tenantId])
+  @@index([employeeId])
+  @@index([status])
+  @@index([category])
+}
+
+model HrDocumentSignature {
+  id                 String    @id @default(cuid())
+  tenantId           String
+  hrDocumentId       String
+  employeeId         String
+  signerEmployeeId   String?
+  signerUserId       String?
+  signerName         String?
+  signerEmail        String?
+  status             String    @default("PENDING")
+  requestedById      String?
+  requestedAt        DateTime  @default(now())
+  expiresAt          DateTime?
+  expiredAt          DateTime?
+  message            String?
+  signedAt           DateTime?
+  signatureText      String?
+  signatureImageHash String?
+  ipAddress          String?
+  userAgent          String?
+  consentStatement   String?
+  signedPayloadHash  String?
+  certificateHash    String?
+  certificatePayload Json?
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @default(now()) @updatedAt
+
+  tenant     Tenant     @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  hrDocument HrDocument @relation(fields: [hrDocumentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([hrDocumentId])
+  @@index([status])
 }
 
 model CommissionPayout {
