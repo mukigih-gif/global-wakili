@@ -47,3 +47,17 @@ deployment issue, separate from the missing-models problem.
 - **Scope:** Schema authoring task — Finance/Billing bounded context
 - **Status:** OPEN — blocking full Wave A/B certification
 - **Logged:** 2026-06-11
+
+---
+
+## FINDING-007-001
+
+**Trust account /view endpoint returns null sub-objects**
+
+- When `statementDate` is not supplied, `snapshot`/`statement`/`account` may return
+  null instead of a default/current-period value
+  (GET /api/v1/trust/accounts/:id/view).
+- Needs product decision: should /view default to the current period when no date
+  is supplied, or is null-on-missing-param the correct contract?
+- **Status:** OPEN — needs clarification, not a bug per se
+- **Logged:** 2026-06-16
