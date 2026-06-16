@@ -153,7 +153,9 @@ Final verification sweep.
 | Phase 1 Groups 1-5 | API Certification (Auth/Clients/Users/Password Reset/Matters) | COMPLETE — 50/50 |
 | Phase 1 Group 6 Wave A | API Certification (Billing reads) | COMPLETE — 16/16 billing reads passing |
 | Phase 1 Group 6 Wave B | API Certification (Billing writes) | COMPLETE — 19/19 billing writes passing |
-| Phase 1 Groups 7-9 | Trust, HR, Reporting | NEXT |
+| Phase 1 Group 7 Trust reads | API Certification (Trust reads) | COMPLETE — 12/12 trust reads passing |
+| Phase 1 Group 9 Reporting | API Certification (Reporting reads+writes) | COMPLETE — 21/21 passing |
+| Phase 1 Group 7 Trust writes + Group 8 HR | API Certification (Trust writes, HR) | NEXT |
 | Phase 2 | Playwright E2E | PENDING |
 | Phase 3 | Finance/Trust/Payroll Compliance | PENDING |
 | Phase 4 | Multi-Tenant Breach | PENDING |
@@ -163,7 +165,7 @@ Final verification sweep.
 
 * Backend: ~82%
 * Frontend: ~35%
-* Tests: Phase 1 API 85/85
+* Tests: Phase 1 API 118/118 (50 Groups 1-5 + 16 Wave A + 19 Wave B + 12 Trust reads + 21 Reporting)
 * Overall: ~58%
 
 ## Recent Fixes
