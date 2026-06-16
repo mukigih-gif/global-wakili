@@ -1,5 +1,7 @@
 // apps/api/src/modules/reporting/ReportingAuditService.ts
 
+import { logSecurityEvent } from '../../utils/audit-logger';
+import { AuditAction, AuditSeverity } from '../../types/audit';
 import type { ReportingAuditAction } from './reporting.types';
 
 function assertTenant(tenantId?: string | null): asserts tenantId is string {
@@ -28,22 +30,27 @@ export class ReportingAuditService {
   ) {
     assertTenant(params.tenantId);
 
-    return db.auditLog.create({
-      data: {
-        tenantId: params.tenantId,
-        userId: params.userId ?? null,
-        action: 'VIEW',
-        entityId: params.entityId ?? 'N/A',
-        entityType: params.entityType ?? 'REPORTING',
-        metadata: {
-          reportingAction: `REPORTING_${params.action}`,
-          requestId: params.requestId ?? null,
-          ip: params.ipAddress ?? null,
-          userAgent: params.userAgent ?? null,
-          timestamp: new Date().toISOString(),
-          ...(params.metadata ?? {}),
-        },
+    // Delegate to the hash-chaining audit writer (utils/audit-logger). A raw
+    // db.auditLog.create here previously omitted the required `hash`/`previousHash`
+    // chain fields (ADR-003) and wrote a non-existent `metadata` column, 500-ing
+    // every reporting handler. logSecurityEvent computes the hash chain, uses a
+    // valid AuditAction, and stores the audit detail under afterData.
+    return logSecurityEvent({
+      db,
+      tenantId: params.tenantId,
+      userId: params.userId ?? null,
+      action: AuditAction.VIEW,
+      severity: AuditSeverity.INFO,
+      entityType: params.entityType ?? 'REPORTING',
+      entityId: params.entityId ?? 'N/A',
+      requestId: params.requestId ?? null,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+      afterData: {
+        reportingAction: `REPORTING_${params.action}`,
+        ...(params.metadata ?? {}),
       },
+      allowMissingTenant: true,
     });
   }
 }
