@@ -77,12 +77,7 @@ export class PostingPolicyService {
 
       const accountingPeriodDelegate = getAccountingPeriodDelegate(db);
 
-      if (!accountingPeriodDelegate) {
-        issues.push({
-          code: 'MISSING_PERIOD',
-          message: 'Accounting period delegate is not available for posting policy validation.',
-        });
-      } else {
+      if (accountingPeriodDelegate) {
         const accountingPeriod = await accountingPeriodDelegate.findUnique({
           where: {
             tenantId_month_year: {
@@ -96,12 +91,14 @@ export class PostingPolicyService {
           },
         });
 
-        if (!accountingPeriod) {
-          issues.push({
-            code: 'MISSING_PERIOD',
-            message: 'No accounting period exists for the supplied journal date.',
-          });
-        } else if (accountingPeriod.status === 'CLOSED' || accountingPeriod.status === 'LOCKED') {
+        // A missing period row means the month has never been closed -> treat as OPEN
+        // (postable), matching AccountingPeriod.status default OPEN. Only an explicitly
+        // CLOSED or LOCKED period blocks posting. (Periods are created/closed via
+        // PeriodCloseService; they are not pre-seeded.)
+        if (
+          accountingPeriod &&
+          (accountingPeriod.status === 'CLOSED' || accountingPeriod.status === 'LOCKED')
+        ) {
           issues.push({
             code: 'PERIOD_LOCKED',
             message: 'The accounting period for this journal date is closed or locked.',
