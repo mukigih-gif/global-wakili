@@ -13,10 +13,12 @@
  * Usage: node --require tsx/cjs src/scripts/seed-default-roles.ts <tenantId>
  * Exports seedDefaultRoles(prisma, tenantId) for reuse in tenant provisioning.
  *
- * NOTE (F-14): the HR module uses a separate, bypass-only permission system
+ * NOTE (F-14): the HR module uses a separate permission system
  * (hr-permission.map.ts) with colon-format keys that are NOT in this catalog.
- * HR_MANAGER therefore receives payroll/client/reporting only; functional HR
- * access currently requires MANAGING_PARTNER / SUPER_ADMIN / SYSTEM_ADMIN.
+ * The catalog perms below grant HR_MANAGER only payroll/client/reporting;
+ * functional HR module access is granted role-by-name in hr-permission.map.ts
+ * (HR_FULL_ACCESS_ROLES + the MANAGING_PARTNER/SUPER_ADMIN/SYSTEM_ADMIN bypass),
+ * not via this catalog. See FINDING-008-001 (commit 8bb946d).
  */
 import { PermissionScope } from '@prisma/client';
 import defaultPrisma from '../config/database';
@@ -55,7 +57,7 @@ const ROLE_SPECS: RoleSpec[] = [
     { module: 'finance' }, { module: 'billing' }, { module: 'trust' }, { module: 'reporting' },
     { key: 'client.view_client' },
   ] },
-  { name: 'HR_MANAGER', description: 'Payroll + client view + reporting (HR module access is bypass-only — F-14)', perms: [
+  { name: 'HR_MANAGER', description: 'Payroll + client view + reporting; full HR module access granted by role in hr-permission.map.ts (F-14 / FINDING-008-001)', perms: [
     { module: 'payroll' }, { key: 'client.view_client' }, { key: 'reporting.view_overview' },
   ] },
   { name: 'RECEPTIONIST', description: 'Front desk — client intake, calendar, reception, notifications', perms: [

@@ -81,3 +81,143 @@ deployment issue, separate from the missing-models problem.
 - **Follow-up flag:** Check Group 8 HR and Group 7 Trust writes for the same anti-pattern
   (raw auditLog.create bypassing logSecurityEvent) during reconnaissance
 - **Logged:** 2026-06-11
+
+---
+
+## FINDING-008-001 — CLOSED
+
+**HR_MANAGER (and all non-superuser roles) got 403 on every functional HR endpoint**
+
+- **Affected:** apps/api/src/modules/hr/hr-permission.map.ts (hasHrPermission)
+- **Symptom:** Live — HR_MANAGER token → `403 HR_PERMISSION_DENIED` on GET /api/v1/hr/employees
+  (requiredPermission `hr:employee:view`); same for FIRM_ADMIN and PARTNER. Only
+  MANAGING_PARTNER passed.
+- **Root cause:** Two **disjoint** permission vocabularies that never intersect:
+  - Main RBAC catalog (config/permissions.ts → permissionKey) emits **dot-format** keys
+    `resource.action`, and has **no `hr` resource** at all. rbac.ts:195/202 only ever
+    builds dot-format keys into req.user.permissions.
+  - The HR module (hr-permission.map.ts) checks **colon-format** keys `hr:resource:action`,
+    `hr:*`, `*`, or the isSuperUser() bypass (SUPER_ADMIN/SYSTEM_ADMIN/MANAGING_PARTNER).
+  - No seeded role's granted permissions can ever satisfy an HR check → access was
+    superuser-bypass-only (the documented F-14 limitation). A seed/catalog change cannot
+    fix this because the seed emits dot keys while the HR guard reads colon keys.
+- **Fix commit:** 8bb946d — added role-by-name grant `HR_FULL_ACCESS_ROLES = ['HR_MANAGER']`
+  + hasHrRoleAccess() alongside the existing isSuperUser bypass in hr-permission.map.ts.
+- **Scope of fix:** Additive only — one file, +14/−1. No schema/migration/seed/DB change.
+  MANAGING_PARTNER unchanged (still via isSuperUser). FIRM_ADMIN intentionally NOT granted.
+- **Verified:** Live re-run against Render after deploy — HR_MANAGER 403→200,
+  MANAGING_PARTNER 200, CLERK/RECEPTIONIST/PARTNER still 403.
+- **Note:** stale "bypass-only (F-14)" comments in seed-default-roles.ts updated in same effort.
+- **Supersedes:** original **F-14** in the API Certification Findings Log
+  (Downloads/FINDINGS_backup_20260610.md, line 134). **Divergence:** that log
+  recommended bridging the two permission systems ("connect HR RBAC to the catalog,
+  or add `hr:*` permissions and emit them in the JWT"). We instead took the approved
+  **role-bypass** approach — simpler, but coarser (grants HR_MANAGER all HR permissions
+  rather than a granular catalog-backed set). The granular bridge remains available as a
+  future refinement if per-permission HR roles are ever required.
+- **Logged:** 2026-06-17
+
+---
+
+# RECONCILIATION — API Certification Findings Log (F-series)
+
+**Reconciled:** 2026-06-17. **Source:** the API Certification Findings Log
+`Downloads/FINDINGS_backup_20260610.md` (Groups 1–3 + RBAC/Auth, IDs F-01…F-21),
+which was tracked outside this repo. The fixed/accepted items there are recorded as
+history below; the **still-open** items are ported here so they are tracked where the
+team reads. Original `F-` IDs are preserved for traceability. This repo's
+`FINDING-00X-00Y` scheme and the `F-NN` scheme are now cross-referenced — do not
+renumber.
+
+## Closed / accepted in the source log (history — no action)
+- **F-01** OAuth callback path mismatch — VERIFIED LIVE (fixed).
+- **F-02** logout returns 204 not 200 — ACCEPTED (cert aligned, no fix).
+- **F-04** no client DELETE endpoint — ACCEPTED for cert (consider soft-delete before GA).
+- **F-06** PATCH /clients/:id 500 (missing tenantId in where) — VERIFIED LIVE.
+- **F-07** GET /clients/:id/dashboard 500 (firstName/lastName not on User) — VERIFIED LIVE.
+- **F-08** 5xx leaked raw Prisma error — VERIFIED LIVE (generic 500 body now).
+- **F-09** PATCH /matters/:id 500 (same as F-06) — VERIFIED LIVE.
+- **F-10** matter inline handlers leaked String(e) on 500 — FIXED IN CODE.
+- **F-11** disbursement create gated by view-only permission — FIXED IN CODE.
+- **F-13** RBAC permission system incomplete — FIXED (11 default roles seeded).
+- **F-14** HR bypass-only permission system — **CLOSED here as FINDING-008-001** (commit 8bb946d).
+- **BUG-B** New Matter form didn't preselect client from ?clientId= — FIXED IN CODE.
+
+## Still OPEN — ported for tracking
+
+### F-17 — HIGH — No MFA enforced at login
+- LoginSchema has optional `mfaCode` and User has `mfaSecret`, but neither is validated.
+- Required before go-live (legal data; Kenya Data Protection Act). Implement TOTP minimum.
+- **Status:** OPEN — auth bounded context.
+
+### F-18 — HIGH — No forgot-password / password-reset flow
+- No POST /auth/forgot-password or /auth/reset-password; forgotten password = DB-edit only.
+- Fix: email flow with time-limited reset token. **Status:** OPEN — required before go-live.
+
+### F-20 — HIGH — No domain/SSO login for firm staff
+- No SAML 2.0 / OIDC domain-enforced SSO (individual OAuth exists per F-01, not domain SSO).
+- Fix: SAML/OIDC with firm-admin-configurable domain. **Status:** OPEN — enterprise go-live.
+
+### F-15 — MEDIUM — Password expiry not enforced
+- `passwordExpiresAt`/`passwordChangedAt` exist but never checked at login.
+- **Status:** OPEN — enforce at login; set whenever a password is set.
+
+### F-16 — MEDIUM — No password complexity policy
+- Only adminPassword min(8) at registration; login password min(1). No shared validator.
+- **Status:** OPEN — add shared password-policy validator at all set-password points.
+
+### F-19 — MEDIUM — Account lockout after failed attempts unverified
+- `failedLoginAttempts`/`isLocked`/`lockedUntil` exist and increment, but threshold firing +
+  auto-unlock not verified end-to-end (brute-force risk if not enforced).
+- **Status:** OPEN — verify lockout fires (~5 attempts) and auto-unlocks (~30 min).
+
+### F-05 — LOW — Client portal routes not RBAC-gated (mitigated by self-scoping)
+- client.routes.ts:74-84 GET /clients/:id/portal/{dashboard,matters} lack requirePermissions.
+- Self-scoping (portalUserId = req.user.sub) prevents cross-client leakage; live probe = 404 not leak.
+- **Status:** OPEN — add requirePermissions(client.viewPortal) for defense-in-depth.
+
+### F-03 — INFO — POST /auth/refresh not implemented
+- Substituted with GET /auth/session for token validation. **Status:** OPEN (deferred; needed for mobile).
+
+### F-21 — INFO/DEFERRED — Invite User uses interim temp-password (Option A)
+- Should become an email-token invite flow (24h token, user sets own password).
+- Depends on F-18 + email service. **Status:** DEFERRED — replace before firm go-live.
+
+### BUG-A — LOW — Client list sort by status not implemented
+- `status` not in allowed sort fields; sortBy stripped at client.routes.ts:22-26.
+- **Status:** DEFERRED — feature gap, not a blocker.
+
+**Reconciliation note:** the cert log's deployed target is `global-wakili-api.vercel.app`;
+this repo's live verification has used `global-wakili-api.onrender.com` (render.yaml).
+Confirm whether these are the same backend/DB before relying on either for sign-off.
+
+---
+
+## FINDING-007-002 — OPEN — HIGH SEVERITY
+
+**Matter-level trust balance check has the same TOCTOU race as the
+account-level check (now fixed) — risks inter-client commingling**
+
+- **Affected:** TrustTransactionService.ts validate() (~:284,
+  INSUFFICIENT_CLIENT_TRUST_BALANCE check) and
+  ClientTrustLedgerService.applyDelta (~:436)
+- **Root cause:** Matter/client sub-balance is a derived aggregate
+  (SUM over clientTrustLedger rows), checked in validate() before
+  the $transaction opens, then written via an unconditional ledger
+  append inside the transaction with no re-check and no lock.
+- **Why this is HIGH not MEDIUM:** unlike the account-level race
+  (fixed via atomic conditional UPDATE — see commit 4180794),
+  this gap means concurrent outflows on different matters within
+  the SAME trust account can cause one client's matter sub-balance
+  to go negative while drawing against ledger capacity that, on
+  paper, belongs to a different client's matter — a direct ADR-004
+  violation ("No commingling," "No cross-trust allocations"), even
+  though the parent TrustAccount.currentBalance stays correct.
+- **Fix complexity:** Higher than the account-level fix — derived-sum
+  balances cannot use the simple atomic-WHERE-clause trick. Requires
+  either (a) a maintained/cached balance column on the ledger updated
+  atomically per matter, or (b) SELECT ... FOR UPDATE / SERIALIZABLE
+  isolation around the read-check-write sequence for matter balances.
+- **Status:** OPEN — must be resolved before Group 7 Trust writes is
+  considered fully closed, not deferred to Phase 3
+- **Logged:** 2026-06-17
