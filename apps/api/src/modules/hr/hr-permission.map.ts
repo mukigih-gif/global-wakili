@@ -73,8 +73,21 @@ function isSuperUser(req: Request): boolean {
   );
 }
 
+const HR_FULL_ACCESS_ROLES = ['HR_MANAGER'];
+
+function hasHrRoleAccess(req: Request): boolean {
+  const user = req.user ?? (req as any).user;
+  const roles = Array.isArray(user?.roles) ? user.roles.map(String) : [];
+  const roleNames = Array.isArray(user?.roleNames) ? user.roleNames.map(String) : [];
+  const role = user?.role ? String(user.role) : '';
+
+  return HR_FULL_ACCESS_ROLES.some(
+    (r) => roles.includes(r) || roleNames.includes(r) || role === r,
+  );
+}
+
 export function hasHrPermission(req: Request, permission: HrPermission): boolean {
-  if (isSuperUser(req)) return true;
+  if (isSuperUser(req) || hasHrRoleAccess(req)) return true;
 
   const permissions = getUserPermissions(req);
 
