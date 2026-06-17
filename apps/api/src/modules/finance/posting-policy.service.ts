@@ -161,13 +161,6 @@ export class PostingPolicyService {
       });
     }
 
-    if (input.currency && context.allowMultiCurrency === false) {
-      issues.push({
-        code: 'MULTI_CURRENCY_POLICY_VIOLATION',
-        message: 'Multi-currency posting is not allowed in this operation context.',
-      });
-    }
-
     if (input.currency) {
       const distinctCurrencies = new Set(
         accounts
