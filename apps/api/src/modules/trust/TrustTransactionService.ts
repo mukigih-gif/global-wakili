@@ -606,7 +606,7 @@ const trustLiability = await this.resolveAccountId(tx, tenantId, AccountSubtype.
       });
 
       return trustTx;
-    });
+    }, { maxWait: 10000, timeout: 30000 });
   }
 
   private static async postOfficeSideSettlement(

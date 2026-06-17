@@ -49,6 +49,7 @@ type FinanceJournalTransactionClient = TenantDbClient & {
 type TransactionCapableFinanceDbClient = TenantDbClient & {
   $transaction: <T>(
     callback: (tx: FinanceJournalTransactionClient) => Promise<T>,
+    options?: { maxWait?: number; timeout?: number },
   ) => Promise<T>;
 };
 
@@ -143,6 +144,6 @@ export class TransactionEngine {
       console.info(`[TX_SUCCESS] journal=${journalEntry.id} committed`);
 
       return journalEntry;
-    });
+    }, { maxWait: 10000, timeout: 30000 });
   }
 }
