@@ -18,7 +18,7 @@ type BankTransactionReferenceRecord = {
 };
 
 type JournalEntryDelegate = {
-  findUnique: (args: unknown) => Promise<JournalReferenceRecord | null>;
+  findFirst: (args: unknown) => Promise<JournalReferenceRecord | null>;
 };
 
 type BankTransactionDelegate = {
@@ -54,12 +54,10 @@ export class FinanceIdempotencyService {
   > {
     const journalEntry = requireDelegate(db.journalEntry, 'journalEntry') as JournalEntryDelegate;
 
-    const existingRecord = await journalEntry.findUnique({
+    const existingRecord = await journalEntry.findFirst({
       where: {
-        tenantId_reference: {
-          tenantId,
-          reference,
-        },
+        tenantId,
+        reference,
       },
       select: {
         id: true,
