@@ -424,14 +424,33 @@ export class TrustTransactionService {
         },
       });
 
-      await tx.trustAccount.update({
-        where: { id: trustAccountId, tenantId },
-        data: {
-          currentBalance: {
-            increment: delta,
+      if (isTrustOutflow(input.transactionType)) {
+        // Authoritative atomic overdraw guard. The conditional UPDATE re-checks the
+        // balance under the row lock it takes, INSIDE this $transaction — closing the
+        // race left open by validate()'s pre-transaction read. Decrement by the positive
+        // `amount` (not `delta`) so the `gte` guard and the write are one atomic statement.
+        const debited = await tx.trustAccount.updateMany({
+          where: { id: trustAccountId, tenantId, currentBalance: { gte: amount } },
+          data: { currentBalance: { decrement: amount } },
+        });
+
+        if (debited.count === 0) {
+          throw Object.assign(new Error('Trust account has insufficient balance'), {
+            statusCode: 422,
+            code: 'INSUFFICIENT_TRUST_ACCOUNT_BALANCE',
+            details: { trustAccountId, required: amount.toString() },
+          });
+        }
+      } else {
+        await tx.trustAccount.update({
+          where: { id: trustAccountId, tenantId },
+          data: {
+            currentBalance: {
+              increment: delta,
+            },
           },
-        },
-      });
+        });
+      }
 
       await ClientTrustLedgerService.applyDelta(tx, tenantId, {
         trustAccountId,
