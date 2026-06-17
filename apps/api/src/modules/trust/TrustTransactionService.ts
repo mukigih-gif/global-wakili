@@ -525,6 +525,7 @@ const trustLiability = await this.resolveAccountId(tx, tenantId, AccountSubtype.
           enforcePeriodLock: true,
           allowMultiCurrency: false,
           expectedSourceModule: 'trust',
+          systemPosting: true,
         },
       );
 
@@ -657,6 +658,7 @@ const accountsReceivable = await this.resolveAccountId(tx, tenantId, AccountSubt
         enforcePeriodLock: true,
         allowMultiCurrency: false,
         expectedSourceModule: 'trust',
+        systemPosting: true,
       },
     );
   }

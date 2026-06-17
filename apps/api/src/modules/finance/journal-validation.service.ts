@@ -5,6 +5,7 @@ import type {
   JournalPostingInput,
   JournalValidationIssue,
   JournalValidationResult,
+  PostingPolicyContext,
   TenantDbClient,
 } from './finance.types';
 
@@ -25,6 +26,7 @@ export class JournalValidationService {
     db: TenantDbClient,
     tenantId: string,
     input: JournalPostingInput,
+    context: PostingPolicyContext = {},
   ): Promise<JournalValidationResult> {
     const issues: JournalValidationIssue[] = [];
 
@@ -149,7 +151,7 @@ export class JournalValidationService {
           });
         }
 
-        if (!account.allowManualPosting) {
+        if (!account.allowManualPosting && !context.systemPosting) {
           issues.push({
             code: 'LOCKED_ACCOUNT',
             message: 'Referenced account does not allow manual posting.',

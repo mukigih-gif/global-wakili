@@ -68,7 +68,7 @@ export class PostingPolicyService {
     input: JournalPostingInput,
     context: PostingPolicyContext = {},
   ): Promise<PostingPolicyResult> {
-    const validation = await JournalValidationService.validate(db, tenantId, input);
+    const validation = await JournalValidationService.validate(db, tenantId, input, context);
     const issues: JournalValidationIssue[] = [...validation.issues];
 
     if (context.enforcePeriodLock !== false) {

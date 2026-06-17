@@ -93,6 +93,10 @@ export type PostingPolicyContext = {
   enforcePeriodLock?: boolean;
   allowMultiCurrency?: boolean;
   expectedSourceModule?: string | null;
+  // System-generated postings (set by service callers) may target accounts with
+  // allowManualPosting:false. Manual journal entries leave this unset, so the
+  // LOCKED_ACCOUNT gate still blocks hand-posting to system-controlled accounts.
+  systemPosting?: boolean;
 };
 
 export type PostingPolicyResult = {

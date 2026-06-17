@@ -786,7 +786,7 @@ export class FinancePostingService {
     const gl = GeneralLedgerService as any;
 
     if (typeof gl.postJournal === 'function') {
-      return gl.postJournal(requestLike, payload);
+      return gl.postJournal(requestLike, payload, { systemPosting: true });
     }
 
     const journalEntry = optionalDelegate(prisma, 'journalEntry');
