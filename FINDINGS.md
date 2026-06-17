@@ -221,3 +221,148 @@ account-level check (now fixed) — risks inter-client commingling**
 - **Status:** OPEN — must be resolved before Group 7 Trust writes is
   considered fully closed, not deferred to Phase 3
 - **Logged:** 2026-06-17
+
+---
+
+## FINDING-007-003 — OPEN — CRITICAL
+
+**Trust journal-posting writes 500 via nested interactive transaction
+— blocks ALL trust deposit/withdrawal/transfer/interest writes**
+
+- **Affected:** TrustTransactionService.ts create() opens
+  db.$transaction(...) (~:403), then calls GeneralLedgerService.postJournal
+  with transactionReq.db = tx (the open tx client), which calls
+  TransactionEngine.postJournalAtomically(db = tx, ...)
+  (transaction-engine.ts:91), which itself calls db.$transaction(...) again.
+  Prisma.TransactionClient has no $transaction method -> TypeError,
+  caught by the generic 5xx handler (F-08) -> opaque 500 to caller.
+- **Impact:** Every trust write requiring journal posting fails:
+  deposit, withdrawal, transfer-to-office, interest. Reads (no journal
+  involved) are unaffected -> explains why Group 7 reads certified
+  12/12 while writes never have.
+- **Type signature tell:** TransactionEngine.postJournalAtomically expects
+  TransactionCapableFinanceDbClient (a full client) but receives a tx
+  client mid-transaction.
+- **Secondary defect found during diagnosis:** Demo tenant had no
+  TRUST_BANK (1010) / TRUST_LIABILITY (2010) chart-of-accounts entries —
+  seeded via live API as part of triage. TRUST_LIABILITY.normalBalance
+  was set to DEBIT by the API's createAccount (should be CREDIT for a
+  liability) -- data-quality defect in createAccount's default,
+  separate from the real seeder (which sets it correctly). Needs
+  correction on the demo tenant + possible createAccount default fix.
+- **Severity:** CRITICAL -- blocks 100% of trust journal-posting
+  writes on every request, not just under concurrency
+- **Status:** OPEN -- requires architectural fix in finance posting
+  core (TransactionEngine / GeneralLedgerService) -- not a one-liner
+- **Logged:** 2026-06-17
+
+### CORRECTION (2026-06-17, after local repro) — root cause was MISDIAGNOSED
+- Local repro (`apps/api/src/scripts/_repro-trust-deposit.ts`, deposit driven
+  directly through TrustTransactionService.create with raw error capture) shows
+  the nested-transaction theory is **WRONG**. `PostingPolicyService.assertAllowed`
+  throws at transaction-engine.ts:**64** — BEFORE the inner `db.$transaction` at :91 —
+  so the nested `tx.$transaction` is never reached.
+- **Actual blocker: `POSTING_POLICY_VIOLATION` (422)** with FOUR issues on a plain
+  KES trust deposit:
+  1. `LOCKED_ACCOUNT` x2 — TRUST_BANK (code 1010) and TRUST_LIABILITY (2010) have
+     `allowManualPosting: false` (correct per seed), but JournalValidationService
+     blocks the SYSTEM trust posting as if it were manual. System/auto postings
+     should not be gated by allowManualPosting.
+  2. `MISSING_PERIOD` — tenant has ZERO AccountingPeriod rows (count=0); trust
+     posting uses enforcePeriodLock=true, so no period for the journal month -> reject.
+  3. `MULTI_CURRENCY_POLICY_VIOLATION` — **logic bug** at posting-policy.service.ts:164:
+     `if (input.currency && context.allowMultiCurrency === false)` fires for ANY
+     single-currency journal that merely SETS a currency, even when only one currency
+     is involved. Trust posts with currency=KES + allowMultiCurrency:false -> always
+     violates. Should check for ACTUAL multiple distinct currencies, not presence.
+- **Secondary real bug (confirmed in repro):** after the policy throw,
+  GeneralLedgerService.postJournal's catch calls logAdminAction -> auditLog.findFirst
+  on the ALREADY-ROLLED-BACK outer trust transaction -> Prisma P2028
+  "Transaction already closed" (audit-logger.ts:302). Swallowed by `.catch`, but a
+  defect: audit-on-failure must not use the rolled-back tx client.
+- **Unresolved discrepancy:** local repro yields 422; the LIVE Render deposit returned
+  500 (opaque). Not yet explained — candidates: the P2028 audit interaction surfacing
+  differently over HTTP, or live running different code/state. Needs live-log
+  confirmation (requestId d9fc975a) — NOT yet confirmed.
+- **Revised status:** the CRITICAL nested-transaction claim above is RETRACTED. The
+  real issue is a cluster of posting-policy gaps (system-posting vs allowManualPosting,
+  missing periods, multi-currency false-positive) + the P2028 audit defect. Re-triage
+  needed before any fix.
+
+---
+
+## FINDING-007-003 — AMENDED
+
+**Status: Nested-transaction theory RETRACTED — superseded by FINDING-007-004**
+
+Local repro disproved the nested db.$transaction theory. Real cause
+confirmed via local stack trace: POSTING_POLICY_VIOLATION from three
+independent gaps. See FINDING-007-004 for the corrected diagnosis.
+
+---
+
+## FINDING-007-004 — OPEN — CRITICAL
+
+**Trust journal-posting writes have never worked — three independent
+posting-policy gaps each independently block every trust write**
+
+- **Gap A — LOCKED_ACCOUNT false positive:** Trust accounts are
+  correctly configured allowManualPosting:false, but the posting
+  validator treats system-initiated trust postings as manual postings,
+  triggering a false LOCKED_ACCOUNT rejection.
+- **Gap B — MISSING_PERIOD:** Tenant has zero AccountingPeriod rows.
+  Trust posting enforces period-lock validation against a period table
+  that was never seeded/created for this tenant.
+- **Gap C — MULTI_CURRENCY_POLICY_VIOLATION (genuine logic bug):**
+  posting-policy.service.ts:164 fires this violation for ANY journal
+  that sets a currency field when allowMultiCurrency:false -- including
+  single-currency KES journals that should never trigger it.
+- **Secondary bug:** GL failure path calls auditLog.findFirst against
+  the already-rolled-back outer transaction client -> P2028 error,
+  currently swallowed silently instead of surfaced.
+- **Discrepancy unresolved:** Local repro returns 422 (validation
+  error, policy gaps visible). Live target (Render) returns 500 for
+  the same operation, requestId d9fc975a-5f86-4f88-ad78-36769c7de1a6.
+  Cause of the local/live difference not yet established -- needs
+  live log access or further investigation.
+- **Severity:** CRITICAL -- any ONE of gaps A/B/C alone blocks every
+  trust journal-posting write (deposit, withdrawal, transfer, interest)
+- **Status:** OPEN -- three independent fixes needed, each requiring
+  full code read before proposing a change (per Principle 3)
+- **Logged:** 2026-06-17
+
+### RESOLUTION (2026-06-17) — all three gaps fixed
+- **Gap C** — commit 8b356ea: removed the spurious standalone
+  MULTI_CURRENCY_POLICY_VIOLATION gate (posting-policy.service.ts); genuine
+  multi-currency conflicts still caught by distinctCurrencies.size>1 + account/journal
+  mismatch checks.
+- **Gap A** — commit ef03a6f: added opt-in `systemPosting` flag to
+  PostingPolicyContext, threaded into JournalValidationService.validate(); LOCKED_ACCOUNT
+  gate skips when systemPosting=true. Set on trust postJournal contexts + FinancePostingService.
+  Manual POST /finance/journals passes no context -> gate still enforced (safe by default).
+- **Gap B** — commit ec3e950: posting-policy.service.ts now treats a MISSING period
+  row as OPEN (postable), matching AccountingPeriod.status default OPEN; only CLOSED/LOCKED
+  blocks. No period rows are required to post.
+- **Status:** gaps A/B/C RESOLVED in code. Live end-to-end verification pending deploy.
+  Secondary P2028 audit-on-rolled-back-tx bug (from the CORRECTION above) NOT yet fixed.
+
+---
+
+## FINDING-007-005 — OPEN — MEDIUM
+
+**Accounting period create/close capability is non-functional — periods can
+never be created, so a period can never actually be CLOSED/LOCKED**
+
+- **Affected:** PeriodCloseService.closePeriod (findUnique -> 404 if the row does
+  not exist, :43-53; then update). No code path anywhere creates an AccountingPeriod
+  row (confirmed: no accountingPeriod.create/upsert/createMany in the codebase; not in
+  provisioning, seeds, or migrations; 0 rows across all 3 tenants).
+- **Impact:** Non-blocking for posting after FINDING-007-004 Gap B (missing period =
+  open). BUT firms cannot lock a period: closePeriod 404s because the period row was
+  never created, so PERIOD_LOCKED is currently unreachable. Period-close /
+  month-end-lock is effectively unavailable.
+- **Fix direction (not yet designed):** add a create/open-period path — e.g. auto-ensure
+  the period row on first post or on tenant provisioning, and/or an "open period" admin
+  endpoint; closePeriod should upsert-or-require accordingly.
+- **Status:** OPEN -- follow-up to FINDING-007-004; surfaced during Gap B fix.
+- **Logged:** 2026-06-17
