@@ -121,7 +121,8 @@ export class PayrollDashboardService {
         orderBy: { createdAt: 'desc' },
         take: 10,
       }),
-      payrollBatch.count({ where: { ...batchWhere, status: 'PENDING_APPROVAL' } }),
+      // "Pending approval" = DRAFT (PayrollBatchStatus has no PENDING_APPROVAL). FINDING-008-005.
+      payrollBatch.count({ where: { ...batchWhere, status: 'DRAFT' } }),
       payrollBatch.count({ where: { ...batchWhere, status: 'APPROVED' } }),
       payrollBatch.count({ where: { ...batchWhere, status: 'POSTED' } }),
     ]);
