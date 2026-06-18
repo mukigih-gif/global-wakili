@@ -462,3 +462,66 @@ closing transaction client — silently fails (P2028), so AccountBalance never r
   divergence. Revisit for tenant-timezone correctness separately.
 - **Status:** OPEN — deferred; not a blocker.
 - **Logged:** 2026-06-18
+
+---
+
+## FINDING-007-008 — OPEN — HIGH
+
+**Payment posting 500s for everyone — Branch.isMain field does not
+exist in schema**
+
+- **Affected:** payment-posting.service.ts:727,
+  resolveReceiptBranchId -- queries Branch.isMain
+- **Impact:** POST /payments/* 500s unconditionally, before
+  reaching assertPeriodOpen/ensureOpenPeriod -- unrelated to
+  FINDING-007-005, blocks the payment path entirely regardless of
+  period state
+- **Status:** OPEN -- needs schema check (does Branch model have
+  an equivalent field under a different name, or was this never
+  added?) before proposing a fix
+- **Logged:** 2026-06-18
+
+---
+
+## FINDING-007-009 — OPEN — MEDIUM
+
+**Payment-route RBAC reads custom role name, ignores tenantRole —
+denies privileged users**
+
+- **Affected:** getUserRole(req) gate on payments:create_receipt /
+  finance.post_journal
+- **Impact:** A user with tenantRole=FIRM_ADMIN but a custom role
+  display-name of "ADMIN" (not matching the expected privileged
+  role-name string) is incorrectly 403'd. Confirmed via demo tenant
+  admin user; MANAGING_PARTNER role name works, FIRM_ADMIN-by-custom
+  -name does not.
+- **Status:** OPEN -- needs to check tenantRole (enum) rather than
+  or in addition to custom role display name
+- **Logged:** 2026-06-18
+
+---
+
+## FINDING-007-010 — OPEN — HIGH
+
+**Invoices created via the API are never journal-posted —
+billing-posting (postInvoiceIssued) is not HTTP-reachable**
+
+- Logged separately from FINDING-007-008 (distinct subsystem +
+  distinct defect class), per the "also noted" item.
+- **Affected:** billing.routes.ts POST /invoices (inline handler)
+  and proforma.service.ts convertToInvoice -- both direct-create
+  the Invoice via `db.invoice.create` and never invoke
+  invoice.service.createInvoice / BillingPostingService.postInvoiceIssued.
+- **Impact:** Invoices created/converted through the HTTP API never
+  produce the AR/income GL journal -- billing-posting.service
+  (and its assertPeriodOpen call site) is dead via HTTP; the GL is
+  silently understated for all API-created invoices.
+- **Side effect on FINDING-007-005 verification:** the only
+  HTTP-reachable assertPeriodOpen/ensureOpenPeriod path is the
+  finance manual journal endpoint (used to live-prove the period
+  fix); billing/payment posting paths are each independently
+  blocked (this finding + 007-008).
+- **Status:** OPEN -- needs decision: wire the inline/convert routes
+  to invoice.service.createInvoice (which posts), or post on a later
+  lifecycle event (submit/approve). Verify before fixing.
+- **Logged:** 2026-06-18
