@@ -592,7 +592,7 @@ authorization bugs twice — unify on rbac.ts DB-permission model**
 
 ---
 
-## FINDING-008-003 — OPEN — MEDIUM
+## FINDING-008-003 — CLOSED — MEDIUM
 
 **Disciplinary create unreachable via API — employee model vs user
 model duality**
@@ -609,3 +609,8 @@ model duality**
 - **Status:** OPEN — either expose Employee ids via GET /hr/employees
   or map User id -> Employee id inside createCase.
 - **Logged:** 2026-06-18
+- **CLOSED 2026-06-18:** Fixed: createCase now resolves
+  userId→Employee.id internally (d8c7e12). Demo tenant seeded with
+  Employee records matching existing Users. Disciplinary create
+  exercisable — cert 13/13.
+- **Status:** CLOSED.

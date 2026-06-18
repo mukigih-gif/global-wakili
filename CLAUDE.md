@@ -156,7 +156,7 @@ Final verification sweep.
 | Phase 1 Group 7 Trust reads | API Certification (Trust reads) | COMPLETE — 12/12 trust reads passing |
 | Phase 1 Group 9 Reporting | API Certification (Reporting reads+writes) | COMPLETE — 21/21 passing |
 | Phase 1 Group 7 Trust writes | API Certification (Trust writes: create-account/deposit/withdrawal/overdraw/transfer/interest/auth) | COMPLETE — 8/8 (f7d15fc; live-verified; blocker FINDING-007-002 closed) |
-| Phase 1 Group 8 HR | API Certification (HR) | COMPLETE — 12/13 (6e1ef0e; FINDING-008-002 dept fixed via schema catch-up dcdf568; 1 skipped: FINDING-008-003 disciplinary employee-id gap) |
+| Phase 1 Group 8 HR | API Certification (HR) | COMPLETE — 13/13 (6e1ef0e; FINDING-008-002 dept fixed dcdf568, FINDING-008-003 disciplinary fixed d8c7e12 + Employee seed) |
 | Phase 2 | Playwright E2E | PENDING |
 | Phase 3 | Finance/Trust/Payroll Compliance | PENDING |
 | Phase 4 | Multi-Tenant Breach | PENDING |
@@ -166,7 +166,7 @@ Final verification sweep.
 
 * Backend: ~82%
 * Frontend: ~35%
-* Tests: Phase 1 API 138/139 (50 Groups 1-5 + 16 Wave A + 19 Wave B + 12 Trust reads + 21 Reporting + 8 Trust writes + 12/13 HR — 1 HR skipped: FINDING-008-003)
+* Tests: Phase 1 API 139/139 (50 Groups 1-5 + 16 Wave A + 19 Wave B + 12 Trust reads + 21 Reporting + 8 Trust writes + 13/13 HR)
 * Overall: ~58%
 
 ## Recent Fixes
