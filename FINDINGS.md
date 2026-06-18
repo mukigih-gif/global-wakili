@@ -561,6 +561,21 @@ authorization bugs twice — unify on rbac.ts DB-permission model**
   (same stale-client pattern as FINDING-006-002) before assuming
   a code fix is needed.
 - **Logged:** 2026-06-18
+- **UPDATE 2026-06-18 — redeploy RULED OUT; root cause is a code/schema
+  field mismatch (NOT a stale client):** manual redeploy of df38c57
+  (build runs `npm run db:gen`) + 5-min buffer → GET /hr/departments
+  still 500. Reproduced in-process against prod DB; verbatim error:
+  `PrismaClientValidationError ... Invalid department.findMany()
+  invocation ... Unknown argument 'status'` at department.service.ts:191.
+  The `Department` model (schema.prisma:3323) has **no `status` field** —
+  it uses `isActive Boolean`. But the HR code references a nonexistent
+  `Department.status`: `listDepartments` orderBy `[{status},{name}]` and
+  the `status` where-filter (department.service.ts:188-204), plus
+  `updateDepartmentSchema`'s `departmentStatusSchema` (hr.validators.ts).
+  POST /hr/departments 500s from the same model/status assumption.
+  **Fix direction (not yet proposed): either replace `status` references
+  with `isActive`, or add a `status` enum + column to Department.**
+  Severity stays HIGH; cheapest-fix (redeploy) exhausted — code change required.
 
 ---
 
