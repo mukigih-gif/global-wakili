@@ -723,26 +723,11 @@ export class PaymentPostingService {
       return null;
     }
 
+    // No "main/default branch" flag is persisted anywhere (Branch has no
+    // isMain/isDefault column), so resolve to the tenant's oldest branch.
+    // See FINDING-007-008.
     const mainBranch =
-      ((await branchDelegate.findFirst({
-        where: {
-          tenantId: receipt.tenantId,
-          isMain: true,
-        },
-        select: {
-          id: true,
-        },
-      } as never)) as BranchRef | null) ??
-      ((await branchDelegate.findFirst({
-        where: {
-          tenantId: receipt.tenantId,
-          isDefault: true,
-        },
-        select: {
-          id: true,
-        },
-      } as never)) as BranchRef | null) ??
-      ((await branchDelegate.findFirst({
+      (await branchDelegate.findFirst({
         where: {
           tenantId: receipt.tenantId,
         },
@@ -752,7 +737,7 @@ export class PaymentPostingService {
         select: {
           id: true,
         },
-      } as never)) as BranchRef | null);
+      } as never)) as BranchRef | null;
 
     return typeof mainBranch?.id === 'string' ? mainBranch.id : null;
   }
