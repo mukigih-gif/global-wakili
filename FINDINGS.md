@@ -635,3 +635,24 @@ model duality**
   list uses. Phase 2 Playwright will surface this definitively.
 - **Status:** OPEN — frontend investigation needed
 - **Logged:** 2026-06-18
+
+---
+
+## FINDING-008-005 — OPEN — MEDIUM
+
+**Payroll dashboard queries fields absent from deployed schema —
+same class as FINDING-008-002 (Department)**
+
+- **Affected:** GET /payroll/dashboard handler
+- **Root cause:** Dashboard queries per-employee statutory
+  breakdown fields (NITA, per-record status lifecycle) that were
+  never added to the deployed PayrollRun/Payslip schema.
+- **Fix applied (Option A):** Surface what exists (Payslip totals
+  + batch status); zero/drop the phantom fields. No schema change.
+- **Deferred (Option B):** Full schema catch-up for statutory
+  breakdown granularity — requires its own migration, same
+  discipline as Department fix.
+- **Risk:** Response shape change for any frontend reading
+  payroll dashboard totals/breakdowns.
+- **Status:** OPEN (Option B deferred) / Option A applied
+- **Logged:** 2026-06-18

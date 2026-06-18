@@ -59,46 +59,39 @@ function money(value: unknown): Prisma.Decimal {
   return decimal.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 }
 
-function getPeriodWhere(input: PayrollDashboardInput) {
-  if (input.year && input.month) {
-    return {
-      periodStart: {
-        gte: new Date(input.year, input.month - 1, 1),
-        lt: new Date(input.year, input.month, 1),
-      },
-    };
-  }
-
-  if (input.year) {
-    return {
-      periodStart: {
-        gte: new Date(input.year, 0, 1),
-        lt: new Date(input.year + 1, 0, 1),
-      },
-    };
-  }
-
-  return {};
+// Period lives on PayrollBatch.year/month (no `periodStart` column exists). FINDING-008-005.
+function getPeriodFilter(input: PayrollDashboardInput): { year?: number; month?: number } {
+  return {
+    ...(input.year ? { year: input.year } : {}),
+    ...(input.month ? { month: input.month } : {}),
+  };
 }
 
 export class PayrollDashboardService {
   async getDashboard(input: PayrollDashboardInput) {
     const payrollBatch = delegate(prisma, 'payrollBatch');
-    const payrollRecord = delegate(prisma, 'payrollRecord');
     const payslip = delegate(prisma, 'payslip');
 
-    const where = {
+    // PayrollBatch carries status/branch/period directly (no `departmentId` column). FINDING-008-005.
+    const batchWhere = {
       tenantId: input.tenantId,
       ...(input.branchId ? { branchId: input.branchId } : {}),
-      ...(input.departmentId ? { departmentId: input.departmentId } : {}),
-      ...getPeriodWhere(input),
+      ...getPeriodFilter(input),
+    };
+
+    // Payslip carries the statutory amounts; filter it by period/branch via the batch
+    // relation (Payslip has no branchId/year/month columns of its own). FINDING-008-005.
+    const periodFilter = getPeriodFilter(input);
+    const payslipWhere = {
+      tenantId: input.tenantId,
+      ...(input.branchId || input.year || input.month
+        ? { batch: { ...(input.branchId ? { branchId: input.branchId } : {}), ...periodFilter } }
+        : {}),
     };
 
     const [
       batchStatusBreakdown,
-      recordStatusBreakdown,
-      records,
-      payslipStatusBreakdown,
+      payslips,
       recentBatches,
       pendingApprovalCount,
       approvedNotPostedCount,
@@ -106,102 +99,50 @@ export class PayrollDashboardService {
     ] = await Promise.all([
       payrollBatch.groupBy({
         by: ['status'],
-        where: {
-          tenantId: input.tenantId,
-          ...(input.branchId ? { branchId: input.branchId } : {}),
-          ...(input.departmentId ? { departmentId: input.departmentId } : {}),
-          ...(input.year ? { year: input.year } : {}),
-          ...(input.month ? { month: input.month } : {}),
-        },
+        where: batchWhere,
         _count: { id: true },
       }),
-      payrollRecord.groupBy({
-        by: ['status'],
-        where,
-        _count: { id: true },
-      }),
-      payrollRecord.findMany({
-        where: {
-          ...where,
-          status: {
-            not: 'CANCELLED',
-          },
-        },
+      payslip.findMany({
+        where: payslipWhere,
         select: {
-          id: true,
           grossPay: true,
           taxablePay: true,
           paye: true,
-          nssfEmployee: true,
-          nssfEmployer: true,
-          sha: true,
-          housingLevyEmployee: true,
-          housingLevyEmployer: true,
-          nitaEmployer: true,
-          totalDeductions: true,
+          shif: true,
+          nssf: true,
+          housingLevy: true,
+          deductions: true,
           netPay: true,
           employerCost: true,
         },
       }),
-      payslip.groupBy({
-        by: ['status'],
-        where: {
-          tenantId: input.tenantId,
-        },
-        _count: { id: true },
-      }),
       payrollBatch.findMany({
-        where: {
-          tenantId: input.tenantId,
-          ...(input.branchId ? { branchId: input.branchId } : {}),
-          ...(input.departmentId ? { departmentId: input.departmentId } : {}),
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        where: batchWhere,
+        orderBy: { createdAt: 'desc' },
         take: 10,
       }),
-      payrollBatch.count({
-        where: {
-          tenantId: input.tenantId,
-          status: 'PENDING_APPROVAL',
-          ...(input.branchId ? { branchId: input.branchId } : {}),
-          ...(input.departmentId ? { departmentId: input.departmentId } : {}),
-        },
-      }),
-      payrollBatch.count({
-        where: {
-          tenantId: input.tenantId,
-          status: 'APPROVED',
-          ...(input.branchId ? { branchId: input.branchId } : {}),
-          ...(input.departmentId ? { departmentId: input.departmentId } : {}),
-        },
-      }),
-      payrollBatch.count({
-        where: {
-          tenantId: input.tenantId,
-          status: 'POSTED',
-          ...(input.branchId ? { branchId: input.branchId } : {}),
-          ...(input.departmentId ? { departmentId: input.departmentId } : {}),
-        },
-      }),
+      payrollBatch.count({ where: { ...batchWhere, status: 'PENDING_APPROVAL' } }),
+      payrollBatch.count({ where: { ...batchWhere, status: 'APPROVED' } }),
+      payrollBatch.count({ where: { ...batchWhere, status: 'POSTED' } }),
     ]);
 
-    const totals = (records as PayrollDashboardRecord[]).reduce(
-      (acc: PayrollDashboardTotals, record: PayrollDashboardRecord): PayrollDashboardTotals => ({
+    // Map deployed Payslip columns onto the totals shape. Fields the schema never stored
+    // (employer NSSF/housing split, NITA) stay 0. FINDING-008-005.
+    const totals = (payslips as PayrollDashboardRecord[]).reduce(
+      (acc: PayrollDashboardTotals, p: PayrollDashboardRecord): PayrollDashboardTotals => ({
         employeeCount: acc.employeeCount + 1,
-        grossPay: acc.grossPay.plus(money(record.grossPay)),
-        taxablePay: acc.taxablePay.plus(money(record.taxablePay)),
-        paye: acc.paye.plus(money(record.paye)),
-        nssfEmployee: acc.nssfEmployee.plus(money(record.nssfEmployee)),
-        nssfEmployer: acc.nssfEmployer.plus(money(record.nssfEmployer)),
-        sha: acc.sha.plus(money(record.sha)),
-        housingLevyEmployee: acc.housingLevyEmployee.plus(money(record.housingLevyEmployee)),
-        housingLevyEmployer: acc.housingLevyEmployer.plus(money(record.housingLevyEmployer)),
-        nitaEmployer: acc.nitaEmployer.plus(money(record.nitaEmployer)),
-        totalDeductions: acc.totalDeductions.plus(money(record.totalDeductions)),
-        netPay: acc.netPay.plus(money(record.netPay)),
-        employerCost: acc.employerCost.plus(money(record.employerCost)),
+        grossPay: acc.grossPay.plus(money(p.grossPay)),
+        taxablePay: acc.taxablePay.plus(money(p.taxablePay)),
+        paye: acc.paye.plus(money(p.paye)),
+        nssfEmployee: acc.nssfEmployee.plus(money(p.nssf)),
+        nssfEmployer: acc.nssfEmployer,
+        sha: acc.sha.plus(money(p.shif)),
+        housingLevyEmployee: acc.housingLevyEmployee.plus(money(p.housingLevy)),
+        housingLevyEmployer: acc.housingLevyEmployer,
+        nitaEmployer: acc.nitaEmployer,
+        totalDeductions: acc.totalDeductions.plus(money(p.deductions)),
+        netPay: acc.netPay.plus(money(p.netPay)),
+        employerCost: acc.employerCost.plus(money(p.employerCost)),
       }),
       {
         employeeCount: 0,
@@ -236,8 +177,8 @@ export class PayrollDashboardService {
       totals,
       breakdowns: {
         batchStatus: batchStatusBreakdown,
-        recordStatus: recordStatusBreakdown,
-        payslipStatus: payslipStatusBreakdown,
+        recordStatus: [], // PayrollRecord has no status column in deployed schema (FINDING-008-005)
+        payslipStatus: [], // Payslip has no status column in deployed schema (FINDING-008-005)
       },
       recentBatches,
       generatedAt: new Date(),
