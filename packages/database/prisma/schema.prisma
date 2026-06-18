@@ -3320,19 +3320,37 @@ model DisbursementRequestNote {
   @@index([createdById])
 }
 
-model Department {
-  id          String   @id @default(cuid())
-  tenantId    String
-  branchId    String?
-  name        String
-  code        String?
-  description String?
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @default(now()) @updatedAt
+enum DepartmentStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+}
 
-  tenant Tenant  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
-  branch Branch? @relation(fields: [branchId], references: [id])
+model Department {
+  id                 String           @id @default(cuid())
+  tenantId           String
+  branchId           String?
+  name               String
+  code               String?
+  description        String?
+  status             DepartmentStatus @default(ACTIVE)
+  parentDepartmentId String?
+  managerEmployeeId  String?
+  costCenterCode     String?
+  createdById        String?
+  updatedById        String?
+  archivedAt         DateTime?
+  archivedById       String?
+  archiveReason      String?
+  metadata           Json?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @default(now()) @updatedAt
+
+  tenant   Tenant       @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  branch   Branch?      @relation(fields: [branchId], references: [id])
+  parent   Department?  @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id])
+  children Department[] @relation("DepartmentHierarchy")
+  manager  Employee?    @relation("DepartmentManager", fields: [managerEmployeeId], references: [id])
 
   employees EmployeeProfile[]
 
@@ -3340,7 +3358,6 @@ model Department {
   @@unique([tenantId, code])
   @@index([tenantId])
   @@index([branchId])
-  @@index([isActive])
 }
 
 model JobTitle {
@@ -3734,6 +3751,8 @@ model Employee {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
   user   User?  @relation("HrEmployeeUser", fields: [userId], references: [id])
+
+  managedDepartments Department[] @relation("DepartmentManager")
 
   @@unique([tenantId, staffNumber])
   @@index([tenantId])
