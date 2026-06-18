@@ -614,3 +614,24 @@ model duality**
   Employee records matching existing Users. Disciplinary create
   exercisable — cert 13/13.
 - **Status:** CLOSED.
+
+---
+
+## FINDING-008-004 — OPEN — MEDIUM
+
+**Seeded Employee records not visible in HR module on frontend**
+
+- **Symptom:** Employee records seeded to Employee model (linked
+  via userId) do not appear in the HR employee list on the live
+  frontend application.
+- **Root cause candidate:** GET /hr/employees reads the User table
+  (confirmed 9 users, correct). Frontend may be querying a
+  different endpoint or the Employee model data is not surfaced
+  via any current UI component.
+- **Impact:** HR module appears empty to users despite data existing.
+  User/Employee duality (FINDING-008-003) has a frontend
+  manifestation the API-level fix did not resolve.
+- **Fix direction:** Confirm which endpoint/query the frontend HR
+  list uses. Phase 2 Playwright will surface this definitively.
+- **Status:** OPEN — frontend investigation needed
+- **Logged:** 2026-06-18
