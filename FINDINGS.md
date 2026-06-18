@@ -576,6 +576,19 @@ authorization bugs twice — unify on rbac.ts DB-permission model**
   **Fix direction (not yet proposed): either replace `status` references
   with `isActive`, or add a `status` enum + column to Department.**
   Severity stays HIGH; cheapest-fix (redeploy) exhausted — code change required.
+- **CLOSED 2026-06-18 (schema catch-up, Option B):** the `DepartmentService`
+  was written for a rich model the deployed table never had (10 phantom fields).
+  Resolved by bringing the schema up to the service (no service code change):
+  added `enum DepartmentStatus {ACTIVE,INACTIVE,ARCHIVED}` + 10 columns
+  (status, parentDepartmentId, managerEmployeeId, costCenterCode, createdById,
+  updatedById, archivedAt, archivedById, archiveReason, metadata) + 2 FKs
+  (self-ref parent/children, manager→Employee), and dropped the unused `isActive`
+  column/index (no readers). Commit dcdf568 (schema) + `prisma db push`
+  (--accept-data-loss for the isActive drop, 1 row). Render redeploy (db:gen)
+  regenerated the client. **Live-verified:** GET /hr/departments → 200,
+  POST /hr/departments → 201; HR cert re-run flipped to passed=12 skipped=1
+  (only FINDING-008-003 disciplinary remains).
+- **Status:** CLOSED.
 
 ---
 
