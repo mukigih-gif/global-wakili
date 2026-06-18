@@ -96,6 +96,11 @@ function requestWithDb(req: Request, db: TrustTransactionClient): Request {
   return {
     ...req,
     db,
+    // Node's IncomingMessage exposes `headers` (and Express exposes `ip`) as PROTOTYPE
+    // getters, which object spread does NOT copy. Carry them forward explicitly so
+    // downstream consumers (audit IP/UA extraction) still see the real request data.
+    headers: req.headers,
+    ip: req.ip,
   } as unknown as Request;
 }
 

@@ -90,9 +90,10 @@ function normalizeIp(req?: Request): string | null {
     return null;
   }
 
+  const forwardedHeader = req.headers?.['x-forwarded-for'];
   const forwarded =
-    typeof req.headers['x-forwarded-for'] === 'string'
-      ? req.headers['x-forwarded-for'].split(',')[0]?.trim() || null
+    typeof forwardedHeader === 'string'
+      ? forwardedHeader.split(',')[0]?.trim() || null
       : null;
 
   return forwarded || req.ip || null;
@@ -103,7 +104,7 @@ function normalizeUserAgent(req?: Request): string | null {
     return null;
   }
 
-  const header = req.headers['user-agent'];
+  const header = req.headers?.['user-agent'];
 
   return typeof header === 'string' ? header : null;
 }
