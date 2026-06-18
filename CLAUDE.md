@@ -186,6 +186,11 @@ Final verification sweep.
   * bbfbba6 — preserve headers/ip in synthetic in-transaction request; harden normalizeIp/normalizeUserAgent vs missing headers
   * Live evidence: deposit 201 (~3.9s); 5-way concurrent withdrawal race on a 2000 balance → 2×201 / 3×422 INSUFFICIENT_TRUST_ACCOUNT_BALANCE, final balance 0 — overdraw atomic guard re-proven under real concurrency (exactly the available funds withdrawn; no overspend, no negative)
 * OPEN follow-ups (must close before Group 7 cert tests): FINDING-007-002 (matter-level TOCTOU race, HIGH), FINDING-007-005 (period create/close), FINDING-007-006 (balance projection off-tx)
+* Period / payment / RBAC fix batch (18 Jun 2026) — all live-verified against production:
+  * FINDING-007-005 CLOSED — `ensureOpenPeriod` helper unifies period enforcement: lazy auto-creates an OPEN AccountingPeriod on first post (server-local month), replacing Gap B's "missing = OPEN (no row)" hack AND `assertPeriodOpen`'s hard 404; both enforcement paths reconciled, close/lock now meaningful (70c2db9). Live-verified: period `2026-06` auto-created over HTTP.
+  * FINDING-007-008 CLOSED — removed dead `Branch.isMain`/`isDefault` findFirst lookups (never existed in schema → PrismaClientValidationError 500'd ALL payment posting before reaching the period check); now resolves to tenant's oldest branch (3480c09). Live-verified: payment receipt posts 201 end-to-end.
+  * FINDING-007-009 CLOSED — payment/finance privilege gates now also check the authoritative `tenantRole` enum (FIRM_ADMIN) + `CFO` role, not just the shadowing custom Role.name (e94c0ca). Live-verified: admin (FIRM_ADMIN/"ADMIN") → 201; accounts (ACCOUNTANT) → 403 (no over-grant).
+  * Still OPEN, tracked, not yet addressed: FINDING-007-010 (API-created invoices never journal-posted — billing-posting not HTTP-reachable, HIGH), FINDING-007-011 (architectural: unify the parallel role/permission systems onto rbac.ts, MEDIUM).
 
 ---
 
