@@ -544,3 +544,40 @@ authorization bugs twice — unify on rbac.ts DB-permission model**
   planned session.
 - **Status:** OPEN -- architectural; deferred to a dedicated session.
 - **Logged:** 2026-06-18
+
+---
+
+## FINDING-008-002 — OPEN — HIGH
+
+**Department endpoints 500 in production — delegate undeployed on Render**
+
+- **Affected:** GET /api/v1/hr/departments, POST /api/v1/hr/departments
+- **Symptom:** Both return 500 in production; other HR delegates
+  (employees, leave, performance, disciplinary, documents) work.
+  Department model exists in schema (confirmed during 4a0475f
+  migration) but the deployed Prisma client on Render does not
+  appear to include the department delegate.
+- **Status:** OPEN — verify whether a Render redeploy resolves it
+  (same stale-client pattern as FINDING-006-002) before assuming
+  a code fix is needed.
+- **Logged:** 2026-06-18
+
+---
+
+## FINDING-008-003 — OPEN — MEDIUM
+
+**Disciplinary create unreachable via API — employee model vs user
+model duality**
+
+- **Affected:** POST /api/v1/hr/disciplinary (createCase validates
+  employeeId against the Employee Prisma model)
+- **Symptom:** No HR read endpoint exposes Employee model ids --
+  GET /hr/employees returns User ids, not Employee ids. A caller
+  has no way to obtain a valid employeeId to pass to createCase.
+- **Root cause:** The HR module has a User/Employee duality --
+  the read surface uses User, the write surface uses Employee
+  (added in 4a0475f). These were never connected by an API that
+  exposes Employee ids to callers.
+- **Status:** OPEN — either expose Employee ids via GET /hr/employees
+  or map User id -> Employee id inside createCase.
+- **Logged:** 2026-06-18
