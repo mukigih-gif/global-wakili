@@ -87,9 +87,30 @@ export class DisciplinaryService {
     const disciplinaryCase = delegate(prisma, 'disciplinaryCase');
     const employee = delegate(prisma, 'employee');
 
+    // Callers pass a User id (GET /hr/employees returns User ids); resolve it to the
+    // Employee record id before validating/creating. FINDING-008-003.
+    const employeeRecord = await employee.findFirst({
+      where: {
+        userId: input.employeeId,
+        tenantId: input.tenantId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!employeeRecord) {
+      throw Object.assign(new Error('Employee not found'), {
+        statusCode: 404,
+        code: 'EMPLOYEE_NOT_FOUND',
+      });
+    }
+
+    const resolvedEmployeeId = employeeRecord.id;
+
     const existingEmployee = await employee.findFirst({
       where: {
-        id: input.employeeId,
+        id: resolvedEmployeeId,
         tenantId: input.tenantId,
       },
       select: {
@@ -108,7 +129,7 @@ export class DisciplinaryService {
     return disciplinaryCase.create({
       data: {
         tenantId: input.tenantId,
-        employeeId: input.employeeId,
+        employeeId: resolvedEmployeeId,
         reportedById: input.reportedById,
         title: input.title,
         description: input.description,
