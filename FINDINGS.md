@@ -348,24 +348,38 @@ posting-policy gaps each independently block every trust write**
 
 ---
 
-## FINDING-007-005 — OPEN — MEDIUM
+## FINDING-007-005 — AMENDED — ESCALATED TO HIGH
 
-**Accounting period create/close capability is non-functional — periods can
-never be created, so a period can never actually be CLOSED/LOCKED**
+**Structural firm-wide gap: no AccountingPeriod ever gets created
+-- blocks billing/payments/payroll/refunds/WHT posting, not just
+period close**
 
-- **Affected:** PeriodCloseService.closePeriod (findUnique -> 404 if the row does
-  not exist, :43-53; then update). No code path anywhere creates an AccountingPeriod
-  row (confirmed: no accountingPeriod.create/upsert/createMany in the codebase; not in
-  provisioning, seeds, or migrations; 0 rows across all 3 tenants).
-- **Impact:** Non-blocking for posting after FINDING-007-004 Gap B (missing period =
-  open). BUT firms cannot lock a period: closePeriod 404s because the period row was
-  never created, so PERIOD_LOCKED is currently unreachable. Period-close /
-  month-end-lock is effectively unavailable.
-- **Fix direction (not yet designed):** add a create/open-period path — e.g. auto-ensure
-  the period row on first post or on tenant provisioning, and/or an "open period" admin
-  endpoint; closePeriod should upsert-or-require accordingly.
-- **Status:** OPEN -- follow-up to FINDING-007-004; surfaced during Gap B fix.
-- **Logged:** 2026-06-17
+- **Two divergent enforcement paths found:**
+  1. posting-policy.service.ts (trust/GL path) -- treats MISSING
+     period as OPEN (Gap B workaround, ec3e950) -- this is why
+     trust postings work.
+  2. assertPeriodOpen (billing/payments/payroll/refunds/WHT path)
+     -- 404s on missing period, NO mitigation exists -- these
+     posting paths are likely broken in production right now.
+- **Secondary consequence:** closePeriod also 404s (no row to
+  close) -- PERIOD_LOCKED enforcement is completely inert; month-end
+  lock does not function.
+- **Severity:** ESCALATED to HIGH -- this affects multiple core
+  finance posting paths (billing, payments, payroll, refunds, WHT),
+  not just trust, and not just period-close cosmetics.
+- **Fix shape (scoped, not implemented):** needs (1) a period
+  create/open mechanism -- candidates: lazy auto-create on first
+  post via a shared helper, tenant-provisioning-time creation +
+  scheduled monthly job, or manual admin endpoint; (2) reconciling
+  the two divergent enforcement paths to agree on behavior; (3)
+  this then makes the existing close/lock logic in both paths
+  finally meaningful.
+- **Recommended approach (not yet approved):** single shared
+  "ensure-open-period" helper invoked by both enforcement paths.
+- **Status:** OPEN -- HIGH severity -- requires dedicated
+  investigation/fix session, same rigor as the trust-write arc.
+  NOT addressed in this session.
+- **Logged:** 2026-06-17 (original) / **Escalated:** 2026-06-18
 
 ---
 
