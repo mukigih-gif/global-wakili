@@ -145,7 +145,7 @@ Final verification sweep.
 
 # 3A. CURRENT GATE STATUS
 
-(updated 11 Jun 2026)
+(updated 18 Jun 2026)
 
 | Gate | Name | Status |
 |------|------|--------|
@@ -155,7 +155,8 @@ Final verification sweep.
 | Phase 1 Group 6 Wave B | API Certification (Billing writes) | COMPLETE — 19/19 billing writes passing |
 | Phase 1 Group 7 Trust reads | API Certification (Trust reads) | COMPLETE — 12/12 trust reads passing |
 | Phase 1 Group 9 Reporting | API Certification (Reporting reads+writes) | COMPLETE — 21/21 passing |
-| Phase 1 Group 7 Trust writes + Group 8 HR | API Certification (Trust writes, HR) | NEXT |
+| Phase 1 Group 7 Trust writes | deposit/withdrawal/transfer/interest VERIFIED LIVE in production (infrastructure/bug-fix, not cert-tested) | UNBLOCKED — NOT yet fully certifiable: FINDING-007-002 (matter-level race, HIGH) must close before Group 7 cert tests are written |
+| Phase 1 Group 8 HR | API Certification (HR) | NEXT |
 | Phase 2 | Playwright E2E | PENDING |
 | Phase 3 | Finance/Trust/Payroll Compliance | PENDING |
 | Phase 4 | Multi-Tenant Breach | PENDING |
@@ -165,7 +166,7 @@ Final verification sweep.
 
 * Backend: ~82%
 * Frontend: ~35%
-* Tests: Phase 1 API 118/118 (50 Groups 1-5 + 16 Wave A + 19 Wave B + 12 Trust reads + 21 Reporting)
+* Tests: Phase 1 API 118/118 (50 Groups 1-5 + 16 Wave A + 19 Wave B + 12 Trust reads + 21 Reporting) — unchanged; the Trust-writes work was infrastructure/bug-fix, no new cert tests written yet
 * Overall: ~58%
 
 ## Recent Fixes
@@ -173,6 +174,18 @@ Final verification sweep.
 * FINDING-006-002: billing schema delegates added, migration applied, dashboard fix deployed
 * FIX D: drop Invoice.createdById in proforma convert
 * FIX E: add CreditNote void fields + migration
+* Trust journal-posting writes UNBLOCKED & VERIFIED LIVE (18 Jun 2026) — deposit/withdrawal/transfer/interest now post end-to-end in production (previously 500'd at every layer; never worked). Fix chain:
+  * 4180794 — overdraw race → atomic conditional balance update
+  * 8b356ea — Gap C: removed spurious MULTI_CURRENCY_POLICY_VIOLATION on single-currency journals
+  * ef03a6f — Gap A: `systemPosting` flag lets system postings target allowManualPosting:false accounts
+  * ec3e950 — Gap B: missing AccountingPeriod treated as OPEN (only CLOSED/LOCKED blocks)
+  * 76e6be1 — P2028: raised interactive-transaction timeout 5s→30s
+  * 033ba04 + f9c2697 — Option-A guard-safe findFirst/updateMany for journal idempotency + account-balance rebuild
+  * e353612 — Option B (root fix): tenant guard accepts composite-key `where` with a matching nested tenantId; tightens top-level to exact-match
+  * 3343102 — committed guard tests (9/9; 365/365 tenant-isolation regression green)
+  * bbfbba6 — preserve headers/ip in synthetic in-transaction request; harden normalizeIp/normalizeUserAgent vs missing headers
+  * Live evidence: deposit 201 (~3.9s); 5-way concurrent withdrawal race on a 2000 balance → 2×201 / 3×422 INSUFFICIENT_TRUST_ACCOUNT_BALANCE, final balance 0 — overdraw atomic guard re-proven under real concurrency (exactly the available funds withdrawn; no overspend, no negative)
+* OPEN follow-ups (must close before Group 7 cert tests): FINDING-007-002 (matter-level TOCTOU race, HIGH), FINDING-007-005 (period create/close), FINDING-007-006 (balance projection off-tx)
 
 ---
 
