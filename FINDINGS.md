@@ -525,3 +525,22 @@ billing-posting (postInvoiceIssued) is not HTTP-reachable**
   to invoice.service.createInvoice (which posts), or post on a later
   lifecycle event (submit/approve). Verify before fixing.
 - **Logged:** 2026-06-18
+
+---
+
+## FINDING-007-011 — OPEN — MEDIUM (architectural)
+
+**Two+ parallel role/permission systems have now caused silent
+authorization bugs twice — unify on rbac.ts DB-permission model**
+
+- Two parallel role/permission systems (custom Role.name vs
+  tenantRole enum vs DB-granted rbac.ts permissions) have now caused
+  silent authorization bugs twice (HR: dot/colon permission-string
+  split, FINDING-008-001; Finance: enum/custom-name split,
+  FINDING-007-009). Recommend a dedicated future effort to unify all
+  authorization checks onto rbac.ts's DB-permission model (the
+  pattern billing already uses correctly). Not undertaken now --
+  scope/risk too large for an opportunistic fix; needs its own
+  planned session.
+- **Status:** OPEN -- architectural; deferred to a dedicated session.
+- **Logged:** 2026-06-18

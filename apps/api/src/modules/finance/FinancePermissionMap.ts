@@ -43,6 +43,7 @@ type FinanceRequestUser = {
   permissions?: unknown;
   roles?: unknown;
   role?: unknown;
+  tenantRole?: unknown;
   isSuperAdmin?: unknown;
   isSystemAdmin?: unknown;
 };
@@ -70,6 +71,9 @@ function isSuperUser(req: Request): boolean {
   const user = financeRequest(req).user;
   const roles = Array.isArray(user?.roles) ? user.roles.map(String) : [];
   const role = user?.role ? String(user.role) : '';
+  // Authoritative tenantRole enum, in addition to the custom role name above:
+  // a FIRM_ADMIN whose custom Role.name is "ADMIN" must not be denied. FINDING-007-009.
+  const tenantRole = user?.tenantRole ? String(user.tenantRole).toUpperCase() : '';
 
   return (
     user?.isSuperAdmin === true ||
@@ -77,9 +81,12 @@ function isSuperUser(req: Request): boolean {
     roles.includes('SUPER_ADMIN') ||
     roles.includes('SYSTEM_ADMIN') ||
     roles.includes('MANAGING_PARTNER') ||
+    roles.includes('CFO') ||
     role === 'SUPER_ADMIN' ||
     role === 'SYSTEM_ADMIN' ||
-    role === 'MANAGING_PARTNER'
+    role === 'MANAGING_PARTNER' ||
+    role === 'CFO' ||
+    tenantRole === 'FIRM_ADMIN'
   );
 }
 

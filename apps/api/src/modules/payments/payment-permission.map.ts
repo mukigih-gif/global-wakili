@@ -21,6 +21,7 @@ const privilegedRoles = new Set([
   'FIRM_ADMIN',
   'MANAGING_PARTNER',
   'FINANCE_MANAGER',
+  'CFO',
 ]);
 
 function normalizePermission(value: unknown): string | null {
@@ -67,10 +68,24 @@ function getUserRole(req: Request): string | null {
   return typeof role === 'string' ? role.toUpperCase() : null;
 }
 
-export function hasPaymentPermission(req: Request, permission: PaymentPermission): boolean {
-  const role = getUserRole(req);
+function getUserTenantRole(req: Request): string | null {
+  const user = req.user ?? (req as any).user ?? {};
+  const tenantRole = (user as { tenantRole?: unknown }).tenantRole;
 
-  if (role && privilegedRoles.has(role)) {
+  return typeof tenantRole === 'string' ? tenantRole.toUpperCase() : null;
+}
+
+export function hasPaymentPermission(req: Request, permission: PaymentPermission): boolean {
+  // Check the derived/custom role name AND the authoritative tenantRole enum:
+  // a FIRM_ADMIN whose custom Role.name is e.g. "ADMIN" must not be denied.
+  // See FINDING-007-009.
+  const role = getUserRole(req);
+  const tenantRole = getUserTenantRole(req);
+
+  if (
+    (role && privilegedRoles.has(role)) ||
+    (tenantRole && privilegedRoles.has(tenantRole))
+  ) {
     return true;
   }
 
