@@ -155,7 +155,7 @@ Final verification sweep.
 | Phase 1 Group 6 Wave B | API Certification (Billing writes) | COMPLETE — 19/19 billing writes passing |
 | Phase 1 Group 7 Trust reads | API Certification (Trust reads) | COMPLETE — 12/12 trust reads passing |
 | Phase 1 Group 9 Reporting | API Certification (Reporting reads+writes) | COMPLETE — 21/21 passing |
-| Phase 1 Group 7 Trust writes | deposit/withdrawal/transfer/interest VERIFIED LIVE in production (infrastructure/bug-fix, not cert-tested) | UNBLOCKED — NOT yet fully certifiable: FINDING-007-002 (matter-level race, HIGH) must close before Group 7 cert tests are written |
+| Phase 1 Group 7 Trust writes | API Certification (Trust writes: create-account/deposit/withdrawal/overdraw/transfer/interest/auth) | COMPLETE — 8/8 (f7d15fc; live-verified; blocker FINDING-007-002 closed) |
 | Phase 1 Group 8 HR | API Certification (HR) | NEXT |
 | Phase 2 | Playwright E2E | PENDING |
 | Phase 3 | Finance/Trust/Payroll Compliance | PENDING |
@@ -166,7 +166,7 @@ Final verification sweep.
 
 * Backend: ~82%
 * Frontend: ~35%
-* Tests: Phase 1 API 118/118 (50 Groups 1-5 + 16 Wave A + 19 Wave B + 12 Trust reads + 21 Reporting) — unchanged; the Trust-writes work was infrastructure/bug-fix, no new cert tests written yet
+* Tests: Phase 1 API 126/126 (50 Groups 1-5 + 16 Wave A + 19 Wave B + 12 Trust reads + 21 Reporting + 8 Trust writes)
 * Overall: ~58%
 
 ## Recent Fixes
