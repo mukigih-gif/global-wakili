@@ -395,3 +395,38 @@ closing transaction client — silently fails (P2028), so AccountBalance never r
   guard-safe queries (already true after e353612).
 - **Status:** OPEN -- deferred; not a blocker for trust/finance write certification.
 - **Logged:** 2026-06-18
+
+---
+
+## FINDING-007-002 — CLOSED
+
+**Matter-level TOCTOU race — same defect class as account-level
+(4180794), fixed via advisory lock + authoritative SUM-based guard**
+
+- **Fix:** Transaction advisory lock (pg_advisory_xact_lock, keyed
+  by namespaced hash of tenantId/trustAccountId/clientId/matterId)
+  serializes concurrent applyDelta calls per matter. Overdraw check
+  changed from reading the latest ledger row's cached `balance`
+  snapshot to computing SUM(credit)-SUM(debit) authoritatively,
+  both inside the lock.
+- **Commit:** 4135720
+- **Verified live in production under real concurrency:** clean
+  matter, deposit 4000, 5 concurrent 1000-withdrawals -> exactly
+  4x201 + 1x409 CLIENT_TRUST_LEDGER_OVERDRAW, true balance (SUM)
+  = 0, never negative, no overspend.
+- **Caveat (accepted, documented, not blocking):** the cached
+  `ClientTrustLedger.balance` column on the "latest" row is
+  unreliable under true concurrency (transactionDate ties make
+  "latest" ambiguous; observed stored=1000 vs true SUM=0 in the
+  verification run). The overdraw guard no longer reads this field
+  (SUM is authoritative), so this does NOT affect safety. Any
+  OTHER reader of this field (reports, dashboards) would see a
+  stale/wrong value under concurrent load.
+- **Decision:** ACCEPT as documented non-authoritative cache. SUM
+  is the source of truth. Relates to FINDING-007-006 (balance
+  projection drift) — fold any future "current balance" display
+  need into a proper recomputed/maintained projection rather than
+  trusting this column.
+- **Status:** CLOSED (race) / caveat documented (display-only,
+  non-blocking)
+- **Logged:** 2026-06-18
