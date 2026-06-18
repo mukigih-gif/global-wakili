@@ -14,7 +14,33 @@ type AccountingPeriodRecord = {
   isClosed: boolean;
 };
 
+const PERIOD_SELECT = {
+  id: true,
+  tenantId: true,
+  name: true,
+  month: true,
+  year: true,
+  startDate: true,
+  endDate: true,
+  status: true,
+  isClosed: true,
+} as const;
+
 type AccountingPeriodDelegate = {
+  create(args: {
+    data: {
+      tenantId: string;
+      name: string;
+      month: number;
+      year: number;
+      startDate: Date;
+      endDate: Date;
+      status: AccountingPeriodStatus;
+      isClosed: boolean;
+    };
+    select: typeof PERIOD_SELECT;
+  }): Promise<AccountingPeriodRecord>;
+
   findFirst(args: {
     where: {
       tenantId: string;
@@ -169,51 +195,51 @@ function assertPeriodIsOpen(period: AccountingPeriodRecord): void {
   }
 }
 
+export async function ensureOpenPeriod(
+  db: unknown,
+  tenantId: string,
+  effectiveDate: Date,
+): Promise<AccountingPeriodRecord> {
+  assertAccountingPeriodDelegate(db);
+
+  const resolvedTenantId = requireTenantId(tenantId);
+  const resolvedDate = normalizeEffectiveDate(effectiveDate);
+
+  const month = resolvedDate.getMonth() + 1; // server-local; see FINDING-007-007
+  const year = resolvedDate.getFullYear();
+  const where = { tenantId_month_year: { tenantId: resolvedTenantId, month, year } };
+
+  const existing = await db.accountingPeriod.findUnique({ where, select: PERIOD_SELECT });
+  if (existing) return existing;
+
+  try {
+    return await db.accountingPeriod.create({
+      data: {
+        tenantId: resolvedTenantId,
+        name: `${year}-${String(month).padStart(2, '0')}`,
+        month,
+        year,
+        startDate: new Date(year, month - 1, 1, 0, 0, 0, 0),
+        endDate: new Date(year, month, 0, 23, 59, 59, 999),
+        status: AccountingPeriodStatus.OPEN,
+        isClosed: false,
+      },
+      select: PERIOD_SELECT,
+    });
+  } catch (err) {
+    // Lost a concurrent create race -> P2002 on unique(tenantId, month, year).
+    const refetched = await db.accountingPeriod.findUnique({ where, select: PERIOD_SELECT });
+    if (refetched) return refetched;
+    throw err;
+  }
+}
+
 export async function assertPeriodOpen(
   db: unknown,
   tenantId: string,
   effectiveDate: Date,
 ): Promise<void> {
-  assertAccountingPeriodDelegate(db);
-
-  const resolvedTenantId = requireTenantId(tenantId);
-  const resolvedEffectiveDate = normalizeEffectiveDate(effectiveDate);
-
-  const period = await db.accountingPeriod.findFirst({
-    where: {
-      tenantId: resolvedTenantId,
-      startDate: {
-        lte: resolvedEffectiveDate,
-      },
-      endDate: {
-        gte: resolvedEffectiveDate,
-      },
-    },
-    select: {
-      id: true,
-      tenantId: true,
-      name: true,
-      month: true,
-      year: true,
-      startDate: true,
-      endDate: true,
-      status: true,
-      isClosed: true,
-    },
-  });
-
-  if (!period) {
-    throw buildPeriodLockError(
-      'No accounting period exists for the supplied date',
-      'ACCOUNTING_PERIOD_NOT_FOUND',
-      404,
-      {
-        tenantId: resolvedTenantId,
-        effectiveDate: resolvedEffectiveDate.toISOString(),
-      },
-    );
-  }
-
+  const period = await ensureOpenPeriod(db, tenantId, effectiveDate);
   assertPeriodIsOpen(period);
 }
 

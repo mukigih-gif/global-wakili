@@ -7,6 +7,7 @@ import type {
   TenantDbClient,
 } from './finance.types';
 import { JournalValidationService } from './journal-validation.service';
+import { ensureOpenPeriod } from '../../utils/period-lock';
 
 function toDecimal(value: Prisma.Decimal | number | string | null | undefined): Prisma.Decimal {
   if (value === null || value === undefined) {
@@ -14,29 +15,6 @@ function toDecimal(value: Prisma.Decimal | number | string | null | undefined): 
   }
 
   return new Prisma.Decimal(value);
-}
-
-type AccountingPeriodRecord = {
-  status: string;
-};
-
-type AccountingPeriodDelegate = {
-  findUnique: (args: unknown) => Promise<AccountingPeriodRecord | null>;
-};
-
-function getAccountingPeriodDelegate(db: TenantDbClient): AccountingPeriodDelegate | null {
-  const candidate = (db as TenantDbClient & { accountingPeriod?: unknown }).accountingPeriod;
-
-  if (
-    candidate &&
-    typeof candidate === 'object' &&
-    'findUnique' in candidate &&
-    typeof (candidate as { findUnique?: unknown }).findUnique === 'function'
-  ) {
-    return candidate as AccountingPeriodDelegate;
-  }
-
-  return null;
 }
 
 const TRUST_SUBTYPES = new Set([
@@ -72,38 +50,16 @@ export class PostingPolicyService {
     const issues: JournalValidationIssue[] = [...validation.issues];
 
     if (context.enforcePeriodLock !== false) {
-      const month = input.date.getMonth() + 1;
-      const year = input.date.getFullYear();
+      // Lazily ensures an OPEN period row exists for the journal month (server-local;
+      // see FINDING-007-007), then blocks only if it is explicitly CLOSED or LOCKED.
+      // Unifies enforcement with assertPeriodOpen (FINDING-007-005).
+      const period = await ensureOpenPeriod(db, tenantId, input.date);
 
-      const accountingPeriodDelegate = getAccountingPeriodDelegate(db);
-
-      if (accountingPeriodDelegate) {
-        const accountingPeriod = await accountingPeriodDelegate.findUnique({
-          where: {
-            tenantId_month_year: {
-              tenantId,
-              month,
-              year,
-            },
-          },
-          select: {
-            status: true,
-          },
+      if (period.isClosed || period.status === 'CLOSED' || period.status === 'LOCKED') {
+        issues.push({
+          code: 'PERIOD_LOCKED',
+          message: 'The accounting period for this journal date is closed or locked.',
         });
-
-        // A missing period row means the month has never been closed -> treat as OPEN
-        // (postable), matching AccountingPeriod.status default OPEN. Only an explicitly
-        // CLOSED or LOCKED period blocks posting. (Periods are created/closed via
-        // PeriodCloseService; they are not pre-seeded.)
-        if (
-          accountingPeriod &&
-          (accountingPeriod.status === 'CLOSED' || accountingPeriod.status === 'LOCKED')
-        ) {
-          issues.push({
-            code: 'PERIOD_LOCKED',
-            message: 'The accounting period for this journal date is closed or locked.',
-          });
-        }
       }
     }
 

@@ -444,3 +444,21 @@ closing transaction client — silently fails (P2028), so AccountBalance never r
 - **Status:** CLOSED (race) / caveat documented (display-only,
   non-blocking)
 - **Logged:** 2026-06-18
+
+---
+
+## FINDING-007-007 — OPEN — LOW
+
+**AccountingPeriod month-bucketing uses server-local time**
+
+- AccountingPeriod month/year is derived from `Date.getMonth()`/
+  `getFullYear()` in server-local time (posting-policy.service.ts,
+  period-lock.ts, and the new `ensureOpenPeriod` helper). Tenants
+  carry a `timezone` field (default `Africa/Nairobi`) that is not
+  consulted, so a post near a month boundary can bucket into the
+  wrong tenant-local month.
+- Deliberately matched to existing server-local behavior when
+  implementing FINDING-007-005 to avoid introducing a third
+  divergence. Revisit for tenant-timezone correctness separately.
+- **Status:** OPEN — deferred; not a blocker.
+- **Logged:** 2026-06-18
