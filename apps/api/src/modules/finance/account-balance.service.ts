@@ -7,6 +7,9 @@ type AccountBalanceDbClient = {
   accountBalance: {
     upsert: Function;
     findMany: Function;
+    findFirst: Function;
+    updateMany: Function;
+    create: Function;
   };
 };
 
@@ -43,19 +46,26 @@ export class AccountBalanceService {
     const creditBalance = toDecimal(aggregate._sum.credit);
     const netBalance = debitBalance.minus(creditBalance);
 
-    return db.accountBalance.upsert({
-      where: {
-        tenantId_accountId: {
-          tenantId,
-          accountId,
-        },
-      },
-      update: {
-        debitBalance,
-        creditBalance,
-        netBalance,
-      },
-      create: {
+    // Tenant-safe upsert: the tenant-isolation guard blocks upsert/findUnique/update on
+    // scoped models whose where lacks a TOP-LEVEL tenantId (a composite tenantId_accountId
+    // key is nested, so it trips the guard). Use findFirst (read) + updateMany/create — all
+    // guard-safe — instead. The @@unique([tenantId, accountId]) constraint still backstops races.
+    const existing = await db.accountBalance.findFirst({
+      where: { tenantId, accountId },
+      select: { id: true },
+    });
+
+    if (existing) {
+      await db.accountBalance.updateMany({
+        where: { tenantId, accountId },
+        data: { debitBalance, creditBalance, netBalance },
+      });
+
+      return { id: existing.id, tenantId, accountId, debitBalance, creditBalance, netBalance };
+    }
+
+    return db.accountBalance.create({
+      data: {
         tenantId,
         accountId,
         debitBalance,

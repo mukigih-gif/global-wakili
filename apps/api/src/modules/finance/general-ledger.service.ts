@@ -32,6 +32,9 @@ type GeneralLedgerAccountBalanceDbClient = TenantDbClient & {
   accountBalance: {
     upsert: (args: unknown) => Promise<unknown>;
     findMany: (args: unknown) => Promise<AccountBalanceRow[]>;
+    findFirst: (args: unknown) => Promise<{ id: string } | null>;
+    updateMany: (args: unknown) => Promise<unknown>;
+    create: (args: unknown) => Promise<unknown>;
   };
 };
 
