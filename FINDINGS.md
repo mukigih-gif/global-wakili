@@ -366,3 +366,32 @@ never be created, so a period can never actually be CLOSED/LOCKED**
   endpoint; closePeriod should upsert-or-require accordingly.
 - **Status:** OPEN -- follow-up to FINDING-007-004; surfaced during Gap B fix.
 - **Logged:** 2026-06-17
+
+---
+
+## FINDING-007-006 — OPEN — LOW
+
+**Account-balance projection rebuild runs post-commit, fire-and-forget, on the
+closing transaction client — silently fails (P2028), so AccountBalance never refreshes**
+
+- **Affected:** GeneralLedgerService.postJournal (general-ledger.service.ts:83) fires
+  `void AccountBalanceService.rebuildMany(db, ...)` where `db` is the interactive
+  transaction client (tx). It is NOT awaited and runs after the journal commits, so by
+  the time its queries execute the tx is closing/closed -> Prisma P2028
+  "Transaction already closed / expired". The rejection is swallowed by the attached
+  `.catch` ([ASYNC_BALANCE_FAIL] log).
+- **Impact:** LOW / non-blocking. The deposit (and other journal postings) now succeed
+  end-to-end; the GL journal + lines are the source of truth and are correct. But the
+  denormalized AccountBalance projection (used by trial-balance / dashboards) is NOT
+  refreshed on post — it goes stale until rebuilt by some other path. No data loss, no
+  incorrect posting.
+- **History:** Originally surfaced as a P2028 during the FINDING-007-004 repro. After the
+  Option-A (f9c2697) and Option-B (e353612) guard fixes, the guard no longer aborts the
+  outer transaction, so this reverted to its original benign-but-broken state (caught,
+  logged, not surfaced) instead of 500ing the request.
+- **Fix direction (not yet designed):** relocate the balance rebuild OFF the closing tx —
+  either run it inside the transaction (awaited, before commit) or after commit on a
+  fresh request-scoped (non-tx) client; or move it to an async queue/worker. Must use
+  guard-safe queries (already true after e353612).
+- **Status:** OPEN -- deferred; not a blocker for trust/finance write certification.
+- **Logged:** 2026-06-18
