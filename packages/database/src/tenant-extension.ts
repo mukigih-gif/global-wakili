@@ -194,12 +194,37 @@ export function addTenantToData(data: unknown, tenantId: string): unknown {
   };
 }
 
-export function hasTenantWhere(where: unknown): boolean {
+export function hasTenantWhere(where: unknown, tenantId?: string): boolean {
   if (!where || typeof where !== 'object') {
     return false;
   }
 
-  return Object.prototype.hasOwnProperty.call(where, 'tenantId');
+  const w = where as Record<string, unknown>;
+
+  // Top-level tenantId. When the real request tenantId is supplied, require an exact
+  // match (prevents spoofing a different tenant); without it (legacy callers/tests),
+  // fall back to presence — preserving prior behavior.
+  if (Object.prototype.hasOwnProperty.call(w, 'tenantId')) {
+    return tenantId === undefined ? true : w.tenantId === tenantId;
+  }
+
+  // Compound/composite unique key (e.g. { tenantId_reference: { tenantId, reference } }):
+  // accept ONLY when a nested key object carries a tenantId that EXACTLY matches the real
+  // request tenant. Never a substring/loose check; never a non-matching literal.
+  if (tenantId !== undefined) {
+    for (const value of Object.values(w)) {
+      if (
+        value !== null &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        (value as Record<string, unknown>).tenantId === tenantId
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 export function createTenantExtension(tenantId: string) {
@@ -232,7 +257,7 @@ export function createTenantExtension(tenantId: string) {
           }
 
           if (UNSAFE_UNIQUE_OPERATIONS.has(operation)) {
-            if (!hasTenantWhere(mutableArgs.where)) {
+            if (!hasTenantWhere(mutableArgs.where, tenantId)) {
               throw new Error(
                 `Unsafe tenant-scoped ${model}.${operation} blocked: include tenantId in where clause or use a tenant-safe query.`,
               );
