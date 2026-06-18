@@ -1,6 +1,8 @@
 // apps/api/src/modules/ai/AIAuditService.ts
 
 import type { AIAuditAction } from './ai.types';
+import { logSecurityEvent } from '../../utils/audit-logger';
+import { AuditAction, AuditSeverity } from '../../types/audit';
 
 type AuditDbClient = {
   auditLog: {
@@ -17,7 +19,7 @@ function assertTenant(tenantId?: string | null): asserts tenantId is string {
   }
 }
 
-function mapAuditAction(action: AIAuditAction): 'CREATE' | 'READ' | 'UPDATE' {
+function mapAuditAction(action: AIAuditAction): AuditAction {
   switch (action) {
     case 'HUB_VIEWED':
     case 'CAPABILITY_VIEWED':
@@ -25,12 +27,12 @@ function mapAuditAction(action: AIAuditAction): 'CREATE' | 'READ' | 'UPDATE' {
     case 'PROVIDER_CONFIGS_VIEWED':
     case 'ARTIFACTS_SEARCHED':
     case 'USAGE_LOGS_SEARCHED':
-      return 'READ';
+      return AuditAction.READ;
     case 'PROVIDER_CONFIG_UPSERTED':
-      return 'UPDATE';
+      return AuditAction.UPDATE;
     case 'TASK_EXECUTED':
     default:
-      return 'CREATE';
+      return AuditAction.CREATE;
   }
 }
 
@@ -51,22 +53,28 @@ export class AIAuditService {
   ) {
     assertTenant(params.tenantId);
 
-    return db.auditLog.create({
-      data: {
-        tenantId: params.tenantId,
-        userId: params.userId ?? null,
-        action: mapAuditAction(params.action),
-        entityId: params.entityId ?? null,
-        entityType: params.entityType ?? 'AI',
-        metadata: {
-          eventCode: `AI_${params.action}`,
-          requestId: params.requestId ?? null,
-          ip: params.ipAddress ?? null,
-          userAgent: params.userAgent ?? null,
-          timestamp: new Date().toISOString(),
-          ...(params.metadata ?? {}),
-        },
+    // Delegate to the hash-chaining audit writer (utils/audit-logger). A raw
+    // db.auditLog.create here previously omitted the required `hash`/`previousHash`
+    // chain fields (ADR-003) and wrote a non-existent `metadata` column, 500-ing
+    // every AI handler. logSecurityEvent computes the hash chain, uses a valid
+    // AuditAction, and stores the audit detail under afterData. Matches the
+    // reporting fix (2e7e70a).
+    return logSecurityEvent({
+      db: db as any,
+      tenantId: params.tenantId,
+      userId: params.userId ?? null,
+      action: mapAuditAction(params.action),
+      severity: AuditSeverity.INFO,
+      entityType: params.entityType ?? 'AI',
+      entityId: params.entityId ?? 'N/A',
+      requestId: params.requestId ?? null,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+      afterData: {
+        eventCode: `AI_${params.action}`,
+        ...(params.metadata ?? {}),
       },
+      allowMissingTenant: true,
     });
   }
 }
