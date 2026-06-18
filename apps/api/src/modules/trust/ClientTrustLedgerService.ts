@@ -51,30 +51,26 @@ export class ClientTrustLedgerService {
     const scopedClientId = requireNonEmpty(clientId, 'clientId');
     const scopedMatterId = normalizeMatterId(matterId);
 
-    const latestLedgerEntry = await db.clientTrustLedger.findFirst({
+    // Authoritative balance = SUM(credit) - SUM(debit) across ALL ledger rows for this
+    // (tenant, account, client, matter). The per-row `balance` snapshot is NOT trusted —
+    // it can drift from truth (FINDING-007-002). Backed by
+    // @@index([tenantId, trustAccountId, clientId, matterId]). When called from applyDelta
+    // this runs under the advisory lock, so read-check-insert is serialized per matter.
+    const totals = await db.clientTrustLedger.aggregate({
       where: {
         tenantId: scopedTenantId,
         trustAccountId: scopedTrustAccountId,
         clientId: scopedClientId,
         matterId: scopedMatterId,
       },
-      orderBy: [
-        { transactionDate: 'desc' },
-        { createdAt: 'desc' },
-      ],
-      select: {
-        trustAccountId: true,
-        clientId: true,
-        matterId: true,
-        balance: true,
-      },
+      _sum: { debit: true, credit: true },
     });
 
     return {
       trustAccountId: scopedTrustAccountId,
       clientId: scopedClientId,
       matterId: scopedMatterId,
-      balance: toDecimal(latestLedgerEntry?.balance),
+      balance: toDecimal(totals._sum.credit).minus(toDecimal(totals._sum.debit)),
     };
   }
 
@@ -151,6 +147,16 @@ export class ClientTrustLedgerService {
         },
       );
     }
+
+    // FINDING-007-002: serialize concurrent movements for THIS exact
+    // (tenant, account, client, matter) tuple via a Postgres transaction-scoped advisory
+    // lock (auto-released on commit/rollback). Combined with the SUM-based getMatterBalance,
+    // this makes read-check-insert atomic per matter — no overdraw, no negative sub-balance
+    // (ADR-004). tenantId is in the key, so the lock is tenant-scoped (ADR-001).
+    const lockKey =
+      `trust-ledger:${scopedTenantId}|${scopedTrustAccountId}|${scopedClientId}|${scopedMatterId ?? ''}`;
+    await (db as Prisma.TransactionClient)
+      .$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`;
 
     const currentSnapshot = await this.getMatterBalance(
       db,
