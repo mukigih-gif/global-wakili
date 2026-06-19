@@ -617,7 +617,7 @@ model duality**
 
 ---
 
-## FINDING-008-004 — OPEN — MEDIUM
+## FINDING-008-004 — CLOSED — MEDIUM
 
 **Seeded Employee records not visible in HR module on frontend**
 
@@ -633,8 +633,18 @@ model duality**
   manifestation the API-level fix did not resolve.
 - **Fix direction:** Confirm which endpoint/query the frontend HR
   list uses. Phase 2 Playwright will surface this definitively.
-- **Status:** OPEN — frontend investigation needed
+- **Status:** ~~OPEN — frontend investigation needed~~
 - **Logged:** 2026-06-18
+- **CLOSED 2026-06-18:** RESOLVED by 4fd5a72 (HR permission gate fix — added
+  FIRM_ADMIN + tenantRole check to HR_FULL_ACCESS_ROLES). Root cause: admin
+  user (role ADMIN, tenantRole FIRM_ADMIN) was deterministically 403'd by the
+  pre-fix gate (HR_FULL_ACCESS_ROLES=['HR_MANAGER'] + isSuperUser only) — not a
+  frontend/cache issue. The underlying GET /hr/employees data (User-based, 9
+  records) was correct throughout; admin simply could not reach it. Post-fix:
+  empirically verified live (200, count=9). Pre-fix 403 confirmed via
+  deterministic code analysis, not directly captured live (probe declined) —
+  disclosed for accuracy.
+- **Status:** CLOSED.
 
 ---
 
