@@ -666,3 +666,68 @@ same class as FINDING-008-002 (Department)**
   payroll dashboard totals/breakdowns.
 - **Status:** OPEN (Option B deferred) / Option A applied
 - **Logged:** 2026-06-18
+
+---
+
+## TODO-002 — SCOPE GAP — Approvals (cross-cutting, not yet a
+named bounded context)
+Approval workflows appear across HR (disciplinary), Billing
+(invoice approval), possibly CapEx/OpEx (Group B) -- but no
+dedicated Approvals cert group exists. Needs scoping as its own
+bounded context or explicitly folded into each domain's cert work.
+Status: OPEN, not started.
+
+## TODO-003 — SCOPE GAP — Court Filing
+Not present in v3/v3.1. May map to "Litigation support" in
+MASTER_EXECUTION_CHARTER.md's Legal Practice Management domain.
+Needs scoping from scratch. Status: OPEN, not started.
+
+## TODO-004 — SCOPE GAP — Tenders
+Not mentioned in any governing document. Entirely new scope.
+Needs requirements clarification before scoping. Status: OPEN,
+not started.
+
+## TODO-005 — SCOPE GAP — Broader Analytics/BI Reporting
+Group 9 (API) and v3.1 Group I (financial reports) cover reporting
+endpoints/financial reports. Broader BI/dashboards/KPIs/scheduled
+reports (per charter's Analytics & Reporting domain) not separately
+scoped. Status: PARTIAL -- needs explicit scoping for the
+non-financial-report portion.
+
+## TODO-006 — SCOPE GAP — AI Platform certification
+WIP-005 (CLAUDE.md) lists AI Legal Operations as Partial: document
+assembly, variable extraction, prompt registry/audit, artifact
+management, review workflows, contract risk radar, semantic search,
+prompt injection protection. None of this is in v3/v3.1 as a cert
+group. Needs scoping -- likely its own Phase 3 or Phase 4 group
+given AI-specific test requirements (prompt injection, context
+isolation -- already named in CLAUDE.md Section 7 Testing Matrix).
+Status: OPEN, not started.
+
+## TODO-007 — SCOPE GAP — Workflow engine
+No dedicated workflow/automation engine certification exists.
+Workflows are referenced across HR, Billing, Trust (approval
+chains) but no unified workflow-engine bounded context is defined.
+May overlap with TODO-002 (Approvals) -- needs scoping to
+determine if these are one context or two.
+Status: OPEN, not started.
+
+## TODO-008 — SCOPE GAP — Document platform has no active
+workspace/email/cloud-storage integration
+Current Document Platform (WIP-003) supports upload only. No
+integration exists for: Microsoft 365 (Outlook/Teams/OneDrive),
+Google Workspace (Gmail/Drive/Docs), or general email-to-matter
+linking. Per MASTER_EXECUTION_CHARTER.md, Microsoft Graph and
+Google Workspace integrations are already named requirements
+(Mail, Calendar, Teams, Files / Gmail, Calendar, Drive, Docs) but
+are Partial/unscoped. For a legal practice platform, this is a
+core capability gap, not a minor feature -- client emails and
+documents should link to matters, and connectors for OneDrive/
+Google Drive should allow document sync. Needs dedicated scoping:
+(1) email-to-matter linking (Outlook/Gmail), (2) cloud storage
+connectors (OneDrive/Google Drive) for document sync, (3) active
+workspace concept (not just upload) so documents/emails live
+alongside the matter they belong to.
+Status: OPEN, not started -- flagged as HIGH PRIORITY for
+post-Phase-3 planning given its centrality to legal practice
+workflows.
