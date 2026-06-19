@@ -669,7 +669,7 @@ same class as FINDING-008-002 (Department)**
 
 ---
 
-## FINDING-008-006 — OPEN — MEDIUM
+## FINDING-008-006 — CLOSED — MEDIUM
 
 **Tasks & Documents dashboards — dead field references
 (payroll-class), separate from the audit-layer bug**
@@ -681,10 +681,21 @@ same class as FINDING-008-002 (Department)**
 - **Distinct from:** the 7-dashboard audit-layer bug (fixed in
   99c1ab3) — this is a separate query-field bug, same class as
   FINDING-008-005 (payroll dashboard).
-- **Fix direction:** Same as payroll Option A — identify exact
-  dead fields, surface what exists, defer full schema catch-up
-  if richer granularity is needed.
-- **Status:** OPEN — next session
+- **Root cause:** Both dashboards' access scopes filtered on
+  `matter.partnerId` and `matter.assignedLawyerId`. Neither
+  exists on the deployed `Matter` model — the only responsible-
+  advocate field is `leadAdvocateId`. The phantom relation
+  filters threw PrismaClientValidationError before any row read.
+- **Fix applied (Option A, 9ef458b):** Collapsed the two phantom
+  matter branches onto the deployed `leadAdvocateId` access path
+  in `TaskDashboardService.buildAccessScope` and
+  `DocumentAccessPolicyService.buildAccessScope`. No schema
+  change. Document `metadata` JSON-path filters left intact
+  (valid Prisma JSON filtering, not dead columns).
+- **Verification:** Typecheck clean. Local 200/200; live 200/200
+  on both vercel.app and onrender.com (tasks + documents
+  dashboards).
+- **Status:** CLOSED — 2026-06-19 (9ef458b)
 - **Logged:** 2026-06-18
 
 ---

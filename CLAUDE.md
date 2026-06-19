@@ -157,7 +157,7 @@ Final verification sweep.
 | Phase 1 Group 9 Reporting | API Certification (Reporting reads+writes) | COMPLETE — 21/21 passing |
 | Phase 1 Group 7 Trust writes | API Certification (Trust writes: create-account/deposit/withdrawal/overdraw/transfer/interest/auth) | COMPLETE — 8/8 (f7d15fc; live-verified; blocker FINDING-007-002 closed) |
 | Phase 1 Group 8 HR | API Certification (HR) | COMPLETE — 13/13 (6e1ef0e; FINDING-008-002 dept fixed dcdf568, FINDING-008-003 disciplinary fixed d8c7e12 + Employee seed) |
-| Dashboard route sweep | Audit-layer routing across dashboard/procurement mounts | SUBSTANTIALLY COMPLETE — 16/18 mounts clean (99c1ab3); 2 tracked under FINDING-008-006 |
+| Dashboard route sweep | Audit-layer routing across dashboard/procurement mounts | COMPLETE — 18/18 mounts clean (99c1ab3 audit layer + 9ef458b Tasks/Documents schema fix; FINDING-008-006 CLOSED) |
 | Phase 2 | Playwright E2E | PENDING |
 | Phase 3 | Finance/Trust/Payroll Compliance | PENDING |
 | Phase 4 | Multi-Tenant Breach | PENDING |
@@ -194,7 +194,7 @@ Final verification sweep.
   * Still OPEN, tracked, not yet addressed: FINDING-007-010 (API-created invoices never journal-posted — billing-posting not HTTP-reachable, HIGH), FINDING-007-011 (architectural: unify the parallel role/permission systems onto rbac.ts, MEDIUM).
 * Dashboard route sweep (18 Jun 2026):
   * 99c1ab3 — routed 7 audit services (dashboards + procurement) through `logSecurityEvent`, matching the AI/reporting/approval pattern; fixed procurement catch-all ordering. Closes the dashboard audit-layer bug.
-  * Still OPEN: FINDING-008-006 (MEDIUM) — Tasks & Documents dashboards reference dead MatterTask/Document fields (PrismaClientValidationError), a separate query-field bug from the audit-layer fix; same class as FINDING-008-005 (payroll). Fix next session via payroll Option A.
+  * FINDING-008-006 CLOSED (9ef458b) — Tasks & Documents dashboard access scopes filtered on `matter.partnerId`/`matter.assignedLawyerId`, neither of which exists on the deployed `Matter` model (only `leadAdvocateId`); the phantom relation filters 500'd with PrismaClientValidationError. Option A: collapsed both phantom branches onto `leadAdvocateId`, no schema change. Live-verified 200/200 on both hosts. Dashboard route sweep now 18/18 clean.
 
 ---
 
