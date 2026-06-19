@@ -128,18 +128,6 @@ router.post(
   payVendorBill,
 );
 
-router.use((req: Request, res: Response) => {
-  res.status(404).json({
-    success: false,
-    module: 'procurement',
-    error: 'Procurement route not found',
-    code: 'PROCUREMENT_ROUTE_NOT_FOUND',
-    path: req.originalUrl,
-    requestId: req.id,
-    timestamp: new Date().toISOString(),
-  });
-});
-
 // ── Frontend-compatible aliases ────────────────────────────────────────────────
 // The frontend uses /procurement/requests, /orders, /bills, /vendors
 
@@ -248,6 +236,21 @@ router.post('/bills/:billId/pay', requirePermissions(PERMISSIONS.procurement.pay
     if (result.count === 0) return res.status(404).json({ error: 'Vendor bill not found', code: 'PROCUREMENT_BILL_NOT_FOUND', requestId: req.id });
     res.json({ success: true });
   } catch (e) { next(e); }
+});
+
+// Catch-all 404 — MUST be registered after all routes above (was previously before the
+// frontend-alias routes, shadowing /requests, /orders, /bills). Same fix class as the HR
+// routing-order bug (9cab5d9).
+router.use((req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    module: 'procurement',
+    error: 'Procurement route not found',
+    code: 'PROCUREMENT_ROUTE_NOT_FOUND',
+    path: req.originalUrl,
+    requestId: req.id,
+    timestamp: new Date().toISOString(),
+  });
 });
 
 export default router;

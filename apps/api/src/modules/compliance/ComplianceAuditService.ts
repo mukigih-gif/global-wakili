@@ -1,6 +1,8 @@
 // apps/api/src/modules/compliance/ComplianceAuditService.ts
 
 import type { ComplianceAuditAction } from './compliance.types';
+import { logSecurityEvent, inferAuditAction } from '../../utils/audit-logger';
+import { AuditSeverity } from '../../types/audit';
 
 export class ComplianceAuditService {
   static async logAction(
@@ -24,23 +26,24 @@ export class ComplianceAuditService {
       });
     }
 
-    return db.auditLog.create({
-      data: {
-        tenantId: params.tenantId,
-        userId: params.userId ?? null,
-        action: `COMPLIANCE_${params.action}`,
-        entityId: params.reportId ?? params.clientId ?? null,
-        entityType: params.reportId ? 'COMPLIANCE_REPORT' : 'COMPLIANCE',
-        metadata: {
-          requestId: params.requestId ?? null,
-          clientId: params.clientId ?? null,
-          reportId: params.reportId ?? null,
-          ip: params.ipAddress ?? null,
-          userAgent: params.userAgent ?? null,
-          timestamp: new Date().toISOString(),
-          ...(params.metadata ?? {}),
-        },
+    return logSecurityEvent({
+      db,
+      tenantId: params.tenantId,
+      userId: params.userId ?? null,
+      action: inferAuditAction(params.action),
+      severity: AuditSeverity.INFO,
+      entityType: params.reportId ? 'COMPLIANCE_REPORT' : 'COMPLIANCE',
+      entityId: params.reportId ?? params.clientId ?? 'N/A',
+      requestId: params.requestId ?? null,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+      afterData: {
+        eventCode: `COMPLIANCE_${params.action}`,
+        clientId: params.clientId ?? null,
+        reportId: params.reportId ?? null,
+        ...(params.metadata ?? {}),
       },
+      allowMissingTenant: true,
     });
   }
 }

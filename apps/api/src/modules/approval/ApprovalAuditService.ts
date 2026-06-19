@@ -1,6 +1,8 @@
 // apps/api/src/modules/approval/ApprovalAuditService.ts
 
 import type { ApprovalAuditAction } from './approval.types';
+import { logSecurityEvent, inferAuditAction } from '../../utils/audit-logger';
+import { AuditSeverity } from '../../types/audit';
 
 function assertTenant(tenantId?: string | null): asserts tenantId is string {
   if (!tenantId?.trim()) {
@@ -27,21 +29,19 @@ export class ApprovalAuditService {
   ) {
     assertTenant(params.tenantId);
 
-    return db.auditLog.create({
-      data: {
-        tenantId: params.tenantId,
-        userId: params.userId ?? null,
-        action: `APPROVAL_${params.action}`,
-        entityId: params.approvalId ?? null,
-        entityType: 'APPROVAL',
-        metadata: {
-          requestId: params.requestId ?? null,
-          ip: params.ipAddress ?? null,
-          userAgent: params.userAgent ?? null,
-          timestamp: new Date().toISOString(),
-          ...(params.metadata ?? {}),
-        },
-      },
+    return logSecurityEvent({
+      db,
+      tenantId: params.tenantId,
+      userId: params.userId ?? null,
+      action: inferAuditAction(params.action),
+      severity: AuditSeverity.INFO,
+      entityType: 'APPROVAL',
+      entityId: params.approvalId ?? 'N/A',
+      requestId: params.requestId ?? null,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+      afterData: { eventCode: `APPROVAL_${params.action}`, ...(params.metadata ?? {}) },
+      allowMissingTenant: true,
     });
   }
 }

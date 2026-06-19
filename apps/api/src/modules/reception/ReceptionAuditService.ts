@@ -1,6 +1,8 @@
 // apps/api/src/modules/reception/ReceptionAuditService.ts
 
 import type { ReceptionAuditAction } from './reception.types';
+import { logSecurityEvent, inferAuditAction } from '../../utils/audit-logger';
+import { AuditSeverity } from '../../types/audit';
 
 export class ReceptionAuditService {
   static async logAction(
@@ -24,22 +26,19 @@ export class ReceptionAuditService {
       });
     }
 
-    return db.auditLog.create({
-      data: {
-        tenantId: params.tenantId,
-        userId: params.userId ?? null,
-        action: `RECEPTION_${params.action}`,
-        entityId: params.logId ?? null,
-        entityType: 'RECEPTION_LOG',
-        metadata: {
-          requestId: params.requestId ?? null,
-          matterId: params.matterId ?? null,
-          ip: params.ipAddress ?? null,
-          userAgent: params.userAgent ?? null,
-          timestamp: new Date().toISOString(),
-          ...(params.metadata ?? {}),
-        },
-      },
+    return logSecurityEvent({
+      db,
+      tenantId: params.tenantId,
+      userId: params.userId ?? null,
+      action: inferAuditAction(params.action),
+      severity: AuditSeverity.INFO,
+      entityType: 'RECEPTION_LOG',
+      entityId: params.logId ?? 'N/A',
+      requestId: params.requestId ?? null,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+      afterData: { eventCode: `RECEPTION_${params.action}`, matterId: params.matterId ?? null, ...(params.metadata ?? {}) },
+      allowMissingTenant: true,
     });
   }
 }

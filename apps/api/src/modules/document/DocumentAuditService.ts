@@ -1,5 +1,8 @@
 ﻿// apps/api/src/modules/document/DocumentAuditService.ts
 
+import { logSecurityEvent, inferAuditAction } from '../../utils/audit-logger';
+import { AuditSeverity } from '../../types/audit';
+
 export type DocumentAuditAction =
   | 'UPLOADED'
   | 'VIEWED'
@@ -41,24 +44,25 @@ export class DocumentAuditService {
       });
     }
 
-    return db.auditLog.create({
-      data: {
-        tenantId: params.tenantId,
-        userId: params.userId ?? null,
-        action: `DOCUMENT_${params.action}`,
-        entityId: params.documentId ?? null,
-        entityType: 'DOCUMENT',
-        metadata: {
-          requestId: params.requestId ?? null,
-          matterId: params.matterId ?? null,
-          fileHash: params.fileHash ?? null,
-          version: params.version ?? null,
-          ip: params.ipAddress ?? null,
-          userAgent: params.userAgent ?? null,
-          timestamp: new Date().toISOString(),
-          ...(params.metadata ?? {}),
-        },
+    return logSecurityEvent({
+      db,
+      tenantId: params.tenantId,
+      userId: params.userId ?? null,
+      action: inferAuditAction(params.action),
+      severity: AuditSeverity.INFO,
+      entityType: 'DOCUMENT',
+      entityId: params.documentId ?? 'N/A',
+      requestId: params.requestId ?? null,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+      afterData: {
+        eventCode: `DOCUMENT_${params.action}`,
+        matterId: params.matterId ?? null,
+        fileHash: params.fileHash ?? null,
+        version: params.version ?? null,
+        ...(params.metadata ?? {}),
       },
+      allowMissingTenant: true,
     });
   }
 }

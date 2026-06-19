@@ -1,6 +1,8 @@
 // apps/api/src/modules/court/CourtAuditService.ts
 
 import type { CourtAuditAction } from './court.types';
+import { logSecurityEvent, inferAuditAction } from '../../utils/audit-logger';
+import { AuditSeverity } from '../../types/audit';
 
 export class CourtAuditService {
   static async logAction(
@@ -24,22 +26,19 @@ export class CourtAuditService {
       });
     }
 
-    return db.auditLog.create({
-      data: {
-        tenantId: params.tenantId,
-        userId: params.userId ?? null,
-        action: `COURT_${params.action}`,
-        entityId: params.hearingId ?? null,
-        entityType: 'COURT_HEARING',
-        metadata: {
-          requestId: params.requestId ?? null,
-          matterId: params.matterId ?? null,
-          ip: params.ipAddress ?? null,
-          userAgent: params.userAgent ?? null,
-          timestamp: new Date().toISOString(),
-          ...(params.metadata ?? {}),
-        },
-      },
+    return logSecurityEvent({
+      db,
+      tenantId: params.tenantId,
+      userId: params.userId ?? null,
+      action: inferAuditAction(params.action),
+      severity: AuditSeverity.INFO,
+      entityType: 'COURT_HEARING',
+      entityId: params.hearingId ?? 'N/A',
+      requestId: params.requestId ?? null,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+      afterData: { eventCode: `COURT_${params.action}`, matterId: params.matterId ?? null, ...(params.metadata ?? {}) },
+      allowMissingTenant: true,
     });
   }
 }

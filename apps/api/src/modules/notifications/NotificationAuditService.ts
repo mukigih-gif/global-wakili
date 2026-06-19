@@ -1,6 +1,7 @@
 // apps/api/src/modules/notifications/NotificationAuditService.ts
 
-import { AuditAction } from '../../types/audit';
+import { AuditAction, AuditSeverity } from '../../types/audit';
+import { logSecurityEvent } from '../../utils/audit-logger';
 import type { NotificationAuditAction } from './notification.types';
 
 function mapNotificationAuditAction(action: NotificationAuditAction): AuditAction {
@@ -42,24 +43,24 @@ export class NotificationAuditService {
       });
     }
 
-    return db.auditLog.create({
-      data: {
-        tenantId: params.tenantId,
-        userId: params.userId ?? null,
-        action: mapNotificationAuditAction(params.action),
-        entityId: params.notificationId ?? null,
-        entityType: 'NOTIFICATION',
-        metadata: {
-          eventCode: `NOTIFICATION_${params.action}`,
-          notificationAction: params.action,
-          requestId: params.requestId ?? null,
-          notificationId: params.notificationId ?? null,
-          ip: params.ipAddress ?? null,
-          userAgent: params.userAgent ?? null,
-          timestamp: new Date().toISOString(),
-          ...(params.metadata ?? {}),
-        },
+    return logSecurityEvent({
+      db,
+      tenantId: params.tenantId,
+      userId: params.userId ?? null,
+      action: mapNotificationAuditAction(params.action),
+      severity: AuditSeverity.INFO,
+      entityType: 'NOTIFICATION',
+      entityId: params.notificationId ?? 'N/A',
+      requestId: params.requestId ?? null,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+      afterData: {
+        eventCode: `NOTIFICATION_${params.action}`,
+        notificationAction: params.action,
+        notificationId: params.notificationId ?? null,
+        ...(params.metadata ?? {}),
       },
+      allowMissingTenant: true,
     });
   }
 }

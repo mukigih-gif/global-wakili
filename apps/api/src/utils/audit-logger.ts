@@ -4,13 +4,31 @@ import type { Prisma } from '@prisma/client';
 import { prisma as rootPrisma } from '../../../../packages/database/src/prisma';
 import { generateAuditHash } from './audit-hash';
 import {
+  AuditAction,
   AuditSeverity,
-  type AuditAction,
   type AuditActor,
   type AuditEventPayload,
   type JsonObject,
   type JsonValue,
 } from '../types/audit';
+
+// Maps a module audit-action string (e.g. "DASHBOARD_VIEWED", "SEND_REQUESTED") to a
+// valid AuditAction enum value. The precise action is preserved in afterData.eventCode.
+export function inferAuditAction(action: string): AuditAction {
+  const a = String(action).toUpperCase();
+  if (/REQUEST|SUBMIT|SEND|QUEUE|CREAT|GENERAT|ISSUE/.test(a)) return AuditAction.CREATE;
+  if (/APPROV/.test(a)) return AuditAction.APPROVE;
+  if (/REJECT/.test(a)) return AuditAction.REJECT;
+  if (/REVOK|CANCEL|DELET/.test(a)) return AuditAction.DELETE;
+  if (/ARCHIV/.test(a)) return AuditAction.ARCHIVE;
+  if (/RESTOR/.test(a)) return AuditAction.RESTORE;
+  if (/SIGN/.test(a)) return AuditAction.SIGN;
+  if (/DOWNLOAD/.test(a)) return AuditAction.DOWNLOAD;
+  if (/UPLOAD/.test(a)) return AuditAction.UPLOAD;
+  if (/EXPORT/.test(a)) return AuditAction.EXPORT;
+  if (/UPDAT|EDIT|STATUS|REASSIGN|ESCALAT/.test(a)) return AuditAction.UPDATE;
+  return AuditAction.VIEW;
+}
 
 type AuditLogDelegate = {
   findFirst(args: unknown): Promise<{ hash: string } | null>;

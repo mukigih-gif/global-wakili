@@ -1,6 +1,8 @@
 // apps/api/src/modules/task/TaskAuditService.ts
 
 import type { TaskAuditAction } from './task.types';
+import { logSecurityEvent, inferAuditAction } from '../../utils/audit-logger';
+import { AuditSeverity } from '../../types/audit';
 
 export class TaskAuditService {
   static async logAction(
@@ -24,22 +26,19 @@ export class TaskAuditService {
       });
     }
 
-    return db.auditLog.create({
-      data: {
-        tenantId: params.tenantId,
-        userId: params.userId ?? null,
-        action: `TASK_${params.action}`,
-        entityId: params.taskId ?? null,
-        entityType: 'TASK',
-        metadata: {
-          requestId: params.requestId ?? null,
-          matterId: params.matterId ?? null,
-          ip: params.ipAddress ?? null,
-          userAgent: params.userAgent ?? null,
-          timestamp: new Date().toISOString(),
-          ...(params.metadata ?? {}),
-        },
-      },
+    return logSecurityEvent({
+      db,
+      tenantId: params.tenantId,
+      userId: params.userId ?? null,
+      action: inferAuditAction(params.action),
+      severity: AuditSeverity.INFO,
+      entityType: 'TASK',
+      entityId: params.taskId ?? 'N/A',
+      requestId: params.requestId ?? null,
+      ipAddress: params.ipAddress ?? null,
+      userAgent: params.userAgent ?? null,
+      afterData: { eventCode: `TASK_${params.action}`, matterId: params.matterId ?? null, ...(params.metadata ?? {}) },
+      allowMissingTenant: true,
     });
   }
 }
