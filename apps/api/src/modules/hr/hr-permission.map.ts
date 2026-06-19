@@ -73,16 +73,20 @@ function isSuperUser(req: Request): boolean {
   );
 }
 
-const HR_FULL_ACCESS_ROLES = ['HR_MANAGER'];
+// FIRM_ADMIN is the firm's top administrator and must have full HR access (the
+// frontend HR pages call /hr/* as the logged-in admin). FINDING-008-004 / -008-001.
+const HR_FULL_ACCESS_ROLES = ['HR_MANAGER', 'FIRM_ADMIN'];
 
 function hasHrRoleAccess(req: Request): boolean {
   const user = req.user ?? (req as any).user;
   const roles = Array.isArray(user?.roles) ? user.roles.map(String) : [];
   const roleNames = Array.isArray(user?.roleNames) ? user.roleNames.map(String) : [];
   const role = user?.role ? String(user.role) : '';
+  // Authoritative tenantRole enum, in addition to the custom role name (matches FINDING-007-009).
+  const tenantRole = user?.tenantRole ? String(user.tenantRole).toUpperCase() : '';
 
   return HR_FULL_ACCESS_ROLES.some(
-    (r) => roles.includes(r) || roleNames.includes(r) || role === r,
+    (r) => roles.includes(r) || roleNames.includes(r) || role === r || tenantRole === r,
   );
 }
 
