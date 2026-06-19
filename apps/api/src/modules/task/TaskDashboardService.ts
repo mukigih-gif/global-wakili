@@ -14,14 +14,7 @@ function buildAccessScope(userId: string): Record<string, unknown> {
       {
         matter: {
           is: {
-            partnerId: userId,
-          },
-        },
-      },
-      {
-        matter: {
-          is: {
-            assignedLawyerId: userId,
+            leadAdvocateId: userId,
           },
         },
       },

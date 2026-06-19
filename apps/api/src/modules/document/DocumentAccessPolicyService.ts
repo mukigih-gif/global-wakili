@@ -57,14 +57,7 @@ export class DocumentAccessPolicyService {
         {
           matter: {
             is: {
-              partnerId: params.userId,
-            },
-          },
-        },
-        {
-          matter: {
-            is: {
-              assignedLawyerId: params.userId,
+              leadAdvocateId: params.userId,
             },
           },
         },
