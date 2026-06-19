@@ -669,6 +669,26 @@ same class as FINDING-008-002 (Department)**
 
 ---
 
+## FINDING-008-006 — OPEN — MEDIUM
+
+**Tasks & Documents dashboards — dead field references
+(payroll-class), separate from the audit-layer bug**
+
+- **Affected:** TaskDashboardService (db.matterTask.findMany),
+  DocumentDashboardService (db.document.count)
+- **Symptom:** PrismaClientValidationError — queries reference
+  fields not in the deployed MatterTask/Document schema.
+- **Distinct from:** the 7-dashboard audit-layer bug (fixed in
+  99c1ab3) — this is a separate query-field bug, same class as
+  FINDING-008-005 (payroll dashboard).
+- **Fix direction:** Same as payroll Option A — identify exact
+  dead fields, surface what exists, defer full schema catch-up
+  if richer granularity is needed.
+- **Status:** OPEN — next session
+- **Logged:** 2026-06-18
+
+---
+
 ## TODO-002 — SCOPE GAP — Approvals (cross-cutting, not yet a
 named bounded context)
 Approval workflows appear across HR (disciplinary), Billing
