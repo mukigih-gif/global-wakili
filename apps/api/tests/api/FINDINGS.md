@@ -307,3 +307,30 @@ regenerated on every test run — findings logged here survive reruns.
   /matters/conflict-check → 404, silently swallowed — the check never ran.)
 - Status: FIXED — API + New Matter UI aligned. (Separate: clients/new posts to
   /clients/conflict-check — different endpoint, verify later.)
+
+---
+
+## F-18 — RECONCILIATION (19 Jun 2026) — re-status OPEN -> IMPLEMENTED (verification pending)
+
+Resolves the Phase-1 close-out contradiction: API_CERTIFICATION_REPORT shows Group 4
+"Password Reset (F-18)" PASSING, while F-18 (line 167) reads OPEN. Read-only code review.
+Original entry above preserved for history; this supersedes its status.
+
+- **Implemented, not a stub:** forgot-password (auth.controller.ts:1044-1073) issues a
+  single-use, SHA-256-hashed, 60-min `PASSWORD_RESET` token via SecureTokenService and
+  emails a reset link; reset-password (1076-1100) verifies token -> enforces password
+  policy -> bcrypt(12) -> updates passwordHash/changedAt/expiresAt(+90d) -> consumes
+  token. SecureToken model + enum exist (schema.prisma:607-628).
+- **Why cert PASS ≠ CLOSED:** the Group 4 test (api-certification.test.ts:465-548) is
+  black-box + deploy-tolerant and asserts only the endpoint CONTRACT (200 neutral shape /
+  400 on bad token). It never runs a real token end-to-end (noted un-testable black-box,
+  lines 522-523). 200 = "endpoint responds", not "reset works".
+- **Open gaps keeping it short of CLOSED:**
+  - V1: no E2E happy-path test (issue token -> reset -> login new OK / old fails). Defer
+    to Phase 2 01-auth.spec.ts or a dedicated integration test.
+  - V2: email is SIMULATED in prod by committed config — EmailService.send falls back to
+    simulation (logs only) when neither SMTP_HOST nor SENDGRID_API_KEY is set; render.yaml
+    has those `sync:false`/absent ("simulation active without"). Reset emails likely never
+    dispatch unless SMTP creds were set manually in the Render dashboard.
+- **Revised status:** IMPLEMENTED — verification pending (V1 + V2). Cert PASS = contract
+  only. Logged: 19 Jun 2026.

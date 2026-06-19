@@ -762,3 +762,74 @@ alongside the matter they belong to.
 Status: OPEN, not started -- flagged as HIGH PRIORITY for
 post-Phase-3 planning given its centrality to legal practice
 workflows.
+
+---
+
+## F-18 — RECONCILIATION (2026-06-19) — re-status OPEN -> IMPLEMENTED (verification pending)
+
+**Why:** Phase 1 close-out flagged a contradiction — the committed
+API_CERTIFICATION_REPORT shows a PASSING "Group 4 — Password Reset (F-18)",
+while F-18 above (and in apps/api/tests/api/FINDINGS.md) still reads OPEN.
+Read-only code investigation resolves it. Original OPEN entry preserved above
+for history; this note supersedes its status.
+
+**Finding — the reset flow is genuinely implemented, NOT a stub:**
+- `POST /auth/forgot-password` (auth.controller.ts:1044-1073): finds ACTIVE user ->
+  `SecureTokenService.generateToken(...,'PASSWORD_RESET',60)` -> builds reset link ->
+  `EmailService.send`; always returns a neutral 200 (no account-existence disclosure);
+  rate-limited 3/email/hour.
+- `POST /auth/reset-password` (auth.controller.ts:1076-1100): verifyToken (400 if
+  invalid/expired) -> password policy (400 if weak) -> bcrypt(12) -> updates
+  passwordHash/passwordChangedAt/passwordExpiresAt(+90d)/resets failedLoginAttempts ->
+  consumeToken (single-use).
+- `SecureTokenService.ts`: real — stores SHA-256 hash only, time-limited, single-use;
+  backed by `model SecureToken` + `enum SecureTokenType` (schema.prisma:607-628).
+
+**Why the cert "PASS" and the "OPEN" status were BOTH defensible (they measured
+different things):** the Group 4 cert test (api-certification.test.ts:465-548) is
+BLACK-BOX and deploy-tolerant. It asserts only the endpoint CONTRACT (forgot -> 200
+neutral envelope w/ "reset link"; reset -> 400 on bad/fabricated/weak-token-gated). It
+NEVER exercises a successful end-to-end reset with a real emailed token (explicitly
+noted un-testable black-box, test lines 522-523). A 200 here means "endpoint exists and
+returns the neutral success shape", NOT "a reset email was sent" or "a password was
+actually changed".
+
+**Two open verification gaps (these are what keeps F-18 short of CLOSED):**
+- **V1 — no E2E happy-path proof.** Needs a server-side/integration test: issue a token
+  via SecureTokenService, call reset-password, assert login succeeds with the NEW
+  password and fails with the OLD. (Lands in Phase 2 01-auth.spec.ts or a dedicated
+  integration test — defer to keep one-phase-at-a-time discipline.)
+- **V2 — email delivery is, by committed config, SIMULATED in prod.** EmailService.send
+  (EmailService.ts:134-154) runs SIMULATION mode (logs only, sends no real email) when
+  neither SMTP_HOST nor SENDGRID_API_KEY is set. render.yaml has SMTP_HOST/SMTP_USER/
+  SMTP_PASS as `sync: false` (no committed value) and NO SENDGRID_API_KEY key at all;
+  its own comment says "simulation active without". So unless SMTP creds were entered
+  manually in the Render dashboard (not verifiable from repo), reset emails never leave
+  the server. forgot-password also swallows send failures (auth.controller.ts:1066).
+
+**Revised status:** F-18 = **IMPLEMENTED — verification pending** (real token-based
+reset flow; cert proves endpoint contract only; E2E + prod email delivery unverified).
+Keep the cert PASS but read it as *endpoint-contract only*. Logged: 2026-06-19.
+
+---
+
+## FINDING-AUTH-001 — OPEN — HIGH
+
+**Production email delivery not configured — all emails
+(password reset, notifications) silently simulate, never send**
+
+- **Affected:** EmailService.send() -- falls back to simulated
+  mode when both SMTP_HOST and SENDGRID_API_KEY are unset
+- **Confirmed:** render.yaml has SMTP_HOST/USER/PASS as sync:false
+  (no committed value), SENDGRID_API_KEY entirely absent. No
+  evidence of dashboard-entered credentials.
+- **Impact:** No user has ever received a real password-reset
+  email, notification email, or any other system email in
+  production. This affects F-18 (password reset) directly --
+  the flow is implemented correctly but functionally unreachable
+  for real users.
+- **Blocker:** Requires a real mailbox account (e.g.
+  mail.globalsitesltd.com) to be created and credentials obtained
+  -- external dependency, not resolvable in-session.
+- **Status:** OPEN -- blocked on account provisioning
+- **Logged:** 2026-06-19
