@@ -17,6 +17,17 @@ dist/
 build/
 startup-error.log
 
+# Next.js
+apps/web/.next/
+apps/web/next-env.d.ts
+
+# TypeScript incremental build cache
+*.tsbuildinfo
+
+# Local scratch / structure dumps
+site-structure.txt
+structure.txt
+
 tmp/
 
 # Regenerated test artifact (permanent log lives in FINDINGS.md)
