@@ -676,3 +676,81 @@ The project is not complete until:
 * Production go-live review is approved.
 
 Only then may Global Wakili Legal Enterprise be considered production-ready.
+
+---
+
+# 12. PLANNED SEED ARCHITECTURE (pre-Phase-2 requirement)
+
+Status: PLANNED — not yet built. Required before Phase 2 Playwright
+begins (E2E needs realistic, complete seed data to test against).
+
+Structure (prisma/seeds/, one file per bounded context, numbered
+for dependency order):
+
+```
+00_platform.seed.ts        01_tenants.seed.ts
+02_users.seed.ts           03_clients.seed.ts
+04_contacts.seed.ts        05_matters.seed.ts
+06_documents.seed.ts       07_calendar.seed.ts
+08_tasks.seed.ts           09_workflows.seed.ts
+10_finance.seed.ts         11_trust.seed.ts
+12_payroll.seed.ts         13_hr.seed.ts
+14_notifications.seed.ts   15_ai.seed.ts
+16_reporting.seed.ts       17_dashboard.seed.ts
+18_integrations.seed.ts    19_security.seed.ts
+22_billing.seed.ts         23_tax_compliance.seed.ts
+24_procurement.seed.ts     25_tenders.seed.ts
+26_court_filing.seed.ts    27_approvals.seed.ts
+28_accounting_periods.seed.ts
+master.seed.ts (orchestrator — calls all above in dependency order)
+```
+
+Refinements agreed (2026-06-19):
+
+- 20_stress.seed.ts: REMOVED from default master.seed.ts run. Kept
+  as a separate, optional script invoked only for load/stress
+  testing -- not run by default, to keep Playwright/dev seeding fast.
+
+- 19_security.seed.ts: sequence AFTER FINDING-007-011 (role/
+  permission system unification) is resolved -- avoid baking in
+  test fixtures for a permission system about to be restructured.
+
+- 22_billing.seed.ts: formalizes Group 6 Billing test data
+  (invoices, proformas, credit notes, retainers, payment reminders).
+
+- 23_tax_compliance.seed.ts: VAT records, WHT certificates, eTIMS
+  submissions, tax periods -- supports v3.1 Groups E/F.
+
+- 24/25/26/27 (procurement, tenders, court filing, approvals):
+  PLACEHOLDERS ONLY -- these domains are unbuilt (procurement has no
+  tracked TODO; tenders TODO-004, court filing TODO-003, approvals
+  TODO-002 -- all OPEN). Seed files reserve the numbering/structure
+  but CANNOT be meaningfully written until each feature is built
+  and scoped. Seed-writing follows feature-building, not the
+  reverse -- do not attempt to write these files prematurely.
+
+- 28_accounting_periods.seed.ts: seeds a valid OPEN AccountingPeriod
+  per tenant -- directly relevant to FINDING-007-005, ensures every
+  tenant starts with a valid period during testing rather than
+  relying on the lazy-create-on-first-post path.
+
+- NEW: 21_validation.seed.ts (or folded into master.seed.ts) --
+  after seeding completes, run a basic read-query against every
+  seeded model, assert no errors. Direct lesson from this session:
+  would have caught the Department/Payroll/Tasks/Documents
+  dead-field bugs before they reached production. Acts as a
+  schema-drift early-warning system going forward.
+
+Sequencing: own dedicated session, scoped properly first (same
+discipline as any multi-session build) -- not squeezed into a
+tail-end of unrelated work.
+
+---
+
+# 13. CONFIRMED SESSION SEQUENCE (as of 2026-06-19)
+
+1. F-17 (MFA) -- own dedicated session, full scoping first
+2. Seed architecture (Section 12 above) -- own dedicated session,
+   buildable seed files only (placeholders 24-27 excluded until
+   their features exist)
+3. Phase 2 Playwright -- begins only after seed architecture in place
