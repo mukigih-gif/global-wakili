@@ -1228,7 +1228,11 @@ Logged: 2026-06-19
 ## TODO-010 — File/path audit
 Full repo sweep for scattered duplicate files, misplaced
 documents, inconsistent naming (this FINDINGS.md duplication is
-the first known instance). Scope as its own dedicated task after
-the GW-EOS governance migration completes.
-Status: OPEN, scheduled next.
-Logged: 2026-06-19
+the first known instance). Scope as its own dedicated task.
+Fixed position (set 2026-06-20): runs immediately after the GW-EOS
+governance migration completes and BEFORE F-17 (MFA) — file/path
+discipline must be settled before MFA adds a large new feature that
+creates new files of its own. See CLAUDE.md Section 13: Step 0
+(governance migration) → Step 1 (this audit) → Step 2 (MFA).
+Status: OPEN — fixed position: post-governance-migration, pre-MFA.
+Logged: 2026-06-19. Position fixed: 2026-06-20.

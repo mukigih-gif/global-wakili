@@ -747,10 +747,16 @@ tail-end of unrelated work.
 
 ---
 
-# 13. CONFIRMED SESSION SEQUENCE (as of 2026-06-19)
+# 13. CONFIRMED SESSION SEQUENCE (as of 2026-06-20)
 
-1. F-17 (MFA) -- own dedicated session, full scoping first
-2. Seed architecture (Section 12 above) -- own dedicated session,
-   buildable seed files only (placeholders 24-27 excluded until
-   their features exist)
-3. Phase 2 Playwright -- begins only after seed architecture in place
+0. GW-EOS governance migration -- CLAUDE.md, SESSION_EXECUTION_
+   PROTOCOL.md, PROJECT_STATUS.md, COMPLETED_GATES.md,
+   KNOWN_GAPS.md, EXECUTION_ROADMAP.md, CERTIFICATION_POLICY.md,
+   CHANGE_CONTROL.md, DEFINITION_OF_DONE.md, QUALITY_STANDARDS.md,
+   RISK_MANAGEMENT.md, ARCHITECTURE_DECISIONS.md -- own dedicated
+   session, real data only (no placeholder/illustrative content)
+1. TODO-010 -- full repo-wide file/path audit -- fixed position:
+   immediately after Step 0, before Step 2
+2. F-17 (MFA) -- own dedicated session, full scoping first
+3. Seed architecture (Section 12) -- own dedicated session
+4. Phase 2 Playwright -- begins only after seed architecture in place
