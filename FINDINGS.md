@@ -43,6 +43,7 @@ preserved for history.
 | FINDING-007-009 | CLOSED | e94c0ca | finance gates also check `tenantRole` enum + CFO |
 | FINDING-008-002 | CLOSED | dcdf568 | Department schema/delegate catch-up |
 | FINDING-006-002 | CLOSED | 20260611161954 | billing models present in schema + migration; Wave A 16/16 + Wave B 19/19 live (was stale-OPEN from June-19 closeout) |
+| FINDING-007-010 | CLOSED | (this session) | postInvoiceIssued wired into invoice approval transition; local-verified balanced + idempotent |
 
 (Already recorded CLOSED elsewhere in file: 007-002, 008-001, 008-003, 008-004,
 008-006, 009-001.)
@@ -50,8 +51,9 @@ preserved for history.
 ### Genuinely OPEN at 2026-06-20 (carry-forward register)
 | ID | Severity | Summary | Owning phase |
 |---|---|---|---|
-| FINDING-007-010 | HIGH | API-created invoices never journal-posted (GL understated) | Phase 3 |
 | FINDING-AUTH-001 | HIGH | Production email delivery unconfigured — all email simulated | pre-go-live |
+| FINDING-007-013 | MEDIUM | Billing posting bypasses shared TransactionEngine (parallel mechanism, drift risk) | Phase 3/4 |
+| FINDING-007-012 | LOW | Invoice approval not fully atomic with GL posting (retry-safe) | Phase 3 |
 | F-17 | HIGH | No MFA enforced at login | pre-go-live |
 | F-20 | HIGH | No domain/SSO (SAML/OIDC) for firm staff | pre-go-live |
 | F-18 | IMPLEMENTED — verify | Reset flow real; E2E happy-path + prod email delivery unverified | Phase 2 |
@@ -597,10 +599,19 @@ denies privileged users**
 
 ---
 
-## FINDING-007-010 — OPEN — HIGH
+## FINDING-007-010 — CLOSED (2026-06-20)
 
 **Invoices created via the API are never journal-posted —
 billing-posting (postInvoiceIssued) is not HTTP-reachable**
+
+> CLOSED 2026-06-20: `postInvoiceIssued` is now wired into the invoice
+> approval transition (`approval.controller.ts` — DRAFT/PENDING_APPROVAL →
+> INVOICED + GL post in ONE transaction; the prior silent `.catch(()=>{})` is
+> removed so a failed post fails the approval). Local-verified against dev DB:
+> KES 10,000 + 16% VAT → DR 1200 AR 11,600 / CR 4000 Income 10,000 / CR 2100
+> VAT 1,600 (balanced); idempotency re-run → 1 journal (no double-post).
+> Follow-ups logged: FINDING-007-012 (atomicity), FINDING-007-013 (posting
+> path divergence). Original entry preserved below.
 
 - Logged separately from FINDING-007-008 (distinct subsystem +
   distinct defect class), per the "also noted" item.
@@ -617,10 +628,38 @@ billing-posting (postInvoiceIssued) is not HTTP-reachable**
   finance manual journal endpoint (used to live-prove the period
   fix); billing/payment posting paths are each independently
   blocked (this finding + 007-008).
-- **Status:** OPEN -- needs decision: wire the inline/convert routes
-  to invoice.service.createInvoice (which posts), or post on a later
-  lifecycle event (submit/approve). Verify before fixing.
-- **Logged:** 2026-06-18
+- **Status:** CLOSED (2026-06-20) — posted on the approve→INVOICED lifecycle
+  event (not at DRAFT create). See closure note above.
+- **Logged:** 2026-06-18 / **Closed:** 2026-06-20
+
+---
+
+## FINDING-007-012 — OPEN — LOW
+
+**Invoice approval not fully atomic with GL posting**
+
+Approval status commits before the posting transaction. If posting throws,
+approval=APPROVED but invoice stays PENDING_APPROVAL with no journal --
+surfaced as error, retry is safe (idempotent guard exists). Fully-atomic fix
+would require moving posting into ApprovalService.decideApproval (larger
+change). Logged for future convergence, not blocking.
+Logged: 2026-06-20
+
+---
+
+## FINDING-007-013 — OPEN — MEDIUM
+
+**Billing posting (postInvoiceIssued) is a parallel mechanism, does not route
+through TransactionEngine.postJournalAtomically**
+
+Skips PostingPolicyService (account-lock/allowManualPosting/multi-currency/
+systemPosting checks) and FinanceIdempotencyService -- compensates with its own
+balance/period/idempotency guards, which currently work correctly (verified) but
+can drift from Trust/payments posting rules over time since they're maintained
+independently. Recommend future convergence onto shared TransactionEngine, or
+formal acceptance of the parallel path as an intentional architecture decision
+(needs ADR either way).
+Logged: 2026-06-20
 
 ---
 

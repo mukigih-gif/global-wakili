@@ -5,6 +5,7 @@ import { asyncHandler } from '../../utils/async-handler';
 import { ApprovalAuditService } from './ApprovalAuditService';
 import { ApprovalCapabilityService } from './ApprovalCapabilityService';
 import { ApprovalService } from './ApprovalService';
+import { billingPostingService } from '../billing/billing-posting.service';
 
 function requireTenantId(req: Request): string {
   if (!req.tenantId?.trim()) {
@@ -183,12 +184,24 @@ export const approveApprovalRequest = asyncHandler(async (req: Request, res: Res
     },
   });
 
-  // Invoice approval hook: an approved INVOICE request issues the invoice.
+  // Invoice approval hook: an approved INVOICE request issues the invoice AND
+  // posts the AR/income GL journal in ONE transaction. A failed GL post fails the
+  // approval response (no silent success with no journal — FINDING-007-010).
+  // postInvoiceIssued is idempotent (dedups on existing BILLING/INVOICE journal)
+  // and enforces the period lock via assertPeriodOpen.
   if ((result as any).entityType === 'INVOICE' && (result as any).entityId) {
-    await req.db.invoice.updateMany({
-      where: { id: (result as any).entityId, tenantId, status: 'PENDING_APPROVAL' as any },
-      data: { status: 'INVOICED' as any },
-    }).catch(() => {});
+    const invoiceId = (result as any).entityId as string;
+    await req.db.$transaction(async (tx: any) => {
+      await tx.invoice.updateMany({
+        where: { id: invoiceId, tenantId, status: 'PENDING_APPROVAL' as any },
+        data: { status: 'INVOICED' as any },
+      });
+      await billingPostingService.postInvoiceIssued(tx, {
+        tenantId,
+        invoiceId,
+        postedById: userId,
+      });
+    });
   }
 
   res.status(200).json(result);
