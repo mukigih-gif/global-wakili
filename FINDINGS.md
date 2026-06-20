@@ -54,6 +54,7 @@ preserved for history.
 |---|---|---|---|
 | FINDING-AUTH-001 | HIGH | Production email delivery unconfigured — all email simulated | pre-go-live |
 | FINDING-007-013 | MEDIUM | Billing posting bypasses shared TransactionEngine (parallel mechanism, drift risk) | Phase 3/4 |
+| FINDING-COV-001 | MEDIUM | Codebase-wide: 43 service files across 10 modules export-only/dead (TODO-011 Part A; see MODULE_COVERAGE_AUDIT.md) | Phase 3 |
 | FINDING-MAT-001 | MEDIUM | Matter module: 12 services export-only/dead, routes run inline; /reports/matter-profitability absent (TODO-011 Part A) | Phase 3 |
 | FINDING-007-012 | LOW | Invoice approval not fully atomic with GL posting (retry-safe) | Phase 3 |
 | F-17 | HIGH | No MFA enforced at login | pre-go-live |
@@ -684,6 +685,28 @@ LIST endpoint 500'd. The journal DATA was always correct (verified directly in D
 orderBy. Original entry preserved.
 Status: CLOSED (2026-06-20).
 Logged: 2026-06-20. Closed: 2026-06-20.
+
+---
+
+## FINDING-COV-001 — OPEN — MEDIUM (coverage / TODO-011 Part A)
+
+**Codebase-wide dead/bypassed service layer — 43 service files across 10 modules
+are export-only (dead to every code path)**
+
+TODO-011 Part A scan (2026-06-20, `docs/governance/MODULE_COVERAGE_AUDIT.md`):
+of 26 modules, 16 are clean; 10 carry 43 services referenced only in their
+`index.ts` barrel (or nowhere) — no route/controller/worker/service invokes them.
+Method validated by direct inspection (matter 12/12, billing invoice.service,
+procurement ProcurementService, document DocumentESignatureService, finance
+petty-cash.service). Highest: document (11), matter (12 — see FINDING-MAT-001),
+procurement (6 — whole service layer). Same class as FINDING-007-010.
+
+This is DETECTION only. Each dead service still needs inline-vs-absent
+classification (capability may be served inline, like matter profitability/
+dashboard, OR absent from HTTP). Remediation (wire-in / delete / accept-via-ADR)
+is per-service scoped work, not done here. See the audit doc for the full table,
+per-module interpretation, and next steps (incl. Part B interconnection).
+Logged: 2026-06-20
 
 ---
 
