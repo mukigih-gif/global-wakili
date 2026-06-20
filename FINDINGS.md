@@ -1378,3 +1378,26 @@ creates new files of its own. See CLAUDE.md Section 13: Step 0
 (governance migration) → Step 1 (this audit) → Step 2 (MFA).
 Status: OPEN — fixed position: post-governance-migration, pre-MFA.
 Logged: 2026-06-19. Position fixed: 2026-06-20.
+
+## TODO-011 — Full file-coverage validation: Finance, Trust, Billing
+
+Before Phase 2 (Playwright) begins, validate that every file in the Finance,
+Trust, and Billing modules is actually exercised and covers what it claims to
+cover -- not just "the cert tests pass," but a deliberate audit confirming:
+- Every service file's stated purpose is actually implemented (not dead code,
+  not partial)
+- Every function in scope is reachable from a real code path (same class of
+  issue as FINDING-007-010 -- a correct function that was never wired in)
+- No silent gaps remain between what a file/module claims to do and what it
+  actually does when exercised
+
+Scope: apps/api/src/modules/finance/, trust/, billing/ -- full directory listing
++ purpose-vs-implementation check for each file.
+
+Position in sequence: AFTER Finance Core Closeout completes, BEFORE Phase 2
+Playwright. Sits alongside/extends Phase 3 (v3.1 Groups A-I) -- likely the
+natural place to run this audit is as part of, or immediately before, Phase 3,
+since Phase 3 is already doing deep financial-correctness verification.
+
+Status: OPEN, scheduled.
+Logged: 2026-06-20
