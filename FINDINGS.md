@@ -58,6 +58,7 @@ preserved for history.
 | FINDING-FIN-001 | MEDIUM | petty-cash.service built (correct TransactionEngine posting) but never wired — wire-in/delete/ADR decision | Phase 3 |
 | FINDING-FIN-B-001 | — | Phase 3 Group B (CapEx/OpEx) unbuilt: no expenditure/asset/depreciation/budget — cert deferred, feature build | Phase 3 |
 | FINDING-FIN-C-001 | — | Phase 3 Group C (Ledger Book) partial: /finance/ledger + export + client sub-ledger missing; period-lock + trial-balance certifiable | Phase 3 |
+| FINDING-FIN-D-001 | — | Phase 3 Group D (P&L) partial: /reports/profit-loss absent; /finance/statements year-only flat (no COS/gross-profit/EBIT/tax tiers, no period/compare/YTD) | Phase 3 |
 | FINDING-MAT-001 | MEDIUM | Matter module: 12 services export-only/dead, routes run inline; /reports/matter-profitability absent (TODO-011 Part A) | Phase 3 |
 | FINDING-007-012 | LOW | Invoice approval not fully atomic with GL posting (retry-safe) | Phase 3 |
 | F-17 | HIGH | No MFA enforced at login | pre-go-live |
@@ -733,6 +734,32 @@ exist) and **trial-balance integrity** (Σdebits = Σcredits via `/trial-balance
 which returns per-account debit/credit/netBalance).
 Verdict: certify the period-lock + balance-integrity invariants; defer the
 ledger-book endpoints (feature build) + wire/retire `client-ledger.service`.
+Logged: 2026-06-20
+
+---
+
+## FINDING-FIN-D-001 — OPEN — (Phase 3 Group D partial)
+
+**P&L Statement (v3.1 Group D) is partially built — a flat year-based P&L exists;
+the structured/period/comparative P&L and `/reports/profit-loss` do not**
+
+Group D recon (2026-06-20). Missing vs spec:
+- `GET /reports/profit-loss?period=YYYY-MM` — DOES NOT EXIST (no `/reports/*`
+  mount; the `/reporting` module is a generic BI framework — catalog/definitions/
+  runs/exports — with no financial P&L).
+- Structured tiers — `/finance/statements` returns only `totalRevenue`,
+  `totalExpenses`, `netProfit` (+ revenue/expense line breakdowns). No cost of
+  sales, gross profit, operating expenses, EBIT, interest, or tax tiers.
+- Granularity is **year-only** (`?year=YYYY`), not month `period`.
+- No comparative (`&compare=`) and no YTD (`?ytd=true`).
+
+Certifiable now (covered by the Group D cert test): `GET /finance/statements`
+returns a ledger-derived P&L with `netProfit = totalRevenue − totalExpenses`,
+revenue/expense lines present, and P&L revenue reconciles to `/trial-balance`
+REVENUE accounts.
+Verdict: certify the flat P&L invariants; defer the structured/period/comparative
+P&L + `/reports/profit-loss` (feature build, shared with the absent `/reports/*`
+namespace also seen in Group A).
 Logged: 2026-06-20
 
 ---
