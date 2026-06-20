@@ -42,6 +42,7 @@ preserved for history.
 | FINDING-007-008 | CLOSED | 3480c09 | removed dead `Branch.isMain`/`isDefault` lookups |
 | FINDING-007-009 | CLOSED | e94c0ca | finance gates also check `tenantRole` enum + CFO |
 | FINDING-008-002 | CLOSED | dcdf568 | Department schema/delegate catch-up |
+| FINDING-006-002 | CLOSED | 20260611161954 | billing models present in schema + migration; Wave A 16/16 + Wave B 19/19 live (was stale-OPEN from June-19 closeout) |
 
 (Already recorded CLOSED elsewhere in file: 007-002, 008-001, 008-003, 008-004,
 008-006, 009-001.)
@@ -49,7 +50,6 @@ preserved for history.
 ### Genuinely OPEN at 2026-06-20 (carry-forward register)
 | ID | Severity | Summary | Owning phase |
 |---|---|---|---|
-| FINDING-006-002 | HIGH | Billing models (ProformaInvoice/Retainer/PaymentReminder/…) absent from schema | Phase 3 |
 | FINDING-007-010 | HIGH | API-created invoices never journal-posted (GL understated) | Phase 3 |
 | FINDING-AUTH-001 | HIGH | Production email delivery unconfigured — all email simulated | pre-go-live |
 | F-17 | HIGH | No MFA enforced at login | pre-go-live |
@@ -120,9 +120,14 @@ deployment issue, separate from the missing-models problem.
 
 ---
 
-## FINDING-006-002
+## FINDING-006-002 — CLOSED (2026-06-20)
 
 **Billing models absent from schema.prisma — services reference non-existent delegates**
+
+> RE-VERIFIED 2026-06-20: all billing models present in schema
+> (migration 20260611161954_add_billing_models), cert tests Wave A 16/16 + Wave B
+> 19/19 passing live. Original OPEN status was stale, inherited from June-19
+> closeout without re-verification. Original entry preserved below for history.
 
 - **Missing models:** ProformaInvoice, Retainer, RetainerApplication,
   PaymentReminder, BillingNotification, BillingExport
@@ -135,7 +140,8 @@ deployment issue, separate from the missing-models problem.
 - **Fix:** Author missing Prisma models in packages/database/prisma/schema.prisma,
   run prisma migrate dev, regenerate client, redeploy
 - **Scope:** Schema authoring task — Finance/Billing bounded context
-- **Status:** OPEN — blocking full Wave A/B certification
+- **Status:** CLOSED (2026-06-20) — models authored + migration 20260611161954
+  applied; Wave A 16/16 + Wave B 19/19 passing live (see re-verification note above)
 - **Logged:** 2026-06-11
 
 ---
