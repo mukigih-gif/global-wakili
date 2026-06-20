@@ -112,7 +112,7 @@ export class JournalService {
             account: true,
           },
           orderBy: {
-            createdAt: 'asc',
+            id: 'asc',
           },
         },
       },
@@ -143,7 +143,7 @@ export class JournalService {
                 account: true,
               },
               orderBy: {
-                createdAt: 'asc',
+                id: 'asc',
               },
             },
           },
@@ -158,7 +158,7 @@ export class JournalService {
                 account: true,
               },
               orderBy: {
-                createdAt: 'asc',
+                id: 'asc',
               },
             },
           },

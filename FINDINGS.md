@@ -44,6 +44,7 @@ preserved for history.
 | FINDING-008-002 | CLOSED | dcdf568 | Department schema/delegate catch-up |
 | FINDING-006-002 | CLOSED | 20260611161954 | billing models present in schema + migration; Wave A 16/16 + Wave B 19/19 live (was stale-OPEN from June-19 closeout) |
 | FINDING-007-010 | CLOSED | (this session) | postInvoiceIssued wired into invoice approval transition; local-verified balanced + idempotent |
+| FINDING-007-014 | CLOSED | (this session) | journals list/getById ordered lines by non-existent JournalLine.createdAt → 500; fixed to id:'asc' |
 
 (Already recorded CLOSED elsewhere in file: 007-002, 008-001, 008-003, 008-004,
 008-006, 009-001.)
@@ -53,7 +54,6 @@ preserved for history.
 |---|---|---|---|
 | FINDING-AUTH-001 | HIGH | Production email delivery unconfigured — all email simulated | pre-go-live |
 | FINDING-007-013 | MEDIUM | Billing posting bypasses shared TransactionEngine (parallel mechanism, drift risk) | Phase 3/4 |
-| FINDING-007-014 | MEDIUM | GET /finance/journals list endpoint 500s (read bug; data is correct) | Phase 3 |
 | FINDING-007-012 | LOW | Invoice approval not fully atomic with GL posting (retry-safe) | Phase 3 |
 | F-17 | HIGH | No MFA enforced at login | pre-go-live |
 | F-20 | HIGH | No domain/SSO (SAML/OIDC) for firm staff | pre-go-live |
@@ -664,18 +664,25 @@ Logged: 2026-06-20
 
 ---
 
-## FINDING-007-014 — OPEN — MEDIUM
+## FINDING-007-014 — CLOSED (2026-06-20)
 
 **GET /api/v1/finance/journals returns 500 (Internal Server Error)**
 
+> CLOSED 2026-06-20: root cause was `JournalService.listJournals` (and
+> `getJournalById`) ordering the nested `lines` by `createdAt` — a field that does
+> NOT exist on `JournalLine` (model has no timestamp). Prisma rejected the orderBy
+> → PrismaClientValidationError → 500. Fix: order lines by `id: 'asc'` (cuid,
+> creation-ordered) in all three sites (journal.service.ts). The top-level
+> JournalEntry orderBy (`createdAt: 'desc'`) is valid and unchanged.
+> Local-verified: listJournals returns rows (incl. the BILLING-INVOICE journal).
+> NOTE: getJournalById shared the same bug and is fixed by the same change.
+
 Discovered during FINDING-007-010 live verification (2026-06-20): the journals
-LIST endpoint 500s (`requestId` ae990ad4 / c890298f-class). The journal data is
-correct and present (verified directly in DB — balanced BILLING-INVOICE journal),
-so this is a read/serialization bug in the list handler (`finance.routes.ts` GET
-/journals, ~line 330), NOT a posting defect. GET /journals/:id and direct DB
-reads work. Needs investigation of the list handler (likely a query/shape/
-serialization issue). Not blocking the 007-010 closure.
-Logged: 2026-06-20
+LIST endpoint 500'd. The journal DATA was always correct (verified directly in DB
+— balanced BILLING-INVOICE journal); the defect was purely the read-handler
+orderBy. Original entry preserved.
+Status: CLOSED (2026-06-20).
+Logged: 2026-06-20. Closed: 2026-06-20.
 
 ---
 
