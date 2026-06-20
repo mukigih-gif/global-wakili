@@ -55,6 +55,8 @@ preserved for history.
 | FINDING-AUTH-001 | HIGH | Production email delivery unconfigured — all email simulated | pre-go-live |
 | FINDING-007-013 | MEDIUM | Billing posting bypasses shared TransactionEngine (parallel mechanism, drift risk) | Phase 3/4 |
 | FINDING-COV-001 | MEDIUM | Codebase-wide: 43 service files across 10 modules export-only/dead (TODO-011 Part A; see MODULE_COVERAGE_AUDIT.md) | Phase 3 |
+| FINDING-FIN-001 | MEDIUM | petty-cash.service built (correct TransactionEngine posting) but never wired — wire-in/delete/ADR decision | Phase 3 |
+| FINDING-FIN-B-001 | — | Phase 3 Group B (CapEx/OpEx) unbuilt: no expenditure/asset/depreciation/budget — cert deferred, feature build | Phase 3 |
 | FINDING-MAT-001 | MEDIUM | Matter module: 12 services export-only/dead, routes run inline; /reports/matter-profitability absent (TODO-011 Part A) | Phase 3 |
 | FINDING-007-012 | LOW | Invoice approval not fully atomic with GL posting (retry-safe) | Phase 3 |
 | F-17 | HIGH | No MFA enforced at login | pre-go-live |
@@ -685,6 +687,49 @@ LIST endpoint 500'd. The journal DATA was always correct (verified directly in D
 orderBy. Original entry preserved.
 Status: CLOSED (2026-06-20).
 Logged: 2026-06-20. Closed: 2026-06-20.
+
+---
+
+## FINDING-FIN-B-001 — OPEN — (Phase 3 Group B unbuilt)
+
+**CapEx/OpEx (v3.1 Phase 3 Group B) is essentially unbuilt — cannot be certified**
+
+Group B recon (2026-06-20). None of the Group B scope exists:
+- No `POST /finance/expenditures`; no CAPEX/OPEX classification anywhere.
+- No `FixedAsset`/`Depreciation`/`Budget` model (schema grep = 0); no depreciation
+  or budget-vs-actual logic.
+- No `GET /reports/expenditure-summary`.
+What exists nearby (NOT Group B): `ExpenseEntry` is matter-scoped disbursement
+(routed `/billing/expenses`, no capex/opex type); `FinancePostingService` posts
+invoice/receipt/creditNote/retainer/payrollBatch/vendorBill/vendorPayment but
+nothing for capital expenditure. `petty-cash.service` exists but is dead
+(FINDING-FIN-001).
+Verdict: Group B is a FEATURE BUILD, not a cert gap. Certification deferred until
+CapEx/OpEx (expenditure classification + fixed-asset/depreciation + budget) is
+built and scoped. Consistent with how unbuilt scope (procurement/tenders) was
+handled.
+Logged: 2026-06-20
+
+---
+
+## FINDING-FIN-001 — OPEN — MEDIUM (coverage / TODO-011 Part A)
+
+**`petty-cash.service` is a complete, correctly-built service that is never wired**
+
+Closed-out 2026-06-20 (from the module coverage audit). `PettyCashService`
+(430 lines, `recordVoucher` + `getFloatStatus`) is referenced NOWHERE — no route,
+no controller, not in `finance/index.ts` barrel, zero call sites. Notably it posts
+through the shared `TransactionEngine.postJournalAtomically` (the CORRECT pattern —
+contrast billing FINDING-007-013), records petty cash as an `ExpenseEntry` + GL
+journal, and uses only real delegates (`expenseEntry`, `journalLine`,
+`chartOfAccount`, `matter`, `branch`). `pettyCashAssetAccountId`/`expenseAccountId`
+are service INPUT params, not phantom schema fields — so the service would function
+if wired. No `PettyCash` model exists, and none is needed (uses ExpenseEntry).
+Classification: **built-but-never-wired** (007-010 class), self-contained, sound.
+Decision needed (not taken here): **wire-in** (add `/finance/petty-cash` route +
+controller) when petty cash is required, **delete** as dead code, or **accept/defer
+via ADR**. Not blocking.
+Logged: 2026-06-20
 
 ---
 
