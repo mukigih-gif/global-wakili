@@ -737,6 +737,42 @@ Logged: 2026-06-20
 
 ---
 
+## FINDING-FIN-C-002 — OPEN — LOW
+
+**Posting-policy / closed-period rejections are masked as opaque "Posting policy
+validation failed" (REQUEST_FAILED) — the PERIOD_LOCKED / issue detail is not
+surfaced to the caller**
+
+Found during Group C cert (2026-06-20). Posting a journal into a CLOSED period is
+correctly REJECTED (control-verified: same single-account journal posts 201 when
+the period is OPEN, fails after close), but the response body is just
+`{"error":"Posting policy validation failed","code":"REQUEST_FAILED","requestId":…}`
+— the `PostingPolicyService` issues array (incl. the PERIOD_LOCKED reason) is not
+returned. Callers/UI cannot tell WHY a post failed (period vs account-lock vs
+multi-currency). The control works; this is an observability/UX gap in the error
+envelope. Suggest surfacing the policy issue code(s) (or mapping PERIOD_LOCKED to
+a specific 409).
+Logged: 2026-06-20
+
+---
+
+## FINDING-FIN-C-003 — OPEN — INFO (seed/config)
+
+**Demo tenant: only 1 of 20 COA accounts has allowManualPosting:true — manual
+multi-account balanced journals are effectively impossible**
+
+Found during Group C cert. 19/20 accounts are system (allowManualPosting:false);
+only `5000 General Operating Expense` is manual-postable. A normal manual journal
+(2 distinct accounts) trips LOCKED_ACCOUNT. System accounts being locked is
+correct (posted by system flows), but a usable firm COA needs several
+manual-postable adjustment/expense accounts. Likely a seed/COA-completeness gap
+for the demo tenant — verify the COA seed for real tenants provides adequate
+manual-postable accounts. (The Group C period-lock test works around this by
+posting DR/CR to the single manual account.)
+Logged: 2026-06-20
+
+---
+
 ## FINDING-FIN-001 — OPEN — MEDIUM (coverage / TODO-011 Part A)
 
 **`petty-cash.service` is a complete, correctly-built service that is never wired**
