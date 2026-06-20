@@ -57,6 +57,7 @@ preserved for history.
 | FINDING-COV-001 | MEDIUM | Codebase-wide: 43 service files across 10 modules export-only/dead (TODO-011 Part A; see MODULE_COVERAGE_AUDIT.md) | Phase 3 |
 | FINDING-FIN-001 | MEDIUM | petty-cash.service built (correct TransactionEngine posting) but never wired — wire-in/delete/ADR decision | Phase 3 |
 | FINDING-FIN-B-001 | — | Phase 3 Group B (CapEx/OpEx) unbuilt: no expenditure/asset/depreciation/budget — cert deferred, feature build | Phase 3 |
+| FINDING-FIN-C-001 | — | Phase 3 Group C (Ledger Book) partial: /finance/ledger + export + client sub-ledger missing; period-lock + trial-balance certifiable | Phase 3 |
 | FINDING-MAT-001 | MEDIUM | Matter module: 12 services export-only/dead, routes run inline; /reports/matter-profitability absent (TODO-011 Part A) | Phase 3 |
 | FINDING-007-012 | LOW | Invoice approval not fully atomic with GL posting (retry-safe) | Phase 3 |
 | F-17 | HIGH | No MFA enforced at login | pre-go-live |
@@ -708,6 +709,30 @@ Verdict: Group B is a FEATURE BUILD, not a cert gap. Certification deferred unti
 CapEx/OpEx (expenditure classification + fixed-asset/depreciation + budget) is
 built and scoped. Consistent with how unbuilt scope (procurement/tenders) was
 handled.
+Logged: 2026-06-20
+
+---
+
+## FINDING-FIN-C-001 — OPEN — (Phase 3 Group C partial)
+
+**Ledger Book (v3.1 Group C) is partially built — the ledger-book presentation
+endpoints are missing; GL substrate + period-lock exist**
+
+Group C recon (2026-06-20). Missing vs spec:
+- `GET /finance/ledger` (transaction-level entries with running balance/reference)
+  — DOES NOT EXIST (per-account balances are computed inside `/statements` via
+  journalLine groupBy; no transaction-level ledger view).
+- `GET /finance/ledger?accountType=CLIENT` (client sub-ledger → control account)
+  — missing; `client-ledger.service` exists but is DEAD/unwired (COV-001).
+- `GET /finance/ledger/export` — missing (only generic `/reports/export`).
+- period filtering with opening-balance carry-forward — missing.
+
+Certifiable now (covered by the Group C cert test): **closed-period posting
+blocked** (`assertPeriodOpen` rejects CLOSED/LOCKED; `/period-close` + `/periods`
+exist) and **trial-balance integrity** (Σdebits = Σcredits via `/trial-balance`,
+which returns per-account debit/credit/netBalance).
+Verdict: certify the period-lock + balance-integrity invariants; defer the
+ledger-book endpoints (feature build) + wire/retire `client-ledger.service`.
 Logged: 2026-06-20
 
 ---
