@@ -6,6 +6,16 @@
 
 Last Updated: 2026-06-03
 
+> ⚠️ SUPERSEDED IN PART — 2026-06-20. This register was written 2026-06-03, before
+> the v3 API Certification campaign. Claims below (WIPs 001–006 closed, ~80–85%
+> complete, Phase 9–12/Gates 12–15 closed) are NOT current: Phase 1 API cert
+> subsequently found/fixed core defects, and Phases 2–5 (E2E, finance/tax
+> compliance, multi-tenant breach, production readiness) have not started.
+> AUTHORITATIVE CURRENT STATUS (in order): CLAUDE.md §3A → FINDINGS.md "STATUS
+> RECONCILIATION — 2026-06-20" → June-19 Phase-1 closeout. Current headline:
+> Backend ~82% · Frontend ~35% · Overall ~58%; cert at Phase 1 of 5 (139/139 API).
+> Retained below for history.
+
 ---
 
 # Executive Summary

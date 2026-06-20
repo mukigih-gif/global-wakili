@@ -22,6 +22,72 @@ Merge performed 2026-06-19. No content was dropped. Known cross-source overlaps
 # PART I — Repository Findings (FINDING-00X-00Y scheme)
 ================================================================================
 
+## STATUS RECONCILIATION — 2026-06-20 (AUTHORITATIVE CURRENT STATUS)
+
+**This section is the single source of truth for finding status.** Where any
+individual entry below — or `CLAUDE.md`, or the June-19 Phase-1 closeout — shows a
+different status, **this table prevails** until superseded by a later dated
+reconciliation. It folds in the reconciled register from the June-19 Phase-1
+closeout (`GLOBAL_WAKILI_PHASE1_CLOSEOUT_FOLLOWUP_20260619`) so that no
+authoritative status lives only outside this repository.
+
+### Status corrections applied 2026-06-20
+Still marked OPEN in their in-body entries but in fact CLOSED (verified via
+`CLAUDE.md` fix log + Phase-1 closeout). Headings corrected below; bodies
+preserved for history.
+
+| Finding | Corrected status | Commit | Note |
+|---|---|---|---|
+| FINDING-007-005 | CLOSED | 70c2db9 | `ensureOpenPeriod` unifies period enforcement |
+| FINDING-007-008 | CLOSED | 3480c09 | removed dead `Branch.isMain`/`isDefault` lookups |
+| FINDING-007-009 | CLOSED | e94c0ca | finance gates also check `tenantRole` enum + CFO |
+| FINDING-008-002 | CLOSED | dcdf568 | Department schema/delegate catch-up |
+
+(Already recorded CLOSED elsewhere in file: 007-002, 008-001, 008-003, 008-004,
+008-006, 009-001.)
+
+### Genuinely OPEN at 2026-06-20 (carry-forward register)
+| ID | Severity | Summary | Owning phase |
+|---|---|---|---|
+| FINDING-006-002 | HIGH | Billing models (ProformaInvoice/Retainer/PaymentReminder/…) absent from schema | Phase 3 |
+| FINDING-007-010 | HIGH | API-created invoices never journal-posted (GL understated) | Phase 3 |
+| FINDING-AUTH-001 | HIGH | Production email delivery unconfigured — all email simulated | pre-go-live |
+| F-17 | HIGH | No MFA enforced at login | pre-go-live |
+| F-20 | HIGH | No domain/SSO (SAML/OIDC) for firm staff | pre-go-live |
+| F-18 | IMPLEMENTED — verify | Reset flow real; E2E happy-path + prod email delivery unverified | Phase 2 |
+| FINDING-008-005 | MEDIUM | Payroll dashboard queries phantom statutory fields (Option B deferred) | Phase 3 |
+| FINDING-007-011 | MEDIUM | Unify parallel role/permission systems onto rbac.ts | Phase 3/4 |
+| F-15 | MEDIUM | Password expiry not enforced at login | pre-go-live |
+| F-16 | MEDIUM | No password complexity policy / shared validator | pre-go-live |
+| F-19 | MEDIUM | Account lockout threshold/auto-unlock not verified E2E | pre-go-live |
+| FINDING-007-006 | LOW | AccountBalance projection rebuild post-commit (stale projection) | Phase 3 |
+| FINDING-007-007 | LOW | AccountingPeriod month-bucketing uses server-local time | Phase 3 |
+| F-05 | LOW | Client portal routes not RBAC-gated (mitigated by self-scoping) | pre-go-live |
+| FINDING-007-001 | INFO | Trust /view null sub-objects when statementDate omitted — product decision | Phase 3 |
+| F-03 | INFO | POST /auth/refresh not implemented (GET /auth/session substitute) | backlog |
+| F-21 | DEFERRED | Invite-user temp password; replace with email-token invite (needs F-18 + email) | backlog |
+
+### Scope-gap TODO register (open)
+TODO-002 Approvals · TODO-003 Court Filing · TODO-004 Tenders · TODO-005 Broader
+BI · TODO-006 AI Platform cert · TODO-007 Workflow engine · TODO-008 Document
+workspace/email/cloud integration (HIGH priority) · TODO-010 File/path audit.
+(TODO-009 CLOSED 2026-06-20 — see Part III.)
+
+### Standing reconciliation flags (resolve before go-live sign-off)
+- **Deploy target — RESOLVED 2026-06-20:** the two are DIFFERENT deployments
+  (vercel.app lacks /health+/ping that onrender serves). **`onrender.com` is the
+  single canonical cert/deploy target** (render.yaml + apps/web/vercel.json proxy
+  + UAT pack + live-verify all point there). vercel.app is deprecated/non-
+  authoritative. Follow-up: 7 cert test files still DEFAULT BASE_URL to vercel.app
+  — flip to onrender (separate commit).
+- **June-3 registers:** `PROJECT_STATUS.md` / `COMPLETED_GATES.md` (dated
+  2026-06-03) still describe "all gates closed / ~82%". Treat **`CLAUDE.md` §3A +
+  this reconciliation** as current until those registers are updated.
+
+Logged: 2026-06-20.
+
+---
+
 ## FINDING-006-001
 
 **Billing schema delegates unavailable on live target — root cause unclear**
@@ -372,7 +438,7 @@ posting-policy gaps each independently block every trust write**
 
 ---
 
-## FINDING-007-005 — AMENDED — ESCALATED TO HIGH
+## FINDING-007-005 — CLOSED (70c2db9) — was AMENDED/ESCALATED-HIGH; see 2026-06-20 reconciliation (top of Part I)
 
 **Structural firm-wide gap: no AccountingPeriod ever gets created
 -- blocks billing/payments/payroll/refunds/WHT posting, not just
@@ -489,7 +555,7 @@ closing transaction client — silently fails (P2028), so AccountBalance never r
 
 ---
 
-## FINDING-007-008 — OPEN — HIGH
+## FINDING-007-008 — CLOSED (3480c09) — was OPEN/HIGH; see 2026-06-20 reconciliation (top of Part I)
 
 **Payment posting 500s for everyone — Branch.isMain field does not
 exist in schema**
@@ -507,7 +573,7 @@ exist in schema**
 
 ---
 
-## FINDING-007-009 — OPEN — MEDIUM
+## FINDING-007-009 — CLOSED (e94c0ca) — was OPEN/MEDIUM; see 2026-06-20 reconciliation (top of Part I)
 
 **Payment-route RBAC reads custom role name, ignores tenantRole —
 denies privileged users**
@@ -571,7 +637,7 @@ authorization bugs twice — unify on rbac.ts DB-permission model**
 
 ---
 
-## FINDING-008-002 — OPEN — HIGH
+## FINDING-008-002 — CLOSED (dcdf568) — was OPEN/HIGH; see 2026-06-20 reconciliation (top of Part I)
 
 **Department endpoints 500 in production — delegate undeployed on Render**
 
@@ -1215,15 +1281,23 @@ Original entry above preserved for history; this supersedes its status.
 # PART III — Governance / Audit TODOs (added during the merge, 2026-06-19)
 ================================================================================
 
-## TODO-009 — DEFERRED — Governance docs not yet adopted
+## TODO-009 — CLOSED (2026-06-20) — Governance docs now adopted
 RELEASE_GOVERNANCE.md, ROLES_AND_RESPONSIBILITIES.md,
 Handover Notes, Engineering Operating Agreement -- from GW-EOS
-v4.0 suite. Deferred: matter more once a team exists beyond
-single-session structure; adopting now with placeholder content
-repeats the illustrative-data problem identified in the original
-GW-EOS templates. Build when actually needed.
-Status: DEFERRED, not blocking.
-Logged: 2026-06-19
+v4.0 suite. [Original 2026-06-19 rationale, preserved] Deferred: matter
+more once a team exists beyond single-session structure; adopting now
+with placeholder content repeats the illustrative-data problem
+identified in the original GW-EOS templates. Build when actually needed.
+
+UPDATE 2026-06-20 — CLOSED: the full GW-EOS v4.0 governance suite was
+transcribed from the provided source PDFs (real content, not placeholders)
+and committed this session — SESSION_EXECUTION_PROTOCOL, CERTIFICATION_POLICY,
+CHANGE_CONTROL, DEFINITION_OF_DONE, QUALITY_STANDARDS, RISK_MANAGEMENT
+(f92c1b9); ENGINEERING_OPERATING_AGREEMENT, RELEASE_GOVERNANCE,
+ROLES_AND_RESPONSIBILITIES (176a6fe); START_HERE.md (01cbe41). The deferral
+rationale (avoid placeholder content) no longer applies.
+Status: CLOSED.
+Logged: 2026-06-19. Closed: 2026-06-20.
 
 ## TODO-010 — File/path audit
 Full repo sweep for scattered duplicate files, misplaced

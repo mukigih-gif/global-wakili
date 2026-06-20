@@ -6,6 +6,13 @@
 
 Last Updated: 2026-06-03
 
+> ⚠️ SUPERSEDED IN PART — 2026-06-20. Written 2026-06-03 on the original 16-gate
+> model. "Gates 1–15 CLOSED / 365+32 tests / all 20 gaps closed" does NOT reflect
+> current reality: the live certification axis is now v3 Phase 0–5, of which only
+> Phase 0–1 are complete (139/139 API); Phases 2–5 and the open HIGH findings
+> (006-002, 007-010, AUTH-001) remain. AUTHORITATIVE: CLAUDE.md §3A → FINDINGS.md
+> "STATUS RECONCILIATION — 2026-06-20" → June-19 closeout. Retained for history.
+
 ---
 
 ## Gate Closure 001
