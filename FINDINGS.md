@@ -1379,25 +1379,58 @@ creates new files of its own. See CLAUDE.md Section 13: Step 0
 Status: OPEN — fixed position: post-governance-migration, pre-MFA.
 Logged: 2026-06-19. Position fixed: 2026-06-20.
 
-## TODO-011 — Full file-coverage validation: Finance, Trust, Billing
+## TODO-011 — AMENDED — Full file-coverage + interconnection validation: Finance, Trust, Billing, Procurement, Payments, Payroll, Vendors, Documents
 
-Before Phase 2 (Playwright) begins, validate that every file in the Finance,
-Trust, and Billing modules is actually exercised and covers what it claims to
-cover -- not just "the cert tests pass," but a deliberate audit confirming:
-- Every service file's stated purpose is actually implemented (not dead code,
-  not partial)
-- Every function in scope is reachable from a real code path (same class of
-  issue as FINDING-007-010 -- a correct function that was never wired in)
-- No silent gaps remain between what a file/module claims to do and what it
-  actually does when exercised
+### Part A — Per-module file coverage (original scope)
+For each module (Finance, Trust, Billing, Procurement, Payments, Payroll,
+Vendors, Documents), validate that every file is actually exercised and covers
+what it claims:
+- Every service file's stated purpose is actually implemented
+- Every function is reachable from a real code path (not dead code like
+  FINDING-007-010's postInvoiceIssued was)
+- No silent gaps between claimed and actual behavior
 
-Scope: apps/api/src/modules/finance/, trust/, billing/ -- full directory listing
-+ purpose-vs-implementation check for each file.
+Scope: apps/api/src/modules/{finance,trust,billing,procurement,payments,
+payroll,vendors,documents}/ -- full directory listing + purpose-vs-implementation
+check per file.
 
-Position in sequence: AFTER Finance Core Closeout completes, BEFORE Phase 2
-Playwright. Sits alongside/extends Phase 3 (v3.1 Groups A-I) -- likely the
-natural place to run this audit is as part of, or immediately before, Phase 3,
-since Phase 3 is already doing deep financial-correctness verification.
+### Part B — NEW: Cross-module interconnection validation
+A distinct, harder check beyond Part A. For each pair of modules that SHOULD
+interact, confirm the connection actually exists and works end-to-end, not just
+that each module works in isolation:
 
-Status: OPEN, scheduled.
-Logged: 2026-06-20
+- Billing -> Finance: invoice approval posts to GL (FINDING-007-010, now CLOSED
+  -- the template/proof this check matters)
+- Trust -> Finance: trust transactions post to GL (verified earlier this
+  session -- confirm still holds)
+- Payments -> Finance: payment receipt posts to GL (verify -- same class of risk
+  as 007-010)
+- Payroll -> Finance: payroll run posts to GL (PAYE/SHIF/NSSF/Housing Levy
+  liabilities) -- verify, likely unverified
+- Procurement -> Finance: purchase order / vendor bill posts to AP (Accounts
+  Payable) -- verify, likely unbuilt given TODO-001/002 status
+- Vendors -> Procurement -> Payments: vendor payment flow -- verify end-to-end
+  if procurement exists
+- Documents -> Matters/Billing/Trust: are documents correctly linked to the
+  matter/invoice/trust transaction they belong to, or living in isolation
+  (relates to TODO-008 email/doc integration gap)
+- HR -> Payroll: employee data flows correctly into payroll calculations
+
+Method: for each connection, trace the ACTUAL code path (same discipline as the
+007-010 investigation: does the calling module genuinely invoke the receiving
+module's function, or does it silently bypass it the way invoice approval
+bypassed GL posting until it was fixed this session).
+
+Position in sequence: AFTER Finance Core Closeout, BEFORE Phase 2 Playwright.
+Natural fit alongside/extending Phase 3 (v3.1 Groups A-I), since Phase 3 already
+does deep financial-correctness work and several of these connections
+(Billing->Finance, Trust->Finance, Payroll->Finance) are direct Phase 3
+prerequisites.
+
+Note: Procurement/Vendors modules may not exist yet (TODO-001/002 status) -- if
+so, Part B's procurement-related checks become "confirm not yet buildable" rather
+than "found broken," consistent with how TODO-004/024-027 placeholders were
+handled earlier.
+
+Status: OPEN, scheduled, scope expanded 2026-06-20.
+Logged: 2026-06-20 (original) / Amended: 2026-06-20
