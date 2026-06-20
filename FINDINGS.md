@@ -53,6 +53,7 @@ preserved for history.
 |---|---|---|---|
 | FINDING-AUTH-001 | HIGH | Production email delivery unconfigured — all email simulated | pre-go-live |
 | FINDING-007-013 | MEDIUM | Billing posting bypasses shared TransactionEngine (parallel mechanism, drift risk) | Phase 3/4 |
+| FINDING-007-014 | MEDIUM | GET /finance/journals list endpoint 500s (read bug; data is correct) | Phase 3 |
 | FINDING-007-012 | LOW | Invoice approval not fully atomic with GL posting (retry-safe) | Phase 3 |
 | F-17 | HIGH | No MFA enforced at login | pre-go-live |
 | F-20 | HIGH | No domain/SSO (SAML/OIDC) for firm staff | pre-go-live |
@@ -659,6 +660,21 @@ can drift from Trust/payments posting rules over time since they're maintained
 independently. Recommend future convergence onto shared TransactionEngine, or
 formal acceptance of the parallel path as an intentional architecture decision
 (needs ADR either way).
+Logged: 2026-06-20
+
+---
+
+## FINDING-007-014 — OPEN — MEDIUM
+
+**GET /api/v1/finance/journals returns 500 (Internal Server Error)**
+
+Discovered during FINDING-007-010 live verification (2026-06-20): the journals
+LIST endpoint 500s (`requestId` ae990ad4 / c890298f-class). The journal data is
+correct and present (verified directly in DB — balanced BILLING-INVOICE journal),
+so this is a read/serialization bug in the list handler (`finance.routes.ts` GET
+/journals, ~line 330), NOT a posting defect. GET /journals/:id and direct DB
+reads work. Needs investigation of the list handler (likely a query/shape/
+serialization issue). Not blocking the 007-010 closure.
 Logged: 2026-06-20
 
 ---

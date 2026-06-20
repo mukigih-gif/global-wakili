@@ -172,7 +172,7 @@ Final verification sweep.
 
 ## Recent Fixes
 
-* FINDING-006-002: billing schema delegates added, migration applied, dashboard fix deployed
+* FINDING-006-002: billing schema delegates added, migration applied, dashboard fix deployed — RE-VERIFIED & CLOSED 2026-06-20 (all billing models present in schema + migration 20260611161954; Wave A 16/16 + Wave B 19/19 live; prior OPEN was stale)
 * FIX D: drop Invoice.createdById in proforma convert
 * FIX E: add CreditNote void fields + migration
 * Trust journal-posting writes UNBLOCKED & VERIFIED LIVE (18 Jun 2026) — deposit/withdrawal/transfer/interest now post end-to-end in production (previously 500'd at every layer; never worked). Fix chain:
@@ -191,7 +191,12 @@ Final verification sweep.
   * FINDING-007-005 CLOSED — `ensureOpenPeriod` helper unifies period enforcement: lazy auto-creates an OPEN AccountingPeriod on first post (server-local month), replacing Gap B's "missing = OPEN (no row)" hack AND `assertPeriodOpen`'s hard 404; both enforcement paths reconciled, close/lock now meaningful (70c2db9). Live-verified: period `2026-06` auto-created over HTTP.
   * FINDING-007-008 CLOSED — removed dead `Branch.isMain`/`isDefault` findFirst lookups (never existed in schema → PrismaClientValidationError 500'd ALL payment posting before reaching the period check); now resolves to tenant's oldest branch (3480c09). Live-verified: payment receipt posts 201 end-to-end.
   * FINDING-007-009 CLOSED — payment/finance privilege gates now also check the authoritative `tenantRole` enum (FIRM_ADMIN) + `CFO` role, not just the shadowing custom Role.name (e94c0ca). Live-verified: admin (FIRM_ADMIN/"ADMIN") → 201; accounts (ACCOUNTANT) → 403 (no over-grant).
-  * Still OPEN, tracked, not yet addressed: FINDING-007-010 (API-created invoices never journal-posted — billing-posting not HTTP-reachable, HIGH), FINDING-007-011 (architectural: unify the parallel role/permission systems onto rbac.ts, MEDIUM).
+  * Still OPEN, tracked: FINDING-007-011 (architectural: unify the parallel role/permission systems onto rbac.ts, MEDIUM).
+* Finance Core Closeout (20 Jun 2026):
+  * FINDING-007-010 CLOSED (e7ec79b) — wired `BillingPostingService.postInvoiceIssued` into the invoice approval transition (`approval.controller.ts`: DRAFT/PENDING_APPROVAL → INVOICED + GL post in ONE tx; removed the silent `.catch(()=>{})` so a failed post fails the approval). Local-verified (dev DB) AND live-verified (production onrender): invoice 10,000 + 16% VAT → DR 1200 AR 11,600 / CR 4000 Income 10,000 / CR 2100 VAT 1,600 (balanced); approve → 200; journal physically present + balanced; idempotent re-run → 1 journal. Closes the "GL silently understated for all API invoices" gap.
+  * FINDING-006-002 CLOSED (re-verified, was stale) — see Recent Fixes above.
+  * AUTH-001 confirmed STILL BLOCKED (external): production email simulated (no SMTP_HOST/SENDGRID_API_KEY in render.yaml — sync:false); code is ready, needs real credentials. Not a code fix.
+  * New follow-ups logged: FINDING-007-012 (approval/posting not fully atomic, retry-safe, LOW), FINDING-007-013 (billing posting bypasses shared TransactionEngine — parallel mechanism, drift risk, MEDIUM; needs convergence or ADR), FINDING-007-014 (GET /finance/journals list endpoint 500s — read bug, data correct, MEDIUM).
 * Dashboard route sweep (18 Jun 2026):
   * 99c1ab3 — routed 7 audit services (dashboards + procurement) through `logSecurityEvent`, matching the AI/reporting/approval pattern; fixed procurement catch-all ordering. Closes the dashboard audit-layer bug.
   * FINDING-008-006 CLOSED (9ef458b) — Tasks & Documents dashboard access scopes filtered on `matter.partnerId`/`matter.assignedLawyerId`, neither of which exists on the deployed `Matter` model (only `leadAdvocateId`); the phantom relation filters 500'd with PrismaClientValidationError. Option A: collapsed both phantom branches onto `leadAdvocateId`, no schema change. Live-verified 200/200 on both hosts. Dashboard route sweep now 18/18 clean.
