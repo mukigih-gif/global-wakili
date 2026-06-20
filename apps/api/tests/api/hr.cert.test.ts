@@ -27,7 +27,7 @@ import request from 'supertest';
 
 jest.setTimeout(20000);
 
-const BASE_URL = process.env.API_BASE_URL || 'https://global-wakili-api.vercel.app';
+const BASE_URL = process.env.API_BASE_URL || 'https://global-wakili-api.onrender.com';
 const HR_EMAIL = process.env.TEST_HR_EMAIL || '';
 const HR_PASSWORD = process.env.TEST_HR_PASSWORD || '';
 const TEST_TENANT_SLUG = process.env.TEST_TENANT_SLUG || '';

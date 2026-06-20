@@ -4,7 +4,7 @@ import { join } from 'path';
 
 jest.setTimeout(10000);
 
-const BASE_URL = process.env.API_BASE_URL || 'https://global-wakili-api.vercel.app';
+const BASE_URL = process.env.API_BASE_URL || 'https://global-wakili-api.onrender.com';
 const TEST_EMAIL = process.env.TEST_ADMIN_EMAIL || '';
 const TEST_PASSWORD = process.env.TEST_ADMIN_PASSWORD || '';
 const TEST_TENANT_SLUG = process.env.TEST_TENANT_SLUG || '';
