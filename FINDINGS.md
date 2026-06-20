@@ -54,6 +54,7 @@ preserved for history.
 |---|---|---|---|
 | FINDING-AUTH-001 | HIGH | Production email delivery unconfigured — all email simulated | pre-go-live |
 | FINDING-007-013 | MEDIUM | Billing posting bypasses shared TransactionEngine (parallel mechanism, drift risk) | Phase 3/4 |
+| FINDING-MAT-001 | MEDIUM | Matter module: 12 services export-only/dead, routes run inline; /reports/matter-profitability absent (TODO-011 Part A) | Phase 3 |
 | FINDING-007-012 | LOW | Invoice approval not fully atomic with GL posting (retry-safe) | Phase 3 |
 | F-17 | HIGH | No MFA enforced at login | pre-go-live |
 | F-20 | HIGH | No domain/SSO (SAML/OIDC) for firm staff | pre-go-live |
@@ -683,6 +684,41 @@ LIST endpoint 500'd. The journal DATA was always correct (verified directly in D
 orderBy. Original entry preserved.
 Status: CLOSED (2026-06-20).
 Logged: 2026-06-20. Closed: 2026-06-20.
+
+---
+
+## FINDING-MAT-001 — OPEN — MEDIUM (coverage / TODO-011 Part A)
+
+**Matter module has a large dead/bypassed service layer — routes run inline
+`req.db` logic while dedicated domain services sit unwired**
+
+Found during TODO-011 Part A audit (2026-06-20), starting from the Group A
+(Matter Profitability) recon. `matter.routes.ts` imports only 4 services
+(`MatterService`, `MatterProgressNotificationService`, `CommissionService`,
+`CalendarService`); the module's other ~30 endpoints implement logic inline.
+
+**12 services are export-only (referenced ONLY in `modules/matter/index.ts`
+barrel — dead to every code path: no route, controller, worker, or service):**
+CourtService, MatterDashboardService, MatterKYCService, MatterOnboardingService,
+MatterProfitabilityService, MatterQueryService, PassiveTimeCaptureQueueService,
+TenderService, TimeApprovalService, TimerService, WriteOffService,
+statute-limit.service. (`MatterAuditService`/`MatterConflictService` are
+transitively dead — only called by the dead `MatterOnboardingService`;
+`court-hearing.service` only by dead `CourtService`.)
+
+**Proven instance (FINDING-007-010 class):** `GET /matters/:matterId/profitability`
+uses an inline calc and does NOT call the full `MatterProfitabilityService`
+(netRevenue/netProfit/realization/collection/margin/WIP/snapshots). Inline calc
+also EXCLUDES time value from cost, has no margin%, no WIP field, and there is
+NO `/reports/matter-profitability` endpoint (single or firm-wide) despite v3.1
+Group A assuming one.
+
+**Per-service classification still needed (deeper TODO-011 step):** for each dead
+service, determine whether its capability is (a) served inline anyway, or
+(b) absent from HTTP entirely. Then decide per service: wire-in, delete, or
+accept-as-intentional (ADR). Not undertaken here — this entry records the
+module-level finding; remediation is its own scoped work.
+Logged: 2026-06-20
 
 ---
 
