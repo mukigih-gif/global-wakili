@@ -339,7 +339,7 @@ export default function HomePage() {
               </div>
 
               {/* Trust signals */}
-              <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-primary-300">
+              <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-primary-200">
                 {['No credit card required', 'LSK compliant from day one', 'KRA eTIMS certified', 'M-PESA ready'].map((t) => (
                   <span key={t} className="flex items-center gap-1.5">
                     <CheckCircle className="h-4 w-4 text-emerald-400 flex-shrink-0" />
@@ -355,7 +355,7 @@ export default function HomePage() {
                 <div key={label} className="stat-pill">
                   <Icon className="h-6 w-6 mb-2 opacity-70" />
                   <div className="text-3xl font-display font-bold">{value}</div>
-                  <div className="text-sm text-white/60 font-medium mt-0.5">{label}</div>
+                  <div className="text-sm text-white/80 font-medium mt-0.5">{label}</div>
                 </div>
               ))}
             </div>
@@ -365,12 +365,12 @@ export default function HomePage() {
         {/* ── Trusted By Bar ─────────────────────────────────────────────── */}
         <section className="border-b border-gray-100 bg-gray-50 py-10">
           <div className="marketing-container">
-            <p className="text-center text-sm font-semibold text-gray-500 uppercase tracking-widest mb-8">
+            <p className="text-center text-sm font-semibold text-gray-600 uppercase tracking-widest mb-8">
               Built for compliance with Kenya's leading regulatory bodies
             </p>
             <div className="flex flex-wrap items-center justify-center gap-8 lg:gap-16">
               {['Law Society of Kenya', 'Kenya Revenue Authority', 'Safaricom M-PESA', 'Kenya Data Commissioner', 'Advocates Act Cap. 16'].map((org) => (
-                <div key={org} className="flex items-center gap-2 text-gray-400 font-semibold text-sm">
+                <div key={org} className="flex items-center gap-2 text-gray-500 font-semibold text-sm">
                   <Award className="h-4 w-4" />
                   {org}
                 </div>
@@ -386,7 +386,7 @@ export default function HomePage() {
               <span className="text-sm font-bold uppercase tracking-widest text-red-600 mb-3 block">The Problem</span>
               <h2 className="text-4xl lg:text-5xl font-display font-bold text-gray-900 mb-5">
                 Running a law firm in Kenya is hard enough.
-                <span className="block text-gray-400 font-normal mt-2 text-3xl">Your software shouldn't make it harder.</span>
+                <span className="block text-gray-500 font-normal mt-2 text-3xl">Your software shouldn't make it harder.</span>
               </h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -419,7 +419,7 @@ export default function HomePage() {
                 Every module your law firm needs.
                 <span className="gradient-text block">Nothing you don't.</span>
               </h2>
-              <p className="text-xl text-gray-500 leading-relaxed">
+              <p className="text-xl text-gray-600 leading-relaxed">
                 Six fully integrated modules covering the entire lifecycle of a modern law firm — from first client contact to final trust disbursement.
               </p>
             </div>
@@ -431,7 +431,7 @@ export default function HomePage() {
                     <Icon className="h-7 w-7" />
                   </div>
                   <h3 className="text-lg font-display font-bold text-gray-900 mb-3">{title}</h3>
-                  <p className="text-sm text-gray-500 leading-relaxed mb-5 flex-1">{desc}</p>
+                  <p className="text-sm text-gray-600 leading-relaxed mb-5 flex-1">{desc}</p>
                   <ul className="space-y-2">
                     {features.map((f) => (
                       <li key={f} className="flex items-center gap-2 text-sm text-gray-600">
@@ -452,7 +452,7 @@ export default function HomePage() {
             <div className="text-center max-w-2xl mx-auto mb-16">
               <span className="text-sm font-bold uppercase tracking-widest text-primary-600 mb-3 block">Simple Onboarding</span>
               <h2 className="text-4xl font-display font-bold text-gray-900 mb-4">Up and running in days, not months</h2>
-              <p className="text-lg text-gray-500">Our implementation team handles migration, training, and configuration. You focus on practising law.</p>
+              <p className="text-lg text-gray-600">Our implementation team handles migration, training, and configuration. You focus on practising law.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               {WORKFLOW.map(({ step, title, desc }) => (
@@ -460,7 +460,7 @@ export default function HomePage() {
                   <div className="card p-7 h-full">
                     <div className="text-5xl font-display font-bold text-primary-100 mb-4">{step}</div>
                     <h3 className="text-base font-bold text-gray-900 mb-2">{title}</h3>
-                    <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
+                    <p className="text-sm text-gray-600 leading-relaxed">{desc}</p>
                   </div>
                   {step !== '04' && (
                     <div className="hidden lg:block absolute top-1/2 -right-3 -translate-y-1/2 z-10">
@@ -482,7 +482,7 @@ export default function HomePage() {
                 <h2 className="text-4xl font-display font-bold text-gray-900 mb-6">
                   Built for Kenya's regulatory environment. <span className="gradient-text">From the ground up.</span>
                 </h2>
-                <p className="text-lg text-gray-500 leading-relaxed mb-8">
+                <p className="text-lg text-gray-600 leading-relaxed mb-8">
                   Every feature is designed with Kenyan legal regulations in mind. We don't retrofit international software — we built Global Wakili specifically for how Kenyan law firms operate and are regulated.
                 </p>
                 <div className="space-y-3">
@@ -510,7 +510,7 @@ export default function HomePage() {
                       <span className="text-xs font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">{badge}</span>
                     </div>
                     <p className="font-semibold text-gray-900 text-sm leading-snug">{name}</p>
-                    <p className="text-xs text-gray-500">{desc}</p>
+                    <p className="text-xs text-gray-600">{desc}</p>
                   </div>
                 ))}
               </div>
@@ -526,7 +526,7 @@ export default function HomePage() {
               <h2 className="text-4xl font-display font-bold text-gray-900 mb-4">
                 Built for Kenya. Not adapted for it.
               </h2>
-              <p className="text-lg text-gray-500">
+              <p className="text-lg text-gray-600">
                 Clio is a good product — for a London or New York law firm. But when your clients pay by M-PESA, your accountant files on eTIMS, and the Law Society audits your trust ledger every year, you need software that actually knows what those things are. That's what we built.
               </p>
             </div>
@@ -536,7 +536,7 @@ export default function HomePage() {
                 <div className="grid grid-cols-3 bg-gray-950 text-white text-sm font-semibold">
                   <div className="px-6 py-4">Feature</div>
                   <div className="px-6 py-4 text-center text-emerald-400">Global Wakili</div>
-                  <div className="px-6 py-4 text-center text-gray-400">International Platforms</div>
+                  <div className="px-6 py-4 text-center text-gray-300">International Platforms</div>
                 </div>
                 {VERSUS.map(({ feature, us, others, note }, i) => (
                   <div key={feature} className={`grid grid-cols-3 text-sm items-center ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-t border-gray-100`}>
@@ -545,7 +545,7 @@ export default function HomePage() {
                       {us ? <CheckCircle className="h-5 w-5 text-emerald-500 mx-auto" /> : <XCircle className="h-5 w-5 text-red-400 mx-auto" />}
                     </div>
                     <div className="px-6 py-4 text-center">
-                      <span className="text-xs text-gray-400 italic">{note}</span>
+                      <span className="text-xs text-gray-500 italic">{note}</span>
                     </div>
                   </div>
                 ))}
@@ -566,7 +566,7 @@ export default function HomePage() {
                       {others
                         ? <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
                         : <XCircle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />}
-                      <span className="text-gray-500">
+                      <span className="text-gray-600">
                         <span className="font-medium text-gray-600">International platforms</span> — <span className="italic">{note}</span>
                       </span>
                     </div>
@@ -582,20 +582,20 @@ export default function HomePage() {
           <div className="absolute inset-0 grid-pattern opacity-10" />
           <div className="marketing-container relative">
             <div className="text-center max-w-2xl mx-auto mb-14">
-              <span className="text-sm font-bold uppercase tracking-widest text-primary-400 mb-3 block">Ecosystem</span>
+              <span className="text-sm font-bold uppercase tracking-widest text-primary-300 mb-3 block">Ecosystem</span>
               <h2 className="text-4xl font-display font-bold text-white mb-4">Connects to the tools you already use</h2>
-              <p className="text-lg text-primary-300">Native integrations with Kenya's payment infrastructure and leading global platforms — with simulation fallback so your team can work even before live credentials arrive.</p>
+              <p className="text-lg text-primary-200">Native integrations with Kenya's payment infrastructure and leading global platforms — with simulation fallback so your team can work even before live credentials arrive.</p>
             </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-12">
               {INTEGRATIONS.map(({ name, category, color }) => (
                 <div key={name} className={`rounded-xl border bg-white/5 backdrop-blur-sm p-5 text-center hover:bg-white/10 transition-colors`}>
-                  <Layers className="h-6 w-6 text-white/50 mx-auto mb-2" />
+                  <Layers className="h-6 w-6 text-white/70 mx-auto mb-2" />
                   <p className="font-semibold text-white text-sm">{name}</p>
-                  <p className="text-xs text-white/40 mt-0.5">{category}</p>
+                  <p className="text-xs text-white/70 mt-0.5">{category}</p>
                 </div>
               ))}
             </div>
-            <p className="text-center text-sm text-primary-400">
+            <p className="text-center text-sm text-primary-300">
               All integrations are built with simulation fallback — your firm can operate fully while awaiting external credentials.
             </p>
           </div>
@@ -609,7 +609,7 @@ export default function HomePage() {
               <h2 className="text-4xl font-display font-bold text-gray-900 mb-5">
                 Engineered with the same rigor <span className="gradient-text">we apply to your trust accounts</span>
               </h2>
-              <p className="text-lg text-gray-500 leading-relaxed">
+              <p className="text-lg text-gray-600 leading-relaxed">
                 We're a new platform — so instead of borrowing someone else's logo, we'll show you our engineering. Here's what's actually built, tested, and running today.
               </p>
             </div>
@@ -618,7 +618,7 @@ export default function HomePage() {
                 <div key={label} className="card p-7 flex flex-col">
                   <div className="text-4xl font-display font-bold gradient-text mb-3">{metric}</div>
                   <p className="font-semibold text-gray-900 text-sm mb-2 leading-snug">{label}</p>
-                  <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
+                  <p className="text-sm text-gray-600 leading-relaxed">{desc}</p>
                 </div>
               ))}
             </div>
@@ -631,7 +631,7 @@ export default function HomePage() {
             <div className="text-center max-w-2xl mx-auto mb-14">
               <span className="text-sm font-bold uppercase tracking-widest text-primary-600 mb-3 block">Transparent Pricing</span>
               <h2 className="text-4xl font-display font-bold text-gray-900 mb-4">Simple, predictable pricing</h2>
-              <p className="text-lg text-gray-500">All plans include unlimited matters, clients, and documents. Pricing in Kenya Shillings.</p>
+              <p className="text-lg text-gray-600">All plans include unlimited matters, clients, and documents. Pricing in Kenya Shillings.</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
               {PRICING.map(({ tier, price, period, tagline, features, cta, featured }) => (
@@ -644,13 +644,13 @@ export default function HomePage() {
                     </div>
                   )}
                   <div className="mb-6">
-                    <p className={`text-sm font-semibold uppercase tracking-wider mb-2 ${featured ? 'text-primary-400' : 'text-primary-600'}`}>{tier}</p>
+                    <p className={`text-sm font-semibold uppercase tracking-wider mb-2 ${featured ? 'text-primary-300' : 'text-primary-600'}`}>{tier}</p>
                     <div className="flex items-end gap-1 mb-1">
-                      {price !== 'Custom' && <span className={`text-sm font-medium ${featured ? 'text-white/60' : 'text-gray-500'}`}>KES</span>}
+                      {price !== 'Custom' && <span className={`text-sm font-medium ${featured ? 'text-white/80' : 'text-gray-600'}`}>KES</span>}
                       <span className={`text-4xl font-display font-bold ${featured ? 'text-white' : 'text-gray-900'}`}>{price}</span>
-                      <span className={`text-sm mb-1 ${featured ? 'text-white/60' : 'text-gray-500'}`}>{period}</span>
+                      <span className={`text-sm mb-1 ${featured ? 'text-white/80' : 'text-gray-600'}`}>{period}</span>
                     </div>
-                    <p className={`text-sm ${featured ? 'text-white/60' : 'text-gray-500'}`}>{tagline}</p>
+                    <p className={`text-sm ${featured ? 'text-white/80' : 'text-gray-600'}`}>{tagline}</p>
                   </div>
                   <ul className="space-y-3 mb-8 flex-1">
                     {features.map((f) => (
@@ -666,7 +666,7 @@ export default function HomePage() {
                 </div>
               ))}
             </div>
-            <p className="text-center text-sm text-gray-500 mt-8">
+            <p className="text-center text-sm text-gray-600 mt-8">
               All prices exclude VAT. Annual billing available at 15% discount. Implementation and training billed separately.
             </p>
           </div>
@@ -697,16 +697,16 @@ export default function HomePage() {
         {/* ── Security Trust Strip ────────────────────────────────────────── */}
         <section className="py-14 bg-gray-950 border-t border-gray-800">
           <div className="marketing-container">
-            <p className="text-center text-xs font-bold uppercase tracking-widest text-gray-500 mb-8">
+            <p className="text-center text-xs font-bold uppercase tracking-widest text-gray-400 mb-8">
               Enterprise-grade security — protecting attorney-client privilege
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
               {SECURITY_BADGES.map(({ label, icon: Icon }) => (
                 <div key={label} className="flex flex-col items-center gap-2 text-center">
                   <div className="h-10 w-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
-                    <Icon className="h-5 w-5 text-gray-400" />
+                    <Icon className="h-5 w-5 text-gray-500" />
                   </div>
-                  <span className="text-xs text-gray-500 leading-tight">{label}</span>
+                  <span className="text-xs text-gray-400 leading-tight">{label}</span>
                 </div>
               ))}
             </div>
@@ -725,7 +725,7 @@ export default function HomePage() {
                 <details key={q} className="card group open:shadow-md transition-shadow">
                   <summary className="flex items-center justify-between gap-4 px-7 py-5 cursor-pointer list-none font-semibold text-gray-900 hover:text-primary-700 transition-colors">
                     {q}
-                    <ChevronRight className="h-5 w-5 text-gray-400 flex-shrink-0 transition-transform group-open:rotate-90" />
+                    <ChevronRight className="h-5 w-5 text-gray-500 flex-shrink-0 transition-transform group-open:rotate-90" />
                   </summary>
                   <div className="px-7 pb-6 text-sm text-gray-600 leading-relaxed border-t border-gray-100 pt-4">
                     {a}
@@ -743,7 +743,7 @@ export default function HomePage() {
               <div>
                 <span className="text-sm font-bold uppercase tracking-widest text-primary-600 mb-3 block">Get in Touch</span>
                 <h2 className="text-4xl font-display font-bold text-gray-900 mb-5">Schedule your personalised demo</h2>
-                <p className="text-lg text-gray-500 mb-8 leading-relaxed">
+                <p className="text-lg text-gray-600 mb-8 leading-relaxed">
                   Our legal technology specialists will walk you through the platform, answer your compliance questions, and build a tailored implementation plan for your firm.
                 </p>
                 <div className="space-y-5">
@@ -754,7 +754,7 @@ export default function HomePage() {
                     <div>
                       <p className="text-sm font-semibold text-gray-900">Call us</p>
                       <a href="tel:+254724178878" className="text-sm text-primary-600 hover:text-primary-700 transition-colors">+(254) 724 178 878</a>
-                      <p className="text-xs text-gray-400">Mon–Fri, 8am–6pm EAT</p>
+                      <p className="text-xs text-gray-500">Mon–Fri, 8am–6pm EAT</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -772,7 +772,7 @@ export default function HomePage() {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-gray-900">Office</p>
-                      <p className="text-sm text-gray-500">Upper Hill, Nairobi, Kenya</p>
+                      <p className="text-sm text-gray-600">Upper Hill, Nairobi, Kenya</p>
                     </div>
                   </div>
                 </div>
@@ -795,14 +795,14 @@ export default function HomePage() {
                 <p className="text-sm leading-relaxed max-w-xs">
                   Kenya's premier enterprise legal ERP. Built for Kenyan law firms, compliant with Kenyan regulations, powered by global technology.
                 </p>
-                <p className="text-xs text-gray-500 mt-5">A product of Global Sites Limited · Nairobi, Kenya</p>
+                <p className="text-xs text-gray-400 mt-5">A product of Global Sites Limited · Nairobi, Kenya</p>
                 <div className="flex gap-3 mt-5">
                   <a
                     href="https://www.linkedin.com/search/results/all/?keywords=GlobalWakili"
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Find Global Wakili on LinkedIn"
-                    className="h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-gray-500 hover:text-white"
+                    className="h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-gray-600 hover:text-white"
                   >
                     <Linkedin className="h-4 w-4" />
                   </a>
@@ -811,7 +811,7 @@ export default function HomePage() {
                     target="_blank"
                     rel="noopener noreferrer"
                     aria-label="Global Sites Limited on YouTube"
-                    className="h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-gray-500 hover:text-white"
+                    className="h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-gray-600 hover:text-white"
                   >
                     <Youtube className="h-4 w-4" />
                   </a>
