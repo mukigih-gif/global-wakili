@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { ChatBolt } from '@/components/chat/ChatBolt';
+import { CookieConsent } from '@/components/ui/CookieConsent';
 
 export const metadata: Metadata = {
   title: { default: 'Global Wakili Legal Enterprise', template: '%s | Global Wakili' },
@@ -14,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body>
         {children}
         <ChatBolt />
+        <CookieConsent />
       </body>
     </html>
   );

@@ -3,33 +3,36 @@ import Link from 'next/link';
 import Image from 'next/image';
 import {
   Scale, Shield, Brain, BarChart2, Globe, CheckCircle,
-  ArrowRight, Zap, Lock, Clock, Users, FileText, TrendingUp,
-  Phone, Mail, MapPin, ChevronRight, Star, Award, Building2,
+  ArrowRight, Lock, Clock, Users, FileText, TrendingUp,
+  Phone, Mail, MapPin, ChevronRight, Award, Linkedin, Youtube,
   Gavel, CreditCard, Database, Layers, HeartHandshake, Play,
   XCircle, MessageCircle, AlertTriangle, Fingerprint, Server,
 } from 'lucide-react';
 import { Logo } from '@/components/ui/Logo';
 import { ContactForm } from '@/components/marketing/ContactForm';
+import { MarketingHeader } from '@/components/marketing/MarketingHeader';
+import { BackToTop } from '@/components/marketing/BackToTop';
 
 // ── SEO Metadata ────────────────────────────────────────────────────────────
 export const metadata: Metadata = {
-  title: 'Global Wakili Legal Enterprise — Kenya\'s Premier Legal ERP Platform',
+  title: 'Global Wakili | Legal Practice Management Software Kenya',
   description:
-    'The only enterprise-grade Legal ERP built for Kenyan law firms. Manage matters, trust accounting, billing, AI legal operations, and KRA eTIMS compliance from one unified platform. Trusted by leading law firms across Kenya.',
+    'Global Wakili is Kenya\'s enterprise legal practice management software — LSK-compliant trust accounting, KRA eTIMS billing, M-PESA payments, matter management and governed AI, with Kenya Data Protection Act (2019) compliance built in.',
   keywords: [
     'legal ERP Kenya', 'law firm management software Kenya', 'legal practice management',
     'trust accounting software Kenya', 'KRA eTIMS legal', 'M-PESA law firm billing',
     'Law Society Kenya compliance', 'AI legal software', 'matter management Kenya',
     'legal accounting software Nairobi',
   ],
-  authors: [{ name: 'Global Wakili Limited', url: 'https://globalwakili.co.ke' }],
-  creator: 'Global Wakili Limited',
-  publisher: 'Global Wakili Limited',
+  authors: [{ name: 'Global Sites Limited', url: 'https://globalsitesltd.com' }],
+  creator: 'Global Sites Limited',
+  publisher: 'Global Sites Limited',
   category: 'Legal Technology',
+  metadataBase: new URL('https://global-wakili-api.vercel.app'),
   openGraph: {
     type: 'website',
     locale: 'en_KE',
-    url: 'https://globalwakili.co.ke',
+    url: 'https://global-wakili-api.vercel.app',
     siteName: 'Global Wakili Legal Enterprise',
     title: 'Global Wakili — Enterprise Legal ERP for Kenyan Law Firms',
     description: 'Manage your entire law firm from one platform. Trust accounting, matters, eTIMS billing, AI legal ops, and M-PESA payments — built for Kenyan enterprise law firms.',
@@ -42,7 +45,7 @@ export const metadata: Metadata = {
     images: ['/og-image.png'],
   },
   robots: { index: true, follow: true, googleBot: { index: true, follow: true } },
-  alternates: { canonical: 'https://globalwakili.co.ke' },
+  alternates: { canonical: 'https://global-wakili-api.vercel.app' },
 };
 
 // ── JSON-LD Structured Data ─────────────────────────────────────────────────
@@ -53,7 +56,7 @@ const jsonLd = {
   applicationCategory: 'BusinessApplication',
   operatingSystem: 'Web Browser',
   description: 'Enterprise-grade Legal ERP for Kenyan law firms. Covers practice management, trust accounting, AI legal operations, KRA eTIMS, and M-PESA payments.',
-  url: 'https://globalwakili.co.ke',
+  url: 'https://global-wakili-api.vercel.app',
   offers: {
     '@type': 'AggregateOffer',
     priceCurrency: 'KES',
@@ -63,8 +66,8 @@ const jsonLd = {
   },
   provider: {
     '@type': 'Organization',
-    name: 'Global Wakili Limited',
-    url: 'https://globalwakili.co.ke',
+    name: 'Global Sites Limited',
+    url: 'https://globalsitesltd.com',
     address: { '@type': 'PostalAddress', addressLocality: 'Nairobi', addressCountry: 'KE' },
   },
   featureList: [
@@ -75,12 +78,38 @@ const jsonLd = {
   ],
 };
 
+// ── LocalBusiness / LegalService structured data ─────────────────────────────
+const localBusinessLd = {
+  '@context': 'https://schema.org',
+  '@type': 'LegalService',
+  name: 'Global Wakili Legal Enterprise',
+  description: 'Enterprise legal practice management software for Kenyan law firms — trust accounting, KRA eTIMS billing, M-PESA payments, matter management, and governed AI.',
+  url: 'https://global-wakili-api.vercel.app',
+  telephone: '+254724178878',
+  email: 'wakili@globalsitesltd.com',
+  image: 'https://global-wakili-api.vercel.app/og-image.png',
+  priceRange: 'KES 15,000–35,000+/month',
+  areaServed: { '@type': 'Country', name: 'Kenya' },
+  address: {
+    '@type': 'PostalAddress',
+    addressLocality: 'Upper Hill, Nairobi',
+    addressRegion: 'Nairobi',
+    addressCountry: 'KE',
+  },
+  parentOrganization: {
+    '@type': 'Organization',
+    name: 'Global Sites Limited',
+    url: 'https://globalsitesltd.com',
+  },
+  sameAs: ['https://www.youtube.com/@globalsitesltd7872'],
+};
+
 // ── Data ────────────────────────────────────────────────────────────────────
 const STATS = [
-  { value: '500+', label: 'Law Firms Ready', icon: Building2 },
-  { value: 'KES 2B+', label: 'Trust Funds Protected', icon: Shield },
-  { value: '99.9%', label: 'Platform Uptime SLA', icon: Zap },
-  { value: '116', label: 'Data Isolation Controls', icon: Lock },
+  { value: '139/139', label: 'API Certification Tests Passing', icon: CheckCircle },
+  { value: '116', label: 'Model-Level Tenant Isolation Controls', icon: Lock },
+  { value: '365/365', label: 'Tenant-Isolation Regression Tests', icon: Shield },
+  { value: '400+', label: 'Granular RBAC Permissions', icon: Users },
 ];
 
 const MODULES = [
@@ -219,18 +248,37 @@ const FAQ = [
   { q: 'Can we import our existing matters and client data?', a: 'Yes. Our implementation team migrates matters, clients, time entries, trust balances, and documents from your existing system. We support Excel/CSV imports and API-based migration from most popular legal platforms.' },
 ];
 
-const TESTIMONIALS = [
+// ── FAQPage structured data (rich results in search) ─────────────────────────
+const faqLd = {
+  '@context': 'https://schema.org',
+  '@type': 'FAQPage',
+  mainEntity: FAQ.map(({ q, a }) => ({
+    '@type': 'Question',
+    name: q,
+    acceptedAnswer: { '@type': 'Answer', text: a },
+  })),
+};
+
+const BUILT_LIVE = [
   {
-    quote: 'Global Wakili transformed how we manage trust accounts. The three-way reconciliation and overdraw prevention give us complete confidence in our compliance with Law Society requirements.',
-    name: 'Wanjiku Kariuki', title: 'Managing Partner', firm: 'Kariuki & Associates Advocates', initials: 'WK',
+    metric: '139/139',
+    label: 'API certification tests passing',
+    desc: 'Every certified endpoint — auth, clients, matters, billing, trust, HR, reporting — verified live against production, not a staging mock.',
   },
   {
-    quote: 'The eTIMS integration and M-PESA payment collection alone saved us 3 days a month in billing administration. Our clients love being able to pay via M-PESA from the portal.',
-    name: 'David Omondi', title: 'Senior Partner', firm: 'Omondi Law LLP', initials: 'DO',
+    metric: '365/365',
+    label: 'Tenant-isolation regression tests green',
+    desc: 'Automated guards prove one firm can never read or write another firm\'s data. Re-run on every change.',
   },
   {
-    quote: 'We evaluated Clio, MyCase, and several other platforms. Global Wakili is the only solution purpose-built for Kenyan law — it understands our regulatory environment completely.',
-    name: 'Amina Hassan', title: 'Director', firm: 'Hassan Legal & Compliance', initials: 'AH',
+    metric: '116',
+    label: 'Model-level tenant isolation controls',
+    desc: 'Tenant filtering enforced at the database layer on every model — architected in from the start, not bolted on.',
+  },
+  {
+    metric: '3-way',
+    label: 'Trust reconciliation proven under concurrency',
+    desc: 'Overdraw prevention re-proven under real concurrent load: exactly the available funds withdrawn, never a negative balance.',
   },
 ];
 
@@ -239,32 +287,13 @@ export default function HomePage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(localBusinessLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqLd) }} />
 
       <div className="min-h-screen bg-white antialiased">
 
-        {/* ── Navigation ─────────────────────────────────────────────────── */}
-        <header className="sticky top-0 z-50 border-b border-gray-100 bg-white/95 backdrop-blur-sm">
-          <nav className="marketing-container h-16 flex items-center justify-between">
-            <Logo variant="full" size="md" href="/" />
-
-            <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
-              <a href="#features" className="hover:text-gray-900 transition-colors">Features</a>
-              <a href="#compliance" className="hover:text-gray-900 transition-colors">Compliance</a>
-              <a href="#integrations" className="hover:text-gray-900 transition-colors">Integrations</a>
-              <a href="#pricing" className="hover:text-gray-900 transition-colors">Pricing</a>
-              <a href="#contact" className="hover:text-gray-900 transition-colors">Contact</a>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <Link href="/login" className="hidden sm:block text-sm font-semibold text-gray-600 hover:text-gray-900 transition-colors">
-                Sign in
-              </Link>
-              <Link href="#contact" className="btn-primary text-sm px-5 py-2.5">
-                Request Demo <ArrowRight className="h-4 w-4" />
-              </Link>
-            </div>
-          </nav>
-        </header>
+        {/* ── Navigation (scroll-spy + mobile menu) ──────────────────────── */}
+        <MarketingHeader />
 
         {/* ── Hero ───────────────────────────────────────────────────────── */}
         <section className="relative overflow-hidden bg-gradient-to-b from-primary-950 via-primary-900 to-primary-800">
@@ -285,10 +314,11 @@ export default function HomePage() {
             {/* Headline */}
             <div className="text-center max-w-5xl mx-auto">
               <h1 className="text-5xl sm:text-6xl lg:text-7xl font-display font-bold text-white leading-[1.05] tracking-tight mb-6">
-                Your firm deserves software{' '}
+                Kenya's Premier{' '}
                 <span className="bg-gradient-to-r from-accent-300 to-accent-400 bg-clip-text text-transparent">
-                  built for Kenya
-                </span>
+                  Legal Practice Management
+                </span>{' '}
+                Platform
               </h1>
               <p className="text-xl lg:text-2xl text-primary-200 max-w-3xl mx-auto leading-relaxed mb-10 font-light">
                 We built Global Wakili because Kenyan law firms deserve more than a foreign platform with a Kenyan flag stuck on it. Trust accounting, eTIMS billing, M-PESA payments, and AI legal work — in one place, the way it should be.
@@ -386,7 +416,7 @@ export default function HomePage() {
             <div className="text-center max-w-3xl mx-auto mb-16">
               <span className="text-sm font-bold uppercase tracking-widest text-primary-600 mb-3 block">Complete Platform</span>
               <h2 className="text-4xl lg:text-5xl font-display font-bold text-gray-900 mb-5">
-                Every module your firm needs.
+                Every module your law firm needs.
                 <span className="gradient-text block">Nothing you don't.</span>
               </h2>
               <p className="text-xl text-gray-500 leading-relaxed">
@@ -501,7 +531,8 @@ export default function HomePage() {
               </p>
             </div>
             <div className="max-w-3xl mx-auto">
-              <div className="rounded-2xl border border-gray-200 overflow-hidden shadow-lg">
+              {/* Desktop: full comparison table */}
+              <div className="hidden md:block rounded-2xl border border-gray-200 overflow-hidden shadow-lg">
                 <div className="grid grid-cols-3 bg-gray-950 text-white text-sm font-semibold">
                   <div className="px-6 py-4">Feature</div>
                   <div className="px-6 py-4 text-center text-emerald-400">Global Wakili</div>
@@ -515,6 +546,29 @@ export default function HomePage() {
                     </div>
                     <div className="px-6 py-4 text-center">
                       <span className="text-xs text-gray-400 italic">{note}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Mobile: stacked comparison cards (the 3-col table is too tight on phones) */}
+              <div className="md:hidden space-y-3">
+                {VERSUS.map(({ feature, us, others, note }) => (
+                  <div key={feature} className="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+                    <p className="font-semibold text-gray-900 text-sm mb-3 leading-snug">{feature}</p>
+                    <div className="flex items-center gap-2 text-sm mb-2">
+                      {us
+                        ? <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />
+                        : <XCircle className="h-4 w-4 text-red-400 flex-shrink-0" />}
+                      <span className="font-medium text-gray-800">Global Wakili</span>
+                    </div>
+                    <div className="flex items-start gap-2 text-sm">
+                      {others
+                        ? <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                        : <XCircle className="h-4 w-4 text-red-400 flex-shrink-0 mt-0.5" />}
+                      <span className="text-gray-500">
+                        <span className="font-medium text-gray-600">International platforms</span> — <span className="italic">{note}</span>
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -547,31 +601,24 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* ── Testimonials ───────────────────────────────────────────────── */}
+        {/* ── Built Live (engineering credibility — replaces testimonials) ── */}
         <section className="marketing-section">
           <div className="marketing-container">
-            <div className="text-center max-w-2xl mx-auto mb-14">
-              <span className="text-sm font-bold uppercase tracking-widest text-primary-600 mb-3 block">Client Stories</span>
-              <h2 className="text-4xl font-display font-bold text-gray-900 mb-4">Trusted by Kenya's leading law firms</h2>
+            <div className="text-center max-w-3xl mx-auto mb-14">
+              <span className="text-sm font-bold uppercase tracking-widest text-primary-600 mb-3 block">Built Live</span>
+              <h2 className="text-4xl font-display font-bold text-gray-900 mb-5">
+                Engineered with the same rigor <span className="gradient-text">we apply to your trust accounts</span>
+              </h2>
+              <p className="text-lg text-gray-500 leading-relaxed">
+                We're a new platform — so instead of borrowing someone else's logo, we'll show you our engineering. Here's what's actually built, tested, and running today.
+              </p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {TESTIMONIALS.map(({ quote, name, title, firm, initials }) => (
-                <div key={name} className="card p-7 flex flex-col">
-                  <div className="flex mb-4">
-                    {[...Array(5)].map((_, i) => <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" />)}
-                  </div>
-                  <blockquote className="text-sm text-gray-600 leading-relaxed flex-1 mb-6">
-                    "{quote}"
-                  </blockquote>
-                  <div className="flex items-center gap-3 pt-4 border-t border-gray-100">
-                    <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center text-primary-700 font-bold text-sm flex-shrink-0">
-                      {initials}
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900 text-sm">{name}</p>
-                      <p className="text-xs text-gray-500">{title} · {firm}</p>
-                    </div>
-                  </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {BUILT_LIVE.map(({ metric, label, desc }) => (
+                <div key={label} className="card p-7 flex flex-col">
+                  <div className="text-4xl font-display font-bold gradient-text mb-3">{metric}</div>
+                  <p className="font-semibold text-gray-900 text-sm mb-2 leading-snug">{label}</p>
+                  <p className="text-sm text-gray-500 leading-relaxed">{desc}</p>
                 </div>
               ))}
             </div>
@@ -706,7 +753,8 @@ export default function HomePage() {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-gray-900">Call us</p>
-                      <p className="text-sm text-gray-500">+254 700 000 000 (Mon–Fri, 8am–6pm EAT)</p>
+                      <a href="tel:+254724178878" className="text-sm text-primary-600 hover:text-primary-700 transition-colors">+(254) 724 178 878</a>
+                      <p className="text-xs text-gray-400">Mon–Fri, 8am–6pm EAT</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -715,7 +763,7 @@ export default function HomePage() {
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-gray-900">Email</p>
-                      <p className="text-sm text-gray-500">hello@globalwakili.co.ke</p>
+                      <a href="mailto:wakili@globalsitesltd.com" className="text-sm text-primary-600 hover:text-primary-700 transition-colors">wakili@globalsitesltd.com</a>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -739,7 +787,7 @@ export default function HomePage() {
         {/* ── Footer ─────────────────────────────────────────────────────── */}
         <footer className="bg-gray-950 text-gray-400">
           <div className="marketing-container py-16">
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-12">
               <div className="col-span-2">
                 <div className="mb-4">
                   <Logo variant="full" size="md" href="/" darkBg />
@@ -747,26 +795,50 @@ export default function HomePage() {
                 <p className="text-sm leading-relaxed max-w-xs">
                   Kenya's premier enterprise legal ERP. Built for Kenyan law firms, compliant with Kenyan regulations, powered by global technology.
                 </p>
+                <p className="text-xs text-gray-500 mt-5">A product of Global Sites Limited · Nairobi, Kenya</p>
                 <div className="flex gap-3 mt-5">
-                  {['LinkedIn', 'Twitter', 'YouTube'].map((s) => (
-                    <a key={s} href="#" className="h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-xs font-semibold text-gray-500 hover:text-white">
-                      {s[0]}
-                    </a>
-                  ))}
+                  <a
+                    href="https://www.linkedin.com/search/results/all/?keywords=GlobalWakili"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Find Global Wakili on LinkedIn"
+                    className="h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-gray-500 hover:text-white"
+                  >
+                    <Linkedin className="h-4 w-4" />
+                  </a>
+                  <a
+                    href="https://www.youtube.com/@globalsitesltd7872"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label="Global Sites Limited on YouTube"
+                    className="h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-gray-500 hover:text-white"
+                  >
+                    <Youtube className="h-4 w-4" />
+                  </a>
                 </div>
               </div>
 
               {[
-                { heading: 'Product', links: ['Features', 'Pricing', 'Integrations', 'Security', 'Changelog'] },
-                { heading: 'Solutions', links: ['Small Firms', 'Mid-size Firms', 'Large Enterprises', 'In-house Legal', 'Barristers'] },
-                { heading: 'Company', links: ['About Us', 'Careers', 'Press', 'Partners', 'Contact'] },
+                { heading: 'Product', links: [
+                  { label: 'Features', href: '#features' },
+                  { label: 'Pricing', href: '#pricing' },
+                  { label: 'Integrations', href: '#integrations' },
+                  { label: 'Security', href: '#compliance' },
+                  { label: 'Contact', href: '#contact' },
+                ] },
+                { heading: 'Legal & Account', links: [
+                  { label: 'Privacy Policy', href: '/legal/privacy' },
+                  { label: 'Terms of Service', href: '/legal/terms' },
+                  { label: 'Data Erasure', href: '/legal/data-erasure' },
+                  { label: 'Sign in', href: '/login' },
+                ] },
               ].map(({ heading, links }) => (
                 <div key={heading}>
                   <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">{heading}</h4>
                   <ul className="space-y-3">
-                    {links.map((l) => (
-                      <li key={l}>
-                        <a href="#" className="text-sm hover:text-white transition-colors">{l}</a>
+                    {links.map(({ label, href }) => (
+                      <li key={label}>
+                        <a href={href} className="text-sm hover:text-white transition-colors">{label}</a>
                       </li>
                     ))}
                   </ul>
@@ -774,17 +846,14 @@ export default function HomePage() {
               ))}
             </div>
 
-            <div className="border-t border-gray-800 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs">
-              <p>© {new Date().getFullYear()} Global Wakili Limited. All rights reserved. Nairobi, Kenya.</p>
-              <div className="flex gap-5">
-                <Link href="/legal/terms" className="hover:text-white transition-colors">Terms of Service</Link>
-                <Link href="/legal/privacy" className="hover:text-white transition-colors">Privacy Policy</Link>
-                <a href="#" className="hover:text-white transition-colors">Cookie Policy</a>
-                <a href="#" className="hover:text-white transition-colors">Security</a>
-              </div>
+            <div className="border-t border-gray-800 pt-8 text-xs">
+              <p>© {new Date().getFullYear()} Global Wakili — a product of Global Sites Limited. All rights reserved. Nairobi, Kenya.</p>
             </div>
           </div>
         </footer>
+
+        {/* ── Long-page navigation aids (progress bar + back-to-top) ──────── */}
+        <BackToTop />
 
       </div>
     </>

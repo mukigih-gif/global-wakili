@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Shield, X, ChevronDown, ChevronUp } from 'lucide-react';
 
@@ -16,6 +16,29 @@ const STORAGE_KEY = 'gw_cookie_consent';
 export function CookieConsent() {
   const [visible, setVisible]   = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const barRef = useRef<HTMLDivElement>(null);
+
+  // Publish the banner height as a CSS var so floating widgets (chat,
+  // back-to-top) can sit above it instead of overlapping. Reset to 0 when hidden.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (!visible) {
+      root.style.setProperty('--gw-cookiebar-height', '0px');
+      return;
+    }
+    const update = () => {
+      root.style.setProperty('--gw-cookiebar-height', `${barRef.current?.offsetHeight ?? 0}px`);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    if (barRef.current) ro.observe(barRef.current);
+    window.addEventListener('resize', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+      root.style.setProperty('--gw-cookiebar-height', '0px');
+    };
+  }, [visible, expanded]);
   const [prefs, setPrefs]       = useState<ConsentState>({
     necessary: true,
     analytics: false,
@@ -47,8 +70,8 @@ export function CookieConsent() {
 
   return (
     <div
+      ref={barRef}
       role="dialog"
-      aria-modal="true"
       aria-label="Cookie consent"
       className="fixed bottom-0 left-0 right-0 z-[200] bg-white border-t border-gray-200 shadow-2xl"
     >
