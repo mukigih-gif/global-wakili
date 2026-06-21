@@ -58,7 +58,8 @@ preserved for history.
 | FINDING-FIN-001 | MEDIUM | petty-cash.service built (correct TransactionEngine posting) but never wired — wire-in/delete/ADR decision | Phase 3 |
 | FINDING-FIN-B-001 | — | Phase 3 Group B (CapEx/OpEx) unbuilt: no expenditure/asset/depreciation/budget — cert deferred, feature build | Phase 3 |
 | FINDING-FIN-C-001 | — | Phase 3 Group C (Ledger Book) partial: /finance/ledger + export + client sub-ledger missing; period-lock + trial-balance certifiable | Phase 3 |
-| FINDING-FIN-D-001 | — | Phase 3 Group D (P&L) partial: /reports/profit-loss absent; /finance/statements year-only flat (no COS/gross-profit/EBIT/tax tiers, no period/compare/YTD) | Phase 3 |
+| FINDING-FIN-D-001 | — | Phase 3 Group D (P&L) UNBUILT at HTTP: P&L handler dead (shadowed, FIN-D-002); reachable /statements is a ledger statement; cert deferred | Phase 3 |
+| FINDING-FIN-D-002 | MEDIUM | Duplicate GET /finance/statements — P&L/balanceSheet handler (lines 540-616) dead/shadowed; reachable handler is a ledger statement | Phase 3 |
 | FINDING-MAT-001 | MEDIUM | Matter module: 12 services export-only/dead, routes run inline; /reports/matter-profitability absent (TODO-011 Part A) | Phase 3 |
 | FINDING-007-012 | LOW | Invoice approval not fully atomic with GL posting (retry-safe) | Phase 3 |
 | F-17 | HIGH | No MFA enforced at login | pre-go-live |
@@ -738,7 +739,27 @@ Logged: 2026-06-20
 
 ---
 
-## FINDING-FIN-D-001 — OPEN — (Phase 3 Group D partial)
+## FINDING-FIN-D-002 — OPEN — MEDIUM (route shadowing / dead handler)
+
+**Duplicate `GET /finance/statements` route — the P&L/balanceSheet handler is
+dead (shadowed); the reachable handler returns a journal-line ledger statement**
+
+Found during Group D cert (2026-06-20). `finance.routes.ts` registers
+`GET /statements` TWICE: line ~375 (`getStatement`, validated) and an inline
+handler at ~540 that builds `{ pnl: {totalRevenue,totalExpenses,netProfit,
+revenue/expenseLines}, balanceSheet: {...} }`. Express uses the FIRST match, so
+the **inline P&L/balanceSheet handler (540-616) never executes — dead code**.
+The reachable `getStatement` returns `{ lines, totals: {debit, credit} }` filtered
+by account/client/matter — a ledger statement, NOT a P&L. Confirmed live
+(`r.body.pnl` undefined). Consequence: **there is no reachable P&L endpoint at all**
+(007-010 / route-shadow class). Fix: remove the duplicate route and either wire the
+P&L handler at a distinct path (e.g. `/statements/pnl` or `/reports/profit-loss`)
+or delete it.
+Logged: 2026-06-20
+
+---
+
+## FINDING-FIN-D-001 — OPEN — (Phase 3 Group D — P&L unbuilt at HTTP)
 
 **P&L Statement (v3.1 Group D) is partially built — a flat year-based P&L exists;
 the structured/period/comparative P&L and `/reports/profit-loss` do not**
@@ -753,13 +774,15 @@ Group D recon (2026-06-20). Missing vs spec:
 - Granularity is **year-only** (`?year=YYYY`), not month `period`.
 - No comparative (`&compare=`) and no YTD (`?ytd=true`).
 
-Certifiable now (covered by the Group D cert test): `GET /finance/statements`
-returns a ledger-derived P&L with `netProfit = totalRevenue − totalExpenses`,
-revenue/expense lines present, and P&L revenue reconciles to `/trial-balance`
-REVENUE accounts.
-Verdict: certify the flat P&L invariants; defer the structured/period/comparative
-P&L + `/reports/profit-loss` (feature build, shared with the absent `/reports/*`
-namespace also seen in Group A).
+CORRECTION 2026-06-20: the flat P&L handler I planned to certify is in fact
+UNREACHABLE — it is the dead, route-shadowed `/statements` handler (see
+FINDING-FIN-D-002). The reachable `GET /finance/statements` (`getStatement`)
+returns a journal-line ledger statement (`{lines, totals:{debit,credit}}`), not a
+P&L. So there is NO working P&L endpoint.
+Verdict: Group D (P&L) is effectively UNBUILT at the HTTP layer → certification
+DEFERRED (like Group B). No Group D cert test shipped. Remediation: un-shadow/
+wire the P&L handler (FIN-D-002) + build the structured/period/comparative P&L +
+`/reports/profit-loss` (absent `/reports/*` namespace, also seen in Group A).
 Logged: 2026-06-20
 
 ---
