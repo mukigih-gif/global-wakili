@@ -60,7 +60,7 @@ preserved for history.
 | FINDING-FIN-C-001 | — | Phase 3 Group C (Ledger Book) partial: /finance/ledger + export + client sub-ledger missing; period-lock + trial-balance certifiable | Phase 3 |
 | FINDING-FIN-D-001 | — | Phase 3 Group D (P&L) UNBUILT at HTTP: P&L handler dead (shadowed, FIN-D-002); reachable /statements is a ledger statement; cert deferred | Phase 3 |
 | FINDING-FIN-D-002 | MEDIUM | Duplicate GET /finance/statements — P&L/balanceSheet handler (lines 540-616) dead/shadowed; reachable handler is a ledger statement | Phase 3 |
-| FINDING-FIN-E-001 | HIGH | Phase 3 Group E (Tax/VAT): VAT-return endpoints (/tax/vat/monthly + /tax/vat/summary) 500 — VATService queries phantom Invoice/VendorBill columns (invoiceDate/totalAmount/taxAmount) | Phase 3 |
+| FINDING-FIN-E-001 | CLOSED | (this session) | VAT-return endpoints (/tax/vat/monthly + /tax/vat/summary) revived — fixed phantom Invoice/VendorBill columns AND invalid status enum literals; +exposure total. Live-DB verified | Phase 3 |
 | FINDING-FIN-E-002 | HIGH | Phase 3 Group E: VatAdjustment model absent → POST /tax/vat/adjustments returns 201 but persists nothing (silent no-op); void path 500s; summary adjustments always 0 | Phase 3 |
 | FINDING-FIN-E-003 | — | Phase 3 Group E: eTIMS control-number externally blocked (KRA creds unset → FAILED, no control number); no persisted VatReturn/TaxPeriod model (returns compute-only) | Phase 3 / pre-go-live |
 | FINDING-FIN-E-004 | CLOSED | Tenant (supplier) KRA PIN not enforced before eTIMS transmit — could submit to KRA with null supplierPin; now guarded (422 ETIMS_SUPPLIER_PIN_REQUIRED) | (this session) |
@@ -1717,6 +1717,23 @@ Remediation (bounded, in-context, no schema change): `invoiceDate`→`issuedDate
 in `VATService.getVatSummary`. `getInvoiceVatExposure` also reads phantom `totalAmount`/
 `grandTotal` but softly (`?? 0`) so it returns 200 with `totalAmount` always 0 — fix alongside.
 Impacted file: `apps/api/src/modules/finance/VATService.ts`. Logged: 2026-06-21.
+
+> **CLOSED 2026-06-21.** Mandatory Analysis surfaced that this was NOT rename-only:
+> the `status.notIn` filters also carried **invalid enum literals** that 500 independently
+> of the column names — `'VOID'` ∉ `InvoiceStatus`; `'CANCELLED'`/`'VOID'` ∉ `VendorBillStatus`
+> (real value is `VOIDED`). Fix applied to `VATService.getVatSummary`:
+> - Invoice: `invoiceDate`→`issuedDate`; `notIn ['DRAFT','CANCELLED','VOID']`→`['DRAFT','CANCELLED']`;
+>   select `totalAmount`→`total`.
+> - VendorBill: `notIn ['DRAFT','CANCELLED','VOID','REJECTED']`→`['DRAFT','REJECTED','VOIDED']`;
+>   removed phantom select `taxAmount` (no such field — the `?? row.vatAmount` reduce sources it);
+>   select `totalAmount`→`total`.
+> - Part B `getInvoiceVatExposure`: `existing.totalAmount ?? existing.grandTotal`→`existing.total`
+>   (+ row type narrowed to `total?`), so exposure `totalAmount` is now populated (was always 0).
+> Verification: `tsc --noEmit` (apps/api) exit 0; local verify against the **production Neon DB**
+> via the exact service path (`new VATService().getVatSummary/getMonthlyVatSummary/getInvoiceVatExposure`)
+> — all three paths returned without `PrismaClientValidationError` (12 invoices → outputVat 5600,
+> netVatPayable 5600; exposure totalAmount 461359). No schema change, no migration. HTTP live-verify
+> on onrender pending a finance-permitted token (DB-path through identical production code already proven).
 
 ---
 

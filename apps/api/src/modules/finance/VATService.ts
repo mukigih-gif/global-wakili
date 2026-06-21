@@ -49,8 +49,7 @@ type VatExposureInvoiceRow = {
   status?: string | null;
   taxAmount?: Prisma.Decimal | number | string | null;
   vatAmount?: Prisma.Decimal | number | string | null;
-  totalAmount?: Prisma.Decimal | number | string | null;
-  grandTotal?: Prisma.Decimal | number | string | null;
+  total?: Prisma.Decimal | number | string | null;
   lines?: VatExposureInvoiceLineRow[] | null;
 };
 
@@ -222,9 +221,9 @@ export class VATService {
         ? invoice.findMany({
             where: {
               tenantId: input.tenantId,
-              ...dateRangeWhere(input.from, input.to, 'invoiceDate'),
+              ...dateRangeWhere(input.from, input.to, 'issuedDate'),
               status: {
-                notIn: ['DRAFT', 'CANCELLED', 'VOID'],
+                notIn: ['DRAFT', 'CANCELLED'],
               },
             },
             select: {
@@ -232,7 +231,7 @@ export class VATService {
               invoiceNumber: true,
               taxAmount: true,
               vatAmount: true,
-              totalAmount: true,
+              total: true,
               status: true,
             },
           })
@@ -244,15 +243,14 @@ export class VATService {
               tenantId: input.tenantId,
               ...dateRangeWhere(input.from, input.to, 'billDate'),
               status: {
-                notIn: ['DRAFT', 'CANCELLED', 'VOID', 'REJECTED'],
+                notIn: ['DRAFT', 'REJECTED', 'VOIDED'],
               },
             },
             select: {
               id: true,
               billNumber: true,
-              taxAmount: true,
               vatAmount: true,
-              totalAmount: true,
+              total: true,
               status: true,
             },
           })
@@ -359,7 +357,7 @@ export class VATService {
       invoiceNumber: existing.invoiceNumber ?? null,
       status: existing.status ?? null,
       outputVat: outputVat.toDecimalPlaces(2),
-      totalAmount: money(existing.totalAmount ?? existing.grandTotal ?? 0),
+      totalAmount: money(existing.total ?? 0),
       lines: lineSummary,
       generatedAt: new Date(),
     };
