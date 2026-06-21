@@ -847,7 +847,12 @@ export default function HomePage() {
             </div>
 
             <div className="border-t border-gray-800 pt-8 text-xs">
-              <p>© {new Date().getFullYear()} Global Wakili — a product of Global Sites Limited. All rights reserved. Nairobi, Kenya.</p>
+              <p>
+                © {new Date().getFullYear()}{' '}
+                <a href="https://lms.globalsitesltd.com" className="hover:text-white transition-colors">Global Wakili</a>
+                {' '}— a product of{' '}
+                <a href="https://globalsitesltd.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Global Sites Limited</a>. All rights reserved. Nairobi, Kenya.
+              </p>
             </div>
           </div>
         </footer>
