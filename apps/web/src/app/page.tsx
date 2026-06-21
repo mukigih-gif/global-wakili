@@ -12,6 +12,7 @@ import { Logo } from '@/components/ui/Logo';
 import { ContactForm } from '@/components/marketing/ContactForm';
 import { MarketingHeader } from '@/components/marketing/MarketingHeader';
 import { BackToTop } from '@/components/marketing/BackToTop';
+import { BrowserFrame } from '@/components/marketing/BrowserFrame';
 
 // ── SEO Metadata ────────────────────────────────────────────────────────────
 export const metadata: Metadata = {
@@ -442,6 +443,77 @@ export default function HomePage() {
                   </ul>
                 </div>
               ))}
+            </div>
+          </div>
+        </section>
+
+        {/* ── See It In Action (real product screenshots — ADR-011) ───────── */}
+        <section className="marketing-section bg-white">
+          <div className="marketing-container">
+            <div className="text-center max-w-2xl mx-auto mb-16">
+              <span className="text-sm font-bold uppercase tracking-widest text-primary-600 mb-3 block">See It In Action</span>
+              <h2 className="text-4xl lg:text-5xl font-display font-bold text-gray-900 mb-5">
+                The actual platform. <span className="gradient-text">Real data. Live today.</span>
+              </h2>
+              <p className="text-xl text-gray-600 leading-relaxed">
+                These aren't mockups — they're real screens from Global Wakili running in production.
+              </p>
+            </div>
+
+            <div className="space-y-20 max-w-5xl mx-auto">
+              {/* Trust Accounting */}
+              <div className="grid lg:grid-cols-5 gap-8 lg:gap-12 items-center">
+                <div className="lg:col-span-2">
+                  <div className="feature-icon-wrap bg-gradient-to-br from-emerald-500 to-emerald-700 mb-5">
+                    <Shield className="h-7 w-7" />
+                  </div>
+                  <h3 className="text-2xl font-display font-bold text-gray-900 mb-3">Trust accounting that passes any LSK audit</h3>
+                  <p className="text-gray-600 leading-relaxed mb-5">
+                    Per-client sub-accounts, three-way reconciliation, and automatic overdraw prevention — every shilling tracked with a tamper-evident trail.
+                  </p>
+                  <ul className="space-y-2.5">
+                    {['Three-way reconciliation built in', 'Overdraw prevention on every account', 'Real-time trust balances'].map((f) => (
+                      <li key={f} className="flex items-center gap-2 text-sm text-gray-700">
+                        <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />{f}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="lg:col-span-3">
+                  <BrowserFrame
+                    src="/shots/trust-accounting.png"
+                    alt="Global Wakili trust accounting dashboard — client trust accounts, balances, and three-way reconciliation"
+                    url="lms.globalsitesltd.com/trust"
+                  />
+                </div>
+              </div>
+
+              {/* Finance & eTIMS */}
+              <div className="grid lg:grid-cols-5 gap-8 lg:gap-12 items-center">
+                <div className="lg:col-span-3 order-2 lg:order-1">
+                  <BrowserFrame
+                    src="/shots/finance.png"
+                    alt="Global Wakili finance dashboard — billing totals, invoice status chart, journals and chart of accounts"
+                    url="lms.globalsitesltd.com/finance"
+                  />
+                </div>
+                <div className="lg:col-span-2 order-1 lg:order-2">
+                  <div className="feature-icon-wrap bg-gradient-to-br from-amber-500 to-orange-600 mb-5">
+                    <CreditCard className="h-7 w-7" />
+                  </div>
+                  <h3 className="text-2xl font-display font-bold text-gray-900 mb-3">Billing, journals & eTIMS in one ledger</h3>
+                  <p className="text-gray-600 leading-relaxed mb-5">
+                    Invoices, double-entry journals, chart of accounts, VAT, and M-PESA receipts — with KRA eTIMS submission built into the workflow.
+                  </p>
+                  <ul className="space-y-2.5">
+                    {['Double-entry journal enforcement', 'Invoice status at a glance', 'KRA eTIMS & M-PESA ready'].map((f) => (
+                      <li key={f} className="flex items-center gap-2 text-sm text-gray-700">
+                        <CheckCircle className="h-4 w-4 text-emerald-500 flex-shrink-0" />{f}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         </section>

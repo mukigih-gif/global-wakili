@@ -1886,3 +1886,29 @@ STILL OPEN (blocked on owner-supplied external info, not code):
 - ADR-011 (Truthfulness Gate) authoring decision.
 
 TODO-012 remains IN PROGRESS until the above land.
+
+### FINDING-LANDING-003 — partial — "See It In Action" product screenshots
+
+(2026-06-21) Captured real screens from the production app we're building
+(global-wakili-api.vercel.app, demo-law-firm tenant) for a new landing
+"See It In Action" section (BrowserFrame component + alternating layout).
+
+SHIPPED (real, data-rich, presentable — assets in apps/web/public/shots/):
+- /app/trust (Trust Accounting) — KES 4.1M balances, 5 accounts, 3-way recon. No PII.
+- /app/finance (Finance) — billed/outstanding figures + invoice-status chart + tabs.
+
+NOT SHIPPED (per ADR-011 + owner guardrail — an empty/raw screen is a worse ad
+than none):
+- /app/analytics/matter-profitability — empty chart, raw TENANTID/BRANCHID/ID
+  cuids exposed, blank matter codes, __CERT_TEST_MATTER__ row. Report UI dumps
+  raw data (relates to TODO-011). Needs UI formatting + seed.
+- /app/analytics/trust (Trust Ledger Report) — empty chart, raw cuids, unformatted
+  balances, raw booleans. Same report-UI issue.
+- /app/dashboard — sparse/near-empty. Needs §12 seed.
+- /app/matters — realistic matters BUT __CERT_TEST_MATTER__/__CERT_TEST_CLIENT__
+  rows + all-0% progress + every lead advocate "Admin User". Usable only after
+  demo-tenant test-data cleanup.
+
+To add more shots later: (1) purge __CERT_TEST_*__ rows from the demo tenant,
+(2) build §12 seed for realistic dashboard/matter/analytics data, (3) give the
+analytics "report" pages a formatted UI (TODO-011) instead of raw cuid tables.

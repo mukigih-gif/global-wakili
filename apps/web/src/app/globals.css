@@ -190,7 +190,17 @@
   .sidebar-link-inactive:hover { background: #EEF2FA; }
 
   /* ── Marketing ── */
-  .marketing-section   { @apply py-24 lg:py-32; }
+  .marketing-section   { @apply py-16 lg:py-20 relative; }
+  /* Subtle gold hairline separator at the top of every section (transparent → gold → transparent) */
+  .marketing-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, rgba(201, 162, 39, 0.55) 50%, transparent 100%);
+  }
   .marketing-container { @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8; }
 
   .feature-icon-wrap {
