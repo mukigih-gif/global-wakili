@@ -1912,3 +1912,30 @@ than none):
 To add more shots later: (1) purge __CERT_TEST_*__ rows from the demo tenant,
 (2) build §12 seed for realistic dashboard/matter/analytics data, (3) give the
 analytics "report" pages a formatted UI (TODO-011) instead of raw cuid tables.
+
+### TODO-012 — REMAINING OWNER ACTIONS (handoff, 2026-06-21)
+
+All landing-page CODE is complete and pushed to branch feat/landing-revamp
+(commits 7e0d0c0, 20b1497, b3a8c8d, 3ab50ac, 3b8ff94, 6715374). This supersedes
+the earlier "STILL OPEN" list: ADR-011 is now AUTHORED (b3a8c8d); form routing is
+DECIDED + WIRED (Web3Forms, 20b1497); GA4/GTM analytics is WIRED + consent-gated
+(20b1497). What remains is OWNER ACTION ONLY — no code:
+
+1. Vercel env vars (then REDEPLOY — NEXT_PUBLIC_* bake in at build time):
+   - NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY  (web3forms.com → wakili@globalsitesltd.com)
+   - NEXT_PUBLIC_GA_ID                 (G-XXXXXXXXXX)
+   - NEXT_PUBLIC_GTM_ID                (GTM-XXXXXXX)
+2. Web3Forms dashboard → enable Auto-response (the submitter "thank-you" email, item 17).
+3. Google Search Console → submit /sitemap.xml for indexing (off-page; required to rank).
+4. Merge feat/landing-revamp → main when approved (main still at bdd833a; restore
+   tag gw-pre-landing-revamp local+remote).
+5. AT FINAL PUBLISH (item 9 carry-forward): swap canonical/OG/JSON-LD/sitemap domain
+   refs from global-wakili-api.vercel.app → the real production domain
+   (e.g. lms.globalsitesltd.com) + confirm SSL.
+
+Deferred enhancements (tracked, not blocking go-live):
+- FINDING-LANDING-002: upgrade ChatBolt rule-based KB → live Claude (needs AI creds).
+- FINDING-LANDING-003: purge __CERT_TEST_*__ demo rows + §12 seed + format analytics
+  report UIs (TODO-011) to unlock more "See It In Action" screenshots.
+
+TODO-012 status: CODE COMPLETE; awaiting owner go-live actions above.
