@@ -59,6 +59,8 @@ export function CookieConsent() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...consent, timestamp: new Date().toISOString(), version: '1.0' }));
     } catch { /* localStorage unavailable */ }
+    // Signal consent so analytics (GA4/GTM) can load or stay off accordingly.
+    try { window.dispatchEvent(new CustomEvent('gw:consent', { detail: consent })); } catch { /* ignore */ }
     setVisible(false);
   };
 
