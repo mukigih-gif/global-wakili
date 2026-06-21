@@ -382,6 +382,17 @@ export class ETimsService {
     }
 
     const payload = this.buildKraPayload(existing);
+
+    if (!payload.supplierPin) {
+      throw Object.assign(
+        new Error('Tenant KRA PIN is required before eTIMS fiscalization'),
+        {
+          statusCode: 422,
+          code: 'ETIMS_SUPPLIER_PIN_REQUIRED',
+        },
+      );
+    }
+
     const response = await this.submitPayload(payload);
     const accepted = providerAccepted(response);
     const normalizedStatus = normalizeProviderStatus(response);

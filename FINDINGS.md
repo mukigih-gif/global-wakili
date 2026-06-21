@@ -60,6 +60,10 @@ preserved for history.
 | FINDING-FIN-C-001 | — | Phase 3 Group C (Ledger Book) partial: /finance/ledger + export + client sub-ledger missing; period-lock + trial-balance certifiable | Phase 3 |
 | FINDING-FIN-D-001 | — | Phase 3 Group D (P&L) UNBUILT at HTTP: P&L handler dead (shadowed, FIN-D-002); reachable /statements is a ledger statement; cert deferred | Phase 3 |
 | FINDING-FIN-D-002 | MEDIUM | Duplicate GET /finance/statements — P&L/balanceSheet handler (lines 540-616) dead/shadowed; reachable handler is a ledger statement | Phase 3 |
+| FINDING-FIN-E-001 | HIGH | Phase 3 Group E (Tax/VAT): VAT-return endpoints (/tax/vat/monthly + /tax/vat/summary) 500 — VATService queries phantom Invoice/VendorBill columns (invoiceDate/totalAmount/taxAmount) | Phase 3 |
+| FINDING-FIN-E-002 | HIGH | Phase 3 Group E: VatAdjustment model absent → POST /tax/vat/adjustments returns 201 but persists nothing (silent no-op); void path 500s; summary adjustments always 0 | Phase 3 |
+| FINDING-FIN-E-003 | — | Phase 3 Group E: eTIMS control-number externally blocked (KRA creds unset → FAILED, no control number); no persisted VatReturn/TaxPeriod model (returns compute-only) | Phase 3 / pre-go-live |
+| FINDING-FIN-E-004 | CLOSED | Tenant (supplier) KRA PIN not enforced before eTIMS transmit — could submit to KRA with null supplierPin; now guarded (422 ETIMS_SUPPLIER_PIN_REQUIRED) | (this session) |
 | FINDING-MAT-001 | MEDIUM | Matter module: 12 services export-only/dead, routes run inline; /reports/matter-profitability absent (TODO-011 Part A) | Phase 3 |
 | FINDING-007-012 | LOW | Invoice approval not fully atomic with GL posting (retry-safe) | Phase 3 |
 | F-17 | HIGH | No MFA enforced at login | pre-go-live |
@@ -1649,3 +1653,112 @@ handled earlier.
 
 Status: OPEN, scheduled, scope expanded 2026-06-20.
 Logged: 2026-06-20 (original) / Amended: 2026-06-20
+
+---
+
+## FINDING-FIN-E-004 — CLOSED — Tenant (supplier) KRA PIN now enforced before eTIMS fiscalization
+
+**Tenant KRA PIN must be present in the invoice payload before any KRA transmit.**
+
+Group E recon (2026-06-21). `ETimsService.fiscalizeInvoice` built the KRA payload and
+immediately called `submitPayload` with no guard that `payload.supplierPin` (the
+tenant/law-firm KRA PIN, resolved by `supplierPinFrom` from `tenant.kraPin`) was present.
+`Tenant.kraPin` is `String @unique` (non-null) at the schema layer (schema.prisma:20), so
+in practice it is always populated — but the eTIMS contract typed `supplierPin: string | null`
+and would have silently transmitted a null supplier PIN (an invalid KRA submission) if the
+value were ever absent.
+
+Fix (this session): added a hard precondition in `fiscalizeInvoice`, immediately after
+`buildKraPayload`, before `submitPayload`:
+
+```ts
+if (!payload.supplierPin) {
+  throw Object.assign(
+    new Error('Tenant KRA PIN is required before eTIMS fiscalization'),
+    { statusCode: 422, code: 'ETIMS_SUPPLIER_PIN_REQUIRED' },
+  );
+}
+```
+
+Covers all callers — the legacy `taxservice.ts` (`processLegalInvoice`) and `kraetims.ts`
+(`postInvoiceToKRA`) wrappers both route through `fiscalizeInvoice`. An invoice can no longer
+be transmitted to KRA without the firm's PIN.
+
+Verification: `npx tsc --noEmit` (apps/api) → exit 0. No schema change, no migration.
+Impacted file: `apps/api/src/modules/finance/ETimsService.ts`.
+Logged: 2026-06-21.
+
+---
+
+## FINDING-FIN-E-001 — OPEN — (Phase 3 Group E — VAT-return endpoints dead, phantom-field 500)
+
+**The two primary VAT-return endpoints 500 on a Prisma phantom-field error.**
+
+Group E recon (2026-06-21). `VATService.getVatSummary` — which backs BOTH
+`GET /finance/tax/vat/monthly` and `GET /finance/tax/vat/summary` (the actual KRA VAT3
+"returns" computation: outputVat − inputVat + adjustments) — queries columns that do not
+exist on the deployed schema:
+
+- Invoice `where` filters on `invoiceDate` → schema has **`issuedDate`** (no `invoiceDate`
+  anywhere in schema.prisma).
+- Invoice `select` reads `totalAmount` → schema Invoice has **`total`** (no `totalAmount`).
+- VendorBill `select` reads `taxAmount` + `totalAmount` → schema VendorBill has **`vatAmount`**
+  + **`total`** (no `taxAmount`, no `totalAmount`).
+
+All three queries run inside one `Promise.all` → `PrismaClientValidationError` → HTTP 500.
+The headline VAT-return endpoints are non-functional in production. Same dead-field class as the
+Department/Payroll/Tasks/Documents bugs the validation seed (CLAUDE.md §12) was meant to catch.
+
+VAT *math* itself is sound: `utils/vat-wht-calculator.ts` + the net-VAT reduction are correct
+(16%, Decimal, ROUND_HALF_UP, KRA sign rules). The defect is purely the Prisma field names.
+
+Remediation (bounded, in-context, no schema change): `invoiceDate`→`issuedDate`,
+`totalAmount`→`total` (Invoice), `taxAmount`→`vatAmount` + `totalAmount`→`total` (VendorBill)
+in `VATService.getVatSummary`. `getInvoiceVatExposure` also reads phantom `totalAmount`/
+`grandTotal` but softly (`?? 0`) so it returns 200 with `totalAmount` always 0 — fix alongside.
+Impacted file: `apps/api/src/modules/finance/VATService.ts`. Logged: 2026-06-21.
+
+---
+
+## FINDING-FIN-E-002 — OPEN — (Phase 3 Group E — VatAdjustment model absent)
+
+**`VatAdjustment` model does not exist in schema → silent-201 writes and a 500 void path.**
+
+Group E recon (2026-06-21). No `model VatAdjustment` in schema.prisma. `VATService` resolves
+it via `optionalDelegate('vatAdjustment')` → null, so:
+
+- `POST /finance/tax/vat/adjustments` (`recordVatAdjustment`) → returns **HTTP 201 with
+  `persisted:false`** and a warning in metadata — a silent no-op write (looks successful, saves
+  nothing). Worst failure mode for an accounting control.
+- `GET /finance/tax/vat/adjustments` (`listVatAdjustments`) → always `[]`.
+- `POST /finance/tax/vat/adjustments/:id/void` (`voidVatAdjustment`) → uses the **non-optional**
+  `delegate()` → throws **500** `FINANCE_SCHEMA_DELEGATE_MISSING`.
+- The adjustments leg of every VAT summary is silently 0.
+
+Remediation: add a `VatAdjustment` model (tenantId, type enum, amount, adjustmentDate, reason,
+reference, status, createdById, voided* fields, metadata) + migration, matching the fields
+`VATService.recordVatAdjustment`/`voidVatAdjustment` already write. This is a real (bounded)
+schema change requiring approval per ADR/CLAUDE.md §2/§4. Logged: 2026-06-21.
+
+---
+
+## FINDING-FIN-E-003 — OPEN (external + scope) — (Phase 3 Group E — eTIMS control number & persisted returns)
+
+**eTIMS control-number issuance is externally blocked; no persisted return/filing model exists.**
+
+Group E recon (2026-06-21).
+
+1. eTIMS control number (external, ≈ FINDING-AUTH-001): `POST /finance/etims/invoices/:id/fiscalize`
+   is structurally sound and reachable — eligibility gates (INVOICED/PARTIALLY_PAID/PAID; rejects
+   CANCELLED), idempotent skip-if-already-fiscalized, 404 on missing invoice, full eTIMS field set
+   on Invoice. But `submitPayload` returns hard `FAILED` + `simulated:true` when `KRA_ETIMS_URL`/
+   `KRA_ETIMS_TOKEN` are unset → **no control number is ever issued** in production. Not a code bug;
+   needs real KRA credentials. The structural path is certifiable; control-number issuance is not.
+
+2. No persisted returns model: there is no `VatReturn`/`TaxPeriod`/`ETimsSubmission` model. VAT
+   "returns" are computed on the fly (FINDING-FIN-E-001's endpoints) and never persisted, versioned,
+   or filed. Acceptable for read-certification; a gap for true KRA iTax filing. Needs scoping.
+
+Verdict: Group E is BUILT and wired (unlike Groups B/D), but NOT certifiable as-is — blocked by
+FIN-E-001 (phantom-field 500, cheap fix) and FIN-E-002 (missing model, bounded schema change);
+FIN-E-003 is external/scope carry-forward. Logged: 2026-06-21.
