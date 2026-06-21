@@ -1796,9 +1796,10 @@ catches up to the page. Only fabricated *claims* that cannot be made true by
 building (invented testimonials, market-traction/SLA stats) are removed/corrected.
 
 NOTE on governance citation: the source task cited "ADR-011 (Truthfulness Gate)"
-as governing authority. **No such ADR exists** — ARCHITECTURE_DECISIONS.md stops
-at ADR-010. The truthfulness principle is applied here on its merits; authoring a
-formal ADR-011 is a separate decision pending with the owner.
+as governing authority. It did NOT exist at task start (the register stopped at
+ADR-010). It has now been authored into ARCHITECTURE_DECISIONS.md (2026-06-21,
+on owner approval) — the truthfulness principle applied throughout this work is
+now formally backed by ADR-011.
 
 ### Batch 1 — Truthfulness (DONE, see commit at close)
 - Removed invented testimonials (Wanjiku Kariuki / David Omondi / Amina Hassan)
