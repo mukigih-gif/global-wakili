@@ -288,6 +288,7 @@ renumber.
 
 ### F-03 — INFO — POST /auth/refresh not implemented
 - Substituted with GET /auth/session for token validation. **Status:** OPEN (deferred; needed for mobile).
+- 2026-06-22: full refresh-flow design scoped (15m access + 7d rotating refresh token, hashed in Session.refreshToken; POST /auth/refresh with single-use rotation + reuse-detection→REVOKE; frontend 401 single-flight interceptor; likely zero migration). To be built as its own Auth-context session, ideally alongside F-17 (MFA). Scope doc: `.claude/plans/auth-refresh-flow-scope.md` (move to /docs at build kickoff). Also resolves the OAuth callback token-issue path. Related: 8h JWT_EXPIRES_IN "Quick pin" already shipped (PR feat/landing-revamp).
 
 ### F-21 — INFO/DEFERRED — Invite User uses interim temp-password (Option A)
 - Should become an email-token invite flow (24h token, user sets own password).
