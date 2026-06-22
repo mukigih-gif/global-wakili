@@ -8,4 +8,4 @@ Disallow: /portal/
 Disallow: /auth/
 
 # Sitemap
-Sitemap: https://globalwakili.co.ke/sitemap.xml
+Sitemap: https://global-wakili-api.vercel.app/sitemap.xml

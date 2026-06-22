@@ -47,6 +47,13 @@ services:
         # SET MANUALLY — minimum 32 chars, strong random
         # Generate: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 
+      - key: JWT_EXPIRES_IN
+        value: 8h
+        # Access-token / session lifetime. No refresh flow yet, so this is the
+        # full working-session length before a re-login is required.
+        # NOTE: confirm no stale value (e.g. 10m) is set manually in the Render
+        # dashboard — a dashboard override wins over this Blueprint value.
+
       - key: ENCRYPTION_KEY
         sync: false
         # SET MANUALLY — exactly 64 hex characters (32 bytes, AES-256)

@@ -26,6 +26,18 @@
   html { scroll-behavior: smooth; }
   * { box-sizing: border-box; }
 
+  /* Offset anchored sections so smooth-scroll jumps clear the sticky header */
+  section[id] { scroll-margin-top: 4.5rem; }
+
+  /* Floating chat widget: smooth transitions; hide while the footer is in view
+     so it never overlaps footer links (data attribute set by BackToTop). */
+  .gw-chat-launcher { transition: opacity .3s ease, transform .3s ease, bottom .3s ease; }
+  [data-gw-at-footer="true"] .gw-chat-launcher {
+    opacity: 0;
+    transform: translateY(0.75rem);
+    pointer-events: none;
+  }
+
   body {
     @apply bg-white text-gray-900 font-sans antialiased;
     font-feature-settings: 'cv02','cv03','cv04','cv11';
@@ -178,7 +190,17 @@
   .sidebar-link-inactive:hover { background: #EEF2FA; }
 
   /* ── Marketing ── */
-  .marketing-section   { @apply py-24 lg:py-32; }
+  .marketing-section   { @apply py-16 lg:py-20 relative; }
+  /* Subtle gold hairline separator at the top of every section (transparent → gold → transparent) */
+  .marketing-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent 0%, rgba(201, 162, 39, 0.6) 50%, transparent 100%);
+  }
   .marketing-container { @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8; }
 
   .feature-icon-wrap {

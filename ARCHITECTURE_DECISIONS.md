@@ -214,4 +214,50 @@ All workstreams executed through gates.
 
 ---
 
+ADR-011
+
+Decision:
+
+Truthfulness Gate for Public-Facing & Marketing Content
+
+Status:
+
+Accepted
+
+Reason:
+
+Public-facing content (landing page, marketing site, docs) had drifted from
+reality — invented testimonials, unverifiable statistics ("500+ law firms",
+"KES 2B+ trust funds protected", "99.9% uptime"), and advertised features not
+yet built. Misrepresentation carries legal and reputational risk and lets
+marketing diverge from the actual product unchecked.
+
+Outcome:
+
+Every public-facing claim must be truthful and verifiable. Specifically:
+
+- Claims must be verifiable against repository evidence (CLAUDE.md status,
+  FINDINGS.md, test results) or an owner-confirmed fact.
+- Statistics must cite real numbers — no estimates or aspirational figures
+  presented as current fact.
+- Testimonials / social proof must be real and attributable — no invented quotes.
+- Advertised-but-unbuilt features are treated as committed deliverables: the
+  public page is the product spec/contract, so such features stay visible but
+  MUST be logged in FINDINGS.md against a tracking TODO so the app catches up
+  (see FINDING-LANDING-001).
+- External-only facts (entity registration name, contact details, domains,
+  social URLs, analytics/tracking IDs) must be owner-confirmed, never fabricated.
+
+Scope: landing page, marketing site, documentation, and any externally
+published material. Classified Class I (Documentation) per CHANGE_CONTROL.md
+unless implementation code is involved.
+
+Related:
+
+TODO-012; FINDING-LANDING-001; FINDING-LANDING-002.
+
+Logged: 2026-06-21.
+
+---
+
 End of File

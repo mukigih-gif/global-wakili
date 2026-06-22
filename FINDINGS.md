@@ -288,6 +288,7 @@ renumber.
 
 ### F-03 — INFO — POST /auth/refresh not implemented
 - Substituted with GET /auth/session for token validation. **Status:** OPEN (deferred; needed for mobile).
+- 2026-06-22: full refresh-flow design scoped (15m access + 7d rotating refresh token, hashed in Session.refreshToken; POST /auth/refresh with single-use rotation + reuse-detection→REVOKE; frontend 401 single-flight interceptor; likely zero migration). To be built as its own Auth-context session, ideally alongside F-17 (MFA). Scope doc: `.claude/plans/auth-refresh-flow-scope.md` (move to /docs at build kickoff). Also resolves the OAuth callback token-issue path. Related: 8h JWT_EXPIRES_IN "Quick pin" already shipped (PR feat/landing-revamp).
 
 ### F-21 — INFO/DEFERRED — Invite User uses interim temp-password (Option A)
 - Should become an email-token invite flow (24h token, user sets own password).
@@ -1779,3 +1780,163 @@ Group E recon (2026-06-21).
 Verdict: Group E is BUILT and wired (unlike Groups B/D), but NOT certifiable as-is — blocked by
 FIN-E-001 (phantom-field 500, cheap fix) and FIN-E-002 (missing model, bounded schema change);
 FIN-E-003 is external/scope carry-forward. Logged: 2026-06-21.
+
+---
+
+## TODO-012 — IN PROGRESS — Landing page closeout (truthfulness + trust infra + SEO + CRO)
+
+Class I (Documentation/Marketing) per CHANGE_CONTROL.md §6. Marketing site
+(`apps/web/src/app/page.tsx`, `layout.tsx`, marketing components). Batched
+execution; each batch committed separately.
+
+Governing principle agreed with owner (2026-06-21): **the landing page is the
+product spec/contract.** Every feature advertised on the page MUST be delivered
+in the app. We do NOT remove advertised features to match current reality — we
+KEEP them on the page and log them here as committed deliverables so the app
+catches up to the page. Only fabricated *claims* that cannot be made true by
+building (invented testimonials, market-traction/SLA stats) are removed/corrected.
+
+NOTE on governance citation: the source task cited "ADR-011 (Truthfulness Gate)"
+as governing authority. It did NOT exist at task start (the register stopped at
+ADR-010). It has now been authored into ARCHITECTURE_DECISIONS.md (2026-06-21,
+on owner approval) — the truthfulness principle applied throughout this work is
+now formally backed by ADR-011.
+
+### Batch 1 — Truthfulness (DONE, see commit at close)
+- Removed invented testimonials (Wanjiku Kariuki / David Omondi / Amina Hassan)
+  entirely — they were fabricated people. Replaced with a "Built Live" section
+  ("Engineered with the same rigor we apply to your trust accounts") citing real
+  CLAUDE.md §3A metrics: 139/139 API cert tests, 365/365 tenant-isolation
+  regression, 116 model-level isolation controls, 3-way trust recon under
+  concurrency.
+- Corrected the 4 hero stats from fabricated/aspirational (`500+ Law Firms`,
+  `KES 2B+ Trust Funds`, `99.9% Uptime SLA`) to real, citable numbers
+  (`139/139`, `116`, `365/365`, `400+`). These are claims, not features, so they
+  were corrected, not "built."
+- All buildable feature copy LEFT INTACT per the spec-contract principle below.
+
+### FINDING-LANDING-001 — OPEN (committed deliverables) — features advertised on the landing page that are NOT yet built/certified in the app
+
+The following are advertised on the public landing page and therefore MUST be
+delivered in the app. Each maps to an existing scope-gap TODO. Status: COMMITTED
+— advertised ∴ must ship. Tracked here so the obligation is not lost.
+
+1. **AI Legal Operations** (full module + "deadline intelligence (AI)" claim in
+   Legal Practice Management + pain-point #3 "AI scans all active matters and
+   flags risks 30/7/1 day") → **TODO-006** (AI Platform certification, OPEN, not
+   started; WIP-005 Partial). Owner directive 2026-06-21: keep on page, must be
+   done. Highest-visibility commitment of this set.
+2. **Tender management** (Legal Practice Management feature list + VERSUS
+   comparison row + JSON-LD featureList) → **TODO-004** (Tenders, OPEN, entirely
+   new scope, not started). Must be built.
+3. **Court filing / court hearing registry** (Legal Practice Management feature
+   list + VERSUS row "Court filing & tender management" + JSON-LD featureList) →
+   **TODO-003** (Court Filing, OPEN, needs scoping from scratch). Court hearing
+   tracking partially exists; the *filing registry* does not. Must be built.
+4. **Document vault** (Client Collaboration "Document vault access") →
+   **TODO-008** (Document platform is upload-only; no versioning/retention/active
+   workspace). The full "vault" advertised must be completed. Must be built.
+
+These remain visible on the page by owner decision; this finding is the
+counter-balancing obligation. Logged: 2026-06-21.
+
+### FINDING-LANDING-002 — OPEN (committed deliverable / external-cred dependent) — marketing chat assistant is rule-based, not live AI
+
+`ChatBolt` (`apps/web/src/components/chat/ChatBolt.tsx`) was a non-functional
+lead-capture stub (any message → static "our team will reply" card; no answers).
+Rebuilt 2026-06-21 into a working conversational assistant with a curated
+knowledge base grounded in the landing-page FAQ/module copy (trust accounting,
+M-PESA, eTIMS, pricing, security, implementation) + graceful demo-form fallback,
+and made responsive (full-width on mobile, scrollable thread, typing indicator).
+
+This is honest and works with zero external credentials, but it is keyword-matched,
+not generative. Upgrade path: replace `getAnswer()` with a live Claude-backed
+endpoint once AI credentials are configured — ties to **TODO-006** (AI Platform)
+and the **FINDING-AUTH-001** external-credential pattern (no AI/SMTP creds in
+render.yaml yet). Until then the rule-based KB is the certified behaviour.
+Logged: 2026-06-21.
+
+### TODO-012 execution log — 2026-06-21 (feat/landing-revamp)
+
+Branch feat/landing-revamp; main untouched at bdd833a; restore tag
+gw-pre-landing-revamp. Landed this session:
+- Batch 1 (truthfulness): testimonials → Built Live; stats corrected;
+  FINDING-LANDING-001 features logged as committed deliverables.
+- Batch 2 (trust infra): contact → click-to-call +(254) 724 178 878 +
+  mailto:wakili@globalsitesltd.com; footer dead links removed/restructured to
+  real destinations; entity → "a product of Global Sites Limited". Item 9
+  domain/SSL resolved interim = global-wakili-api.vercel.app (owner decision),
+  revisit at final publish.
+- Batch 3 (SEO): title, meta description, H1, keyword H2, metadataBase,
+  canonical, OG+Twitter, LocalBusiness + FAQPage JSON-LD, sitemap.ts +
+  robots.txt aligned to Vercel domain, sameAs (YouTube), generated branded
+  1200x630 og-image.png from the logo.
+- Batch 4 (CRO): KDPA cookie banner wired into root layout (de-duped from app
+  layout); floating chat/back-to-top/cookie coordination (no content blocking).
+- Batch 5 (social): footer LinkedIn (GlobalWakili search) + YouTube.
+- Batch 6 (nav UX, Class II): scroll-spy sticky header + mobile menu;
+  back-to-top (scroll-up reveal, hides at footer); scroll-progress bar;
+  smooth-scroll offsets. New components MarketingHeader, BackToTop.
+- ChatBolt: dead stub → responsive conversational assistant (FINDING-LANDING-002).
+- Mobile: zero horizontal overflow; comparison table → stacked cards on mobile.
+
+STILL OPEN (blocked on owner-supplied external info, not code):
+- item 16/17 form routing + thank-you email (destination decision + SMTP creds;
+  thank-you email is Class II backend, FINDING-AUTH-001 pattern).
+- item 19 tracking IDs (GA4 / GTM / LinkedIn Insight).
+- ADR-011 (Truthfulness Gate) authoring decision.
+
+TODO-012 remains IN PROGRESS until the above land.
+
+### FINDING-LANDING-003 — partial — "See It In Action" product screenshots
+
+(2026-06-21) Captured real screens from the production app we're building
+(global-wakili-api.vercel.app, demo-law-firm tenant) for a new landing
+"See It In Action" section (BrowserFrame component + alternating layout).
+
+SHIPPED (real, data-rich, presentable — assets in apps/web/public/shots/):
+- /app/trust (Trust Accounting) — KES 4.1M balances, 5 accounts, 3-way recon. No PII.
+- /app/finance (Finance) — billed/outstanding figures + invoice-status chart + tabs.
+
+NOT SHIPPED (per ADR-011 + owner guardrail — an empty/raw screen is a worse ad
+than none):
+- /app/analytics/matter-profitability — empty chart, raw TENANTID/BRANCHID/ID
+  cuids exposed, blank matter codes, __CERT_TEST_MATTER__ row. Report UI dumps
+  raw data (relates to TODO-011). Needs UI formatting + seed.
+- /app/analytics/trust (Trust Ledger Report) — empty chart, raw cuids, unformatted
+  balances, raw booleans. Same report-UI issue.
+- /app/dashboard — sparse/near-empty. Needs §12 seed.
+- /app/matters — realistic matters BUT __CERT_TEST_MATTER__/__CERT_TEST_CLIENT__
+  rows + all-0% progress + every lead advocate "Admin User". Usable only after
+  demo-tenant test-data cleanup.
+
+To add more shots later: (1) purge __CERT_TEST_*__ rows from the demo tenant,
+(2) build §12 seed for realistic dashboard/matter/analytics data, (3) give the
+analytics "report" pages a formatted UI (TODO-011) instead of raw cuid tables.
+
+### TODO-012 — REMAINING OWNER ACTIONS (handoff, 2026-06-21)
+
+All landing-page CODE is complete and pushed to branch feat/landing-revamp
+(commits 7e0d0c0, 20b1497, b3a8c8d, 3ab50ac, 3b8ff94, 6715374). This supersedes
+the earlier "STILL OPEN" list: ADR-011 is now AUTHORED (b3a8c8d); form routing is
+DECIDED + WIRED (Web3Forms, 20b1497); GA4/GTM analytics is WIRED + consent-gated
+(20b1497). What remains is OWNER ACTION ONLY — no code:
+
+1. Vercel env vars (then REDEPLOY — NEXT_PUBLIC_* bake in at build time):
+   - NEXT_PUBLIC_WEB3FORMS_ACCESS_KEY  (web3forms.com → wakili@globalsitesltd.com)
+   - NEXT_PUBLIC_GA_ID                 (G-XXXXXXXXXX)
+   - NEXT_PUBLIC_GTM_ID                (GTM-XXXXXXX)
+2. Web3Forms dashboard → enable Auto-response (the submitter "thank-you" email, item 17).
+3. Google Search Console → submit /sitemap.xml for indexing (off-page; required to rank).
+4. Merge feat/landing-revamp → main when approved (main still at bdd833a; restore
+   tag gw-pre-landing-revamp local+remote).
+5. AT FINAL PUBLISH (item 9 carry-forward): swap canonical/OG/JSON-LD/sitemap domain
+   refs from global-wakili-api.vercel.app → the real production domain
+   (e.g. lms.globalsitesltd.com) + confirm SSL.
+
+Deferred enhancements (tracked, not blocking go-live):
+- FINDING-LANDING-002: upgrade ChatBolt rule-based KB → live Claude (needs AI creds).
+- FINDING-LANDING-003: purge __CERT_TEST_*__ demo rows + §12 seed + format analytics
+  report UIs (TODO-011) to unlock more "See It In Action" screenshots.
+
+TODO-012 status: CODE COMPLETE; awaiting owner go-live actions above.
