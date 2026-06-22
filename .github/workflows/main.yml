@@ -1,3 +1,11 @@
+name: Env Template Check
+
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+    branches: [main]
+
 jobs:
   validate-env:
     runs-on: ubuntu-latest
