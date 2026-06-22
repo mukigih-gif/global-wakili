@@ -1169,7 +1169,7 @@ authRouter.get('/oauth/google/callback', async (req: Request, res: Response, nex
       provider: 'google',
     };
 
-    const accessToken = signToken(jwtPayload, resolveJwtExpiresIn('access'));
+    const accessToken = signToken(jwtPayload, resolveJwtExpiresIn(process.env.JWT_EXPIRES_IN));
     const appUrl = process.env.APP_URL ?? `${req.protocol}://${req.get('host')}`;
     const portal = claims.isSuperAdmin ? '/admin/dashboard' : '/app/dashboard';
 
@@ -1243,7 +1243,7 @@ authRouter.get('/oauth/microsoft/callback', async (req: Request, res: Response, 
       provider: 'microsoft',
     };
 
-    const accessToken = signToken(jwtPayload, resolveJwtExpiresIn('access'));
+    const accessToken = signToken(jwtPayload, resolveJwtExpiresIn(process.env.JWT_EXPIRES_IN));
     const appUrl = process.env.APP_URL ?? `${req.protocol}://${req.get('host')}`;
     const portal = claims.isSuperAdmin ? '/admin/dashboard' : '/app/dashboard';
 
