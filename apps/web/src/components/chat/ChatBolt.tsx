@@ -95,6 +95,13 @@ export function ChatBolt() {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, typing, open]);
 
+  // Let other parts of the page (e.g. footer "Chat with us") open the widget.
+  useEffect(() => {
+    const openChat = () => setOpen(true);
+    window.addEventListener('gw:open-chat', openChat);
+    return () => window.removeEventListener('gw:open-chat', openChat);
+  }, []);
+
   const respond = (question: string) => {
     const q = question.trim();
     if (!q) return;

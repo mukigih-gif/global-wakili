@@ -4,7 +4,7 @@ import Image from 'next/image';
 import {
   Scale, Shield, Brain, BarChart2, Globe, CheckCircle,
   ArrowRight, Lock, Clock, Users, FileText, TrendingUp,
-  Phone, Mail, MapPin, ChevronRight, Award, Linkedin, Youtube,
+  Phone, Mail, MapPin, ChevronRight, Award, Linkedin, Youtube, Facebook,
   Gavel, CreditCard, Database, Layers, HeartHandshake, Play,
   XCircle, MessageCircle, AlertTriangle, Fingerprint, Server,
 } from 'lucide-react';
@@ -13,6 +13,8 @@ import { ContactForm } from '@/components/marketing/ContactForm';
 import { MarketingHeader } from '@/components/marketing/MarketingHeader';
 import { BackToTop } from '@/components/marketing/BackToTop';
 import { BrowserFrame } from '@/components/marketing/BrowserFrame';
+import { Reveal } from '@/components/marketing/Reveal';
+import { ChatLink } from '@/components/marketing/ChatLink';
 
 // ── SEO Metadata ────────────────────────────────────────────────────────────
 export const metadata: Metadata = {
@@ -480,22 +482,26 @@ export default function HomePage() {
                   </ul>
                 </div>
                 <div className="lg:col-span-3">
-                  <BrowserFrame
-                    src="/shots/trust-accounting.png"
-                    alt="Global Wakili trust accounting dashboard — client trust accounts, balances, and three-way reconciliation"
-                    url="lms.globalsitesltd.com/trust"
-                  />
+                  <Reveal>
+                    <BrowserFrame
+                      src="/shots/trust-accounting.png"
+                      alt="Global Wakili trust accounting dashboard — client trust accounts, balances, and three-way reconciliation"
+                      url="lms.globalsitesltd.com/trust"
+                    />
+                  </Reveal>
                 </div>
               </div>
 
               {/* Finance & eTIMS */}
               <div className="grid lg:grid-cols-5 gap-8 lg:gap-12 items-center">
                 <div className="lg:col-span-3 order-2 lg:order-1">
-                  <BrowserFrame
-                    src="/shots/finance.png"
-                    alt="Global Wakili finance dashboard — billing totals, invoice status chart, journals and chart of accounts"
-                    url="lms.globalsitesltd.com/finance"
-                  />
+                  <Reveal>
+                    <BrowserFrame
+                      src="/shots/finance.png"
+                      alt="Global Wakili finance dashboard — billing totals, invoice status chart, journals and chart of accounts"
+                      url="lms.globalsitesltd.com/finance"
+                    />
+                  </Reveal>
                 </div>
                 <div className="lg:col-span-2 order-1 lg:order-2">
                   <div className="feature-icon-wrap bg-gradient-to-br from-amber-500 to-orange-600 mb-5">
@@ -526,21 +532,22 @@ export default function HomePage() {
               <h2 className="text-4xl font-display font-bold text-gray-900 mb-4">Up and running in days, not months</h2>
               <p className="text-lg text-gray-600">Our implementation team handles migration, training, and configuration. You focus on practising law.</p>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-              {WORKFLOW.map(({ step, title, desc }) => (
-                <div key={step} className="relative">
-                  <div className="card p-7 h-full">
-                    <div className="text-5xl font-display font-bold text-primary-100 mb-4">{step}</div>
-                    <h3 className="text-base font-bold text-gray-900 mb-2">{title}</h3>
-                    <p className="text-sm text-gray-600 leading-relaxed">{desc}</p>
-                  </div>
-                  {step !== '04' && (
-                    <div className="hidden lg:block absolute top-1/2 -right-3 -translate-y-1/2 z-10">
-                      <ChevronRight className="h-6 w-6 text-gray-300" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+              {WORKFLOW.map(({ step, title, desc }, i) => {
+                const Icon = [Users, Scale, CreditCard, BarChart2][i] ?? Users;
+                return (
+                  <Reveal key={step} delay={i * 120}>
+                    <div className="text-center sm:text-left h-full">
+                      <div className="relative inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-primary-600 to-primary-800 text-white shadow-lg mb-5">
+                        <Icon className="h-7 w-7" />
+                        <span className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-accent-400 text-primary-900 text-xs font-bold flex items-center justify-center shadow">{step}</span>
+                      </div>
+                      <h3 className="text-lg font-bold text-gray-900 mb-2">{title}</h3>
+                      <p className="text-sm text-gray-600 leading-relaxed">{desc}</p>
                     </div>
-                  )}
-                </div>
-              ))}
+                  </Reveal>
+                );
+              })}
             </div>
           </div>
         </section>
@@ -869,58 +876,66 @@ export default function HomePage() {
                 </p>
                 <p className="text-xs text-gray-400 mt-5">A product of Global Sites Limited · Nairobi, Kenya</p>
                 <div className="flex gap-3 mt-5">
-                  <a
-                    href="https://www.linkedin.com/search/results/all/?keywords=GlobalWakili"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Find Global Wakili on LinkedIn"
-                    className="h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-gray-600 hover:text-white"
-                  >
-                    <Linkedin className="h-4 w-4" />
-                  </a>
-                  <a
-                    href="https://www.youtube.com/@globalsitesltd7872"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label="Global Sites Limited on YouTube"
-                    className="h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-gray-600 hover:text-white"
-                  >
-                    <Youtube className="h-4 w-4" />
-                  </a>
+                  {[
+                    { Icon: Linkedin, href: 'https://www.linkedin.com/search/results/all/?keywords=GlobalWakili', label: 'Find Global Wakili on LinkedIn' },
+                    { Icon: Facebook, href: 'https://www.facebook.com/globalsitesltd/', label: 'Global Sites Limited on Facebook' },
+                    { Icon: Youtube, href: 'https://www.youtube.com/@globalsitesltd7872', label: 'Global Sites Limited on YouTube' },
+                  ].map(({ Icon, href, label }) => (
+                    <a
+                      key={label}
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={label}
+                      className="h-9 w-9 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center transition-colors text-gray-400 hover:text-white"
+                    >
+                      <Icon className="h-4 w-4" />
+                    </a>
+                  ))}
                 </div>
               </div>
 
-              {[
-                { heading: 'Product', links: [
-                  { label: 'Features', href: '#features' },
-                  { label: 'Pricing', href: '#pricing' },
-                  { label: 'Integrations', href: '#integrations' },
-                  { label: 'Security', href: '#compliance' },
-                  { label: 'Contact', href: '#contact' },
-                ] },
-                { heading: 'Legal & Account', links: [
-                  { label: 'Privacy Policy', href: '/legal/privacy' },
-                  { label: 'Terms of Service', href: '/legal/terms' },
-                  { label: 'Data Erasure', href: '/legal/data-erasure' },
-                  { label: 'Sign in', href: '/login' },
-                ] },
-              ].map(({ heading, links }) => (
-                <div key={heading}>
-                  <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">{heading}</h4>
-                  <ul className="space-y-3">
-                    {links.map(({ label, href }) => (
-                      <li key={label}>
-                        <a href={href} className="text-sm hover:text-white transition-colors">{label}</a>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ))}
+              {/* Product */}
+              <div>
+                <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Product</h4>
+                <ul className="space-y-3">
+                  {[
+                    { label: 'Features', href: '#features' },
+                    { label: 'Pricing', href: '#pricing' },
+                    { label: 'Integrations', href: '#integrations' },
+                    { label: 'Contact', href: '#contact' },
+                    { label: 'Sign in', href: '/login' },
+                  ].map(({ label, href }) => (
+                    <li key={label}>
+                      <a href={href} className="text-sm hover:text-white transition-colors">{label}</a>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Legal & Support */}
+              <div>
+                <h4 className="text-sm font-semibold text-white uppercase tracking-wider mb-4">Legal &amp; Support</h4>
+                <ul className="space-y-3">
+                  {[
+                    { label: 'Terms of Service', href: '/legal/terms' },
+                    { label: 'Privacy Policy', href: '/legal/privacy' },
+                    { label: 'Cookie Policy', href: '/legal/cookie-policy' },
+                    { label: 'Security', href: '/legal/security' },
+                    { label: 'Data Erasure', href: '/legal/data-erasure' },
+                  ].map(({ label, href }) => (
+                    <li key={label}>
+                      <a href={href} className="text-sm hover:text-white transition-colors">{label}</a>
+                    </li>
+                  ))}
+                  <li><ChatLink className="text-sm hover:text-white transition-colors" /></li>
+                </ul>
+              </div>
             </div>
 
             <div className="border-t border-gray-800 pt-8 text-xs">
               <p>
-                © {new Date().getFullYear()}{' '}
+                © {new Date().getFullYear() > 2026 ? `2026–${new Date().getFullYear()}` : '2026'}{' '}
                 <a href="https://lms.globalsitesltd.com" className="hover:text-white transition-colors">Global Wakili</a>
                 {' '}— a product of{' '}
                 <a href="https://globalsitesltd.com" target="_blank" rel="noopener noreferrer" className="hover:text-white transition-colors">Global Sites Limited</a>. All rights reserved. Nairobi, Kenya.
