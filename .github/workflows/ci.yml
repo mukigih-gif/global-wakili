@@ -23,6 +23,8 @@ jobs:
         run: npm ci
 
       - name: Prisma validate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL || 'postgresql://placeholder:placeholder@localhost:5432/placeholder' }}
         run: npm run db:validate
 
       - name: Prisma generate
