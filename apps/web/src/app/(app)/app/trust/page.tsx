@@ -84,6 +84,9 @@ export default function TrustPage() {
           <Button size="sm" variant="secondary" onClick={() => { setShowNewAccount(true); setAccountError(''); }}>
             <Settings className="h-4 w-4" /> New Account
           </Button>
+          <Link href="/app/trust/withdraw"><Button size="sm" variant="secondary">Withdraw</Button></Link>
+          <Link href="/app/trust/transfer"><Button size="sm" variant="secondary">Transfer</Button></Link>
+          <Link href="/app/trust/interest"><Button size="sm" variant="secondary">Interest</Button></Link>
           <Link href="/app/trust/deposit">
             <Button size="sm"><Plus className="h-4 w-4" /> New Deposit</Button>
           </Link>

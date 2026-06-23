@@ -2360,7 +2360,7 @@ Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app route
 
 ---
 
-## FINDING-FRONT-002 — OPEN — HIGH
+## FINDING-FRONT-002 — CLOSED (2026-06-24) — HIGH
 
 **Trust withdrawal, transfer-to-office, and interest posting have no UI — only deposit is reachable in the browser.**
 - Parent finding: Trust write fixes (deposit/withdrawal/transfer/interest UNBLOCKED
@@ -2377,6 +2377,11 @@ Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app route
 - Frontend work: NOT STARTED — awaiting explicit instruction
 - Severity: HIGH (core trust-accounting workflow; partial money-movement surface)
 - Logged: 2026-06-23
+- **CLOSED (2026-06-24):** added three pages modeled on the deposit page —
+  `/app/trust/withdraw` (`POST /trust/transactions` type WITHDRAWAL),
+  `/app/trust/transfer` (`POST /trust/transfers/to-office`), `/app/trust/interest`
+  (`POST /trust/interest`) — plus Withdraw/Transfer/Interest header links on
+  `/app/trust`. Backends already certified (Group 7, 8/8 trust writes). Web tsc exit 0.
 
 ---
 
