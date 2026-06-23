@@ -2425,7 +2425,7 @@ Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app route
 
 ---
 
-## FINDING-FRONT-005 — OPEN — MEDIUM
+## FINDING-FRONT-005 — CLOSED (2026-06-24) — MEDIUM
 
 **No disciplinary UI — the disciplinary endpoint works but cannot be reached from the browser.**
 - Parent finding: FINDING-008-003 (disciplinary employee-id fix + Employee seed) —
@@ -2438,10 +2438,14 @@ Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app route
 - Frontend work: NOT STARTED — awaiting explicit instruction
 - Severity: MEDIUM (HR workflow)
 - Logged: 2026-06-23
+- **CLOSED (2026-06-24):** new `/app/hr/disciplinary` page — lists `GET /hr/disciplinary`,
+  create-case form → `POST /hr/disciplinary` (employeeId/reportedById from `/hr/employees`
+  User ids per FINDING-008-003, title/description/incidentDate/severity/category); linked
+  from the HR quick-actions. Web tsc exit 0.
 
 ---
 
-## FINDING-FRONT-006 — OPEN — LOW
+## FINDING-FRONT-006 — CLOSED (2026-06-24) — LOW
 
 **No department-management UI — the new Department schema (status/hierarchy/manager/archive) surfaces only as a read-only name string.**
 - Parent finding: FINDING-008-002 (Department fields: status/hierarchy/manager/
@@ -2454,6 +2458,10 @@ Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app route
 - Frontend work: NOT STARTED — awaiting explicit instruction
 - Severity: LOW (configuration/reference data; name display already works)
 - Logged: 2026-06-23
+- **CLOSED (2026-06-24):** new `/app/hr/departments` page — lists `GET /hr/departments`,
+  create form → `POST /hr/departments` (name/code/description/costCenterCode), per-row
+  **Archive** → `POST /hr/departments/:id/archive {reason}`; shows `status`
+  (ACTIVE/INACTIVE/ARCHIVED). Linked from HR quick-actions. Web tsc exit 0.
 
 ---
 

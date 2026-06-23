@@ -7,7 +7,7 @@ import { formatDate, formatCurrency } from '@/lib/utils';
 import { StatCard } from '@/components/ui/Card';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
-import { Users, DollarSign, Calendar, TrendingUp, UserCheck, Receipt } from 'lucide-react';
+import { Users, DollarSign, Calendar, TrendingUp, UserCheck, Receipt, ShieldAlert, Building2 } from 'lucide-react';
 import Link from 'next/link';
 
 type Employee = {
@@ -60,6 +60,12 @@ export default function HRPage() {
         </Link>
         <Link href="/app/approvals" className="card p-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-primary-700 hover:shadow-sm transition-all">
           <Calendar className="h-4 w-4 icon-tasks" /> Leave Approvals
+        </Link>
+        <Link href="/app/hr/disciplinary" className="card p-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-primary-700 hover:shadow-sm transition-all">
+          <ShieldAlert className="h-4 w-4 icon-hr" /> Disciplinary Cases
+        </Link>
+        <Link href="/app/hr/departments" className="card p-3 flex items-center gap-2 text-sm font-medium text-gray-700 hover:text-primary-700 hover:shadow-sm transition-all">
+          <Building2 className="h-4 w-4 icon-hr" /> Departments
         </Link>
       </div>
 
