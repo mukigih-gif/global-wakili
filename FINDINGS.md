@@ -2143,7 +2143,7 @@ as 0; employee-side PAYE/NSSF/SHIF/Housing + gross/taxable/net are correct.
 
 ---
 
-## FINDING-FIN-I-001 — OPEN — MEDIUM — (Phase 3 Group I — Balance Sheet does not balance; equity not derived)
+## FINDING-FIN-I-001 — CLOSED (2026-06-24) — (Phase 3 Group I — Balance Sheet does not balance; equity not derived)
 
 **`GET /finance/balance-sheet` returns 200 but `isBalanced:false` — assets ≠ liabilities + equity, with equity computed as 0.**
 
@@ -2179,6 +2179,17 @@ account being posted → equity computes to 0. Fix (separate, own Mandatory Anal
 add current-year earnings to equity in the balance-sheet handler (equity = Σequity
 accounts + (Σrevenue − Σexpense)). **Status: OPEN — root cause corrected; independent
 of FIN-G-001.**
+
+### CLOSURE (2026-06-24)
+**Status: CLOSED.** `BalanceSheetService.getAsOf` now rolls **current-year net income**
+(`−Σrevenue netBalance − Σexpense netBalance`) into equity as retained/current earnings, and
+returns a new `netIncome` field. `balance-sheet.service.ts` only; no schema change. tsc exit 0.
+Local-verified on the MP tenant: `assets=58,225  liabilities=38,325  equity=19,900
+netIncome=19,900  isBalanced=true` (was `equity=0, isBalanced=false`). Live-verified
+post-deploy. Both consumers (`getBalanceSheetReport`, `getDashboardSnapshot`) pass through the
+corrected shape. Pre-existing caveat (separate, not addressed): equity-account summing uses
+`abs()`, which assumes credit-normal equity balances (a debit/drawings equity account would be
+mis-added) — noted for a future refinement.
 
 ---
 
