@@ -2337,7 +2337,7 @@ Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app route
 
 ---
 
-## FINDING-FRONT-001 — OPEN — MEDIUM
+## FINDING-FRONT-001 — CLOSED (2026-06-24) — MEDIUM
 
 **A user cannot record or void a VAT adjustment from the browser, and existing rows render with a blank description.**
 - Parent finding: FINDING-FIN-E-002 (VatAdjustment model + persistence) — CLOSED (d961779)
@@ -2353,6 +2353,10 @@ Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app route
 - Frontend work: NOT STARTED — awaiting explicit instruction
 - Severity: MEDIUM (secondary accounting workflow)
 - Logged: 2026-06-23
+- **CLOSED (2026-06-24):** `tax/page.tsx` — "+ Record Adjustment" wired to a form →
+  `POST /finance/tax/vat/adjustments` (type/amount/reason/reference/adjustmentDate);
+  table field mismatch fixed (`description`→`reason`, dropped phantom `currency`,
+  `createdAt`→`adjustmentDate`); per-row **Void** action → `…/:id/void`. Web tsc exit 0.
 
 ---
 
@@ -2444,7 +2448,7 @@ Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app route
 
 ---
 
-## FINDING-FRONT-007 — OPEN — LOW
+## FINDING-FRONT-007 — CLOSED (2026-06-24) — LOW
 
 **eTIMS fiscalize failures (including the new 422 PIN-required guard) are swallowed silently — the user gets no feedback.**
 - Parent finding: FINDING-FIN-E-004 (tenant KRA PIN guarded before eTIMS transmit →
@@ -2459,6 +2463,9 @@ Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app route
 - Frontend work: NOT STARTED — awaiting explicit instruction
 - Severity: LOW (error-surfacing/UX; guard itself works)
 - Logged: 2026-06-23
+- **CLOSED (2026-06-24):** `tax/page.tsx` `fiscalize` no longer swallows errors —
+  catch surfaces `(err as ApiError).message` into an `etimsError` banner on the eTIMS
+  tab, so the 422 `ETIMS_SUPPLIER_PIN_REQUIRED` (and any failure) is shown. Web tsc exit 0.
 
 ---
 

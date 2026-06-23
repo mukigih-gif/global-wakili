@@ -2,7 +2,7 @@
 export const dynamic = 'force-dynamic';
 
 import { useEffect, useState, useCallback } from 'react';
-import { api } from '@/lib/api';
+import { api, type ApiError } from '@/lib/api';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -21,8 +21,8 @@ type VatMonthly = {
 };
 
 type VatAdjustment = {
-  id: string; type: string; amount: number; currency: string;
-  description: string; status: string; createdAt: string;
+  id: string; type: string; amount: number;
+  reason: string; reference?: string | null; status: string; adjustmentDate: string;
 };
 
 type WhtCertificate = {
@@ -73,6 +73,11 @@ export default function TaxPage() {
   const [vatAdjs, setVatAdjs]           = useState<VatAdjustment[]>([]);
   const [vatLoading, setVatLoading]     = useState(false);
   const [vatYear, setVatYear]           = useState(now.getFullYear());
+  const [showVatAdjForm, setShowVatAdjForm] = useState(false);
+  const [vatAdjForm, setVatAdjForm]     = useState({ type: 'OUTPUT_VAT', amount: '', reason: '', reference: '', adjustmentDate: '' });
+  const [vatAdjSaving, setVatAdjSaving] = useState(false);
+  const [vatAdjError, setVatAdjError]   = useState('');
+  const [etimsError, setEtimsError]     = useState('');
 
   // WHT state
   const [whtCerts, setWhtCerts]         = useState<WhtCertificate[]>([]);
@@ -138,14 +143,15 @@ export default function TaxPage() {
   }, [tab, dedPeriod]);
 
   const fiscalize = async (invoiceId: string) => {
-    setFiscalizing(invoiceId);
+    setFiscalizing(invoiceId); setEtimsError('');
     try {
       await api.post(`/finance/etims/invoices/${invoiceId}/fiscalize`, {});
       // Refresh
       const r = await api.get<{ data: EtimsInvoice[] }>('/billing/invoices?limit=50');
       setEtimsInvs(r.data ?? []);
-    } catch {
-      // silent
+    } catch (err) {
+      // FRONT-007: surface the failure reason (e.g. 422 ETIMS_SUPPLIER_PIN_REQUIRED)
+      setEtimsError((err as ApiError)?.message ?? 'Fiscalization failed');
     } finally {
       setFiscalizing(null);
     }
@@ -165,6 +171,37 @@ export default function TaxPage() {
   };
 
   const setW = (k: string, v: string) => setWhtForm((f) => ({ ...f, [k]: v }));
+
+  // VAT adjustments (FRONT-001)
+  const submitVatAdj = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setVatAdjSaving(true); setVatAdjError('');
+    try {
+      await api.post('/finance/tax/vat/adjustments', {
+        type: vatAdjForm.type,
+        amount: parseFloat(vatAdjForm.amount),
+        reason: vatAdjForm.reason,
+        reference: vatAdjForm.reference || null,
+        adjustmentDate: vatAdjForm.adjustmentDate || new Date().toISOString(),
+      });
+      setShowVatAdjForm(false);
+      setVatAdjForm({ type: 'OUTPUT_VAT', amount: '', reason: '', reference: '', adjustmentDate: '' });
+      const r = await api.get<{ data: VatAdjustment[] }>('/finance/tax/vat/adjustments');
+      setVatAdjs(r.data ?? []);
+    } catch (err) {
+      setVatAdjError((err as ApiError)?.message ?? 'Failed to record adjustment');
+    } finally { setVatAdjSaving(false); }
+  };
+
+  const voidVatAdj = async (id: string) => {
+    const reason = window.prompt('Reason for voiding this VAT adjustment?');
+    if (!reason?.trim()) return;
+    try {
+      await api.post(`/finance/tax/vat/adjustments/${id}/void`, { reason });
+      const r = await api.get<{ data: VatAdjustment[] }>('/finance/tax/vat/adjustments');
+      setVatAdjs(r.data ?? []);
+    } catch (err) { setVatAdjError((err as ApiError)?.message ?? 'Void failed'); }
+  };
 
   // VAT metrics
   const currentYearVat = vatMonthly;
@@ -273,19 +310,51 @@ export default function TaxPage() {
           <div className="card">
             <div className="card-header flex items-center justify-between">
               <h2 className="font-semibold text-gray-900">VAT Adjustments</h2>
-              <Button size="sm" variant="secondary">+ Record Adjustment</Button>
+              <Button size="sm" variant="secondary" onClick={() => { setShowVatAdjForm((v) => !v); setVatAdjError(''); }}>+ Record Adjustment</Button>
             </div>
+            {vatAdjError && <div className="px-4 pt-3 text-xs text-red-600">{vatAdjError}</div>}
+            {showVatAdjForm && (
+              <form onSubmit={submitVatAdj} className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 border-b border-gray-100">
+                <div>
+                  <label className="form-label">Type *</label>
+                  <select value={vatAdjForm.type} onChange={(e) => setVatAdjForm((f) => ({ ...f, type: e.target.value }))} className="form-select w-full">
+                    {['OUTPUT_VAT','INPUT_VAT','VAT_PAYABLE','VAT_REFUND','OTHER'].map((t) => <option key={t} value={t}>{t.replace(/_/g,' ')}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="form-label">Amount (KES) *</label>
+                  <input required type="number" min="0" step="0.01" value={vatAdjForm.amount} onChange={(e) => setVatAdjForm((f) => ({ ...f, amount: e.target.value }))} className="form-input w-full" />
+                </div>
+                <div>
+                  <label className="form-label">Adjustment Date</label>
+                  <input type="date" value={vatAdjForm.adjustmentDate} onChange={(e) => setVatAdjForm((f) => ({ ...f, adjustmentDate: e.target.value }))} className="form-input w-full" />
+                </div>
+                <div>
+                  <label className="form-label">Reference</label>
+                  <input value={vatAdjForm.reference} onChange={(e) => setVatAdjForm((f) => ({ ...f, reference: e.target.value }))} className="form-input w-full" placeholder="e.g. KRA-ADJ-2026-001" />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="form-label">Reason *</label>
+                  <textarea required value={vatAdjForm.reason} onChange={(e) => setVatAdjForm((f) => ({ ...f, reason: e.target.value }))} rows={2} className="form-input w-full" placeholder="Why this adjustment is being recorded" />
+                </div>
+                <div className="sm:col-span-2 flex gap-3">
+                  <Button type="submit" loading={vatAdjSaving}>Save Adjustment</Button>
+                  <button type="button" onClick={() => setShowVatAdjForm(false)} className="text-sm text-gray-400 hover:text-gray-600">Cancel</button>
+                </div>
+              </form>
+            )}
             <Table>
-              <thead><tr><Th>Type</Th><Th>Description</Th><Th>Amount</Th><Th>Status</Th><Th>Date</Th></tr></thead>
+              <thead><tr><Th>Type</Th><Th>Reason</Th><Th>Amount</Th><Th>Status</Th><Th>Date</Th><Th></Th></tr></thead>
               <tbody>
-                {!vatAdjs.length ? <EmptyRow colSpan={5} message="No VAT adjustments recorded" /> :
+                {!vatAdjs.length ? <EmptyRow colSpan={6} message="No VAT adjustments recorded" /> :
                  vatAdjs.map((a) => (
                    <tr key={a.id}>
                      <Td><span className="text-xs font-medium text-gray-600">{a.type.replace(/_/g,' ')}</span></Td>
-                     <Td className="text-gray-900 text-sm">{a.description}</Td>
-                     <Td className="font-medium">{formatCurrency(a.amount, a.currency)}</Td>
+                     <Td className="text-gray-900 text-sm">{a.reason}</Td>
+                     <Td className="font-medium">{formatCurrency(a.amount)}</Td>
                      <Td><StatusBadge status={a.status} /></Td>
-                     <Td className="text-xs text-gray-500">{formatDate(a.createdAt)}</Td>
+                     <Td className="text-xs text-gray-500">{formatDate(a.adjustmentDate)}</Td>
+                     <Td>{a.status === 'POSTED' && <button onClick={() => voidVatAdj(a.id)} className="text-xs text-red-600 hover:underline">Void</button>}</Td>
                    </tr>
                  ))}
               </tbody>
@@ -400,6 +469,12 @@ export default function TaxPage() {
             <strong>KRA eTIMS Compliance:</strong> All invoices issued to registered entities must be fiscalized
             via Kenya Revenue Authority eTIMS before or at the time of issuance. Penalties apply for non-fiscalized invoices.
           </div>
+
+          {etimsError && (
+            <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
+              {etimsError}
+            </div>
+          )}
 
           <div className="grid grid-cols-3 gap-4">
             <div className="rounded-xl border border-green-100 bg-green-50 p-4">
