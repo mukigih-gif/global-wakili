@@ -796,3 +796,27 @@ tail-end of unrelated work.
 2. F-17 (MFA) -- own dedicated session, full scoping first
 3. Seed architecture (Section 12) -- own dedicated session
 4. Phase 2 Playwright -- begins only after seed architecture in place
+
+## UPDATED 2026-06-23 — AGREED STANDING OPERATING PROCEDURE (supersedes the 2026-06-20 list above for sequencing)
+
+The authoritative session sequence from 2026-06-23 onward:
+
+1. Complete Phase 3 Groups F through I (backend only, same
+   discipline as A-E — certify what exists, log what doesn't).
+   (Group F WHT = DONE/DEFERRED, FINDING-FIN-F-001. Groups G/H
+   need scope definitions from the external v3.1 roadmap before
+   recon; I = financial reports.)
+2. Frontend sprint — close ALL FINDING-FRONT items (current
+   FRONT-001…007 plus any added by Groups F-I) in one focused pass.
+3. Seed architecture (Section 12) — build alongside or
+   immediately after the frontend sprint.
+4. Phase 2 Playwright — begins only once frontend sprint + seed
+   architecture are BOTH complete.
+
+Hard rules:
+- Do NOT mix frontend work into Phase 3 backend sessions.
+- Do NOT start Playwright before the frontend sprint is done.
+- Log any new frontend gap discovered during Phase 3 as
+  FINDING-FRONT-XXX immediately — do not defer logging (Principle 5).
+- No thin code: never write placeholder/token cert tests just to
+  show green; certify real behavior or DEFER + log a finding.

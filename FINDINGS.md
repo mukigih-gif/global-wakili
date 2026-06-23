@@ -2016,7 +2016,7 @@ Remediation (deferred, own session): fix FE endpoint+params (Low), persist
 
 ---
 
-## FINDING-HR-ONB-001 — OPEN — (HR/Identity — OnboardingService writes phantom `Department.isActive` → tsc break)
+## FINDING-HR-ONB-001 — CLOSED (2026-06-23, d961779) — (HR/Identity — OnboardingService writes phantom `Department.isActive` → tsc break)
 
 **`OnboardingService` writes `isActive` on `Department.create`, but `Department` has no `isActive` field (it uses `status DepartmentStatus`).**
 
@@ -2031,6 +2031,63 @@ NOT caused by and OUT OF SCOPE for FIN-E-002 (different bounded context —
 HR/identity). Remediation (own task): map `isActive` → `status: ACTIVE`/
 `INACTIVE` (DepartmentStatus) in OnboardingService, or add the field if onboarding
 genuinely needs it. Logged 2026-06-23.
+
+### CLOSURE (2026-06-23) — commit d961779
+**Status: CLOSED.** Resolved by commit d961779 (the FIN-E-002 commit), which
+changed `OnboardingService.ts` from `isActive: true` to `status: 'ACTIVE'` on the
+default-department `create`, matching `Department.status DepartmentStatus`. The
+phantom-field write is gone; `tsc --noEmit` verified exit 0 (2026-06-23). The
+original entry was logged OPEN before/independently of that fix; corrected here per
+the retroactive-audit discipline. No further action.
+
+---
+
+## FINDING-FIN-F-001 — OPEN — HIGH — (Phase 3 Group F — WHT report/record/void 500 via schema/service mismatch)
+
+**`/tax/wht/{report,certificates,void}` all 500 — `finance/WHTService` reads/writes phantom fields absent from the deployed schema; only `/calculate` works.**
+
+Group F recon (2026-06-23). The four `/finance/tax/wht/*` routes
+(`finance.routes.ts:461–488`) all delegate to `finance/WHTService.ts`, which was
+written against a field design that does not match the deployed schema:
+
+- **POST `/tax/wht/certificates`** (`recordCertificate`) → writes
+  `baseAmount, withholdingRate, withholdingAmount, vendorBillId, supplierId,
+  paymentReceiptId, reference, createdById, metadata` — NONE exist on
+  `WithholdingTaxCertificate` (schema:1983, which has `amount, payerName, payerPin,
+  status(RECEIVED), receivedById, cancelled*`) — and passes `invoiceId: null` though
+  the model REQUIRES `invoiceId`. → PrismaClientValidationError → 500.
+- **POST `/tax/wht/certificates/:id/void`** (`voidCertificate`) → writes
+  `status:'VOID', voidedAt, voidedById, voidReason, metadata`; schema uses
+  `cancelledAt/cancelledById/cancellationReason` and has no `metadata`/`voided*`. → 500.
+- **GET `/tax/wht/report`** (`getWhtReport`) → queries
+  `paymentReceipt.where.receiptDate` and `select whtAmount/withholdingTaxAmount/
+  whtExposure`; `PaymentReceipt` (schema:4623) has `receivedAt` and none of those WHT
+  fields. → 500.
+- **POST `/tax/wht/calculate`** (`calculate`) → pure computation (no persistence);
+  WORKS.
+
+**Live (MANAGING_PARTNER, onrender.com, 2026-06-23):** GET `/finance/tax/wht/report`
+→ **500** `INTERNAL_SERVER_ERROR` (requestId `ad812aac-92cb-4ca6-b0ba-03643dd0cca2`);
+POST `/finance/tax/wht/calculate` (baseAmount 100000, rate 5) → **200**,
+`withholdingAmount: "5000"`. Write endpoints NOT fired against production (read-only
+recon); their break is established statically.
+
+**Note — a schema-aligned service already exists but is unwired:**
+`billing/withholding-tax-certificate.service.ts` (`WithholdingTaxCertificateService`)
+uses the real fields (`amount, payerName, payerPin, receivedById`), aggregates by
+`amount`, respects `status` CANCELLED, and posts a balanced GL leg — but it is wired
+into the billing flow, NOT into `/tax/wht/*`.
+
+**Same defect class as FIN-E-001 (phantom columns) / FIN-E-002 (missing model).**
+**Verdict: WHT DEFERRED for full certification** — only `/calculate` is certifiable;
+a thin `/calculate`-only cert was explicitly rejected (no thin code). Fix (a FIX, not
+done mid-recon): either rewrite `finance/WHTService` to the real schema, or re-point
+`/tax/wht/*` at the aligned `WithholdingTaxCertificateService`. Frontend impact: the
+Tax → WHT tab (`apps/web/.../tax/page.tsx`, `/finance/tax/wht/report` + `/certificates`)
+is silently dead — log a FINDING-FRONT against this once the backend is fixed.
+Logged: 2026-06-23.
+
+---
 
 ================================================================================
 # PART IV — FRONTEND PARITY REGISTER (Principle 5)
