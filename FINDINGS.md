@@ -2042,7 +2042,7 @@ the retroactive-audit discipline. No further action.
 
 ---
 
-## FINDING-FIN-F-001 — OPEN — HIGH — (Phase 3 Group F — WHT report/record/void 500 via schema/service mismatch)
+## FINDING-FIN-F-001 — CLOSED (2026-06-23) — (Phase 3 Group F — WHT report/record/void 500 via schema/service mismatch)
 
 **`/tax/wht/{report,certificates,void}` all 500 — `finance/WHTService` reads/writes phantom fields absent from the deployed schema; only `/calculate` works.**
 
@@ -2086,6 +2086,9 @@ done mid-recon): either rewrite `finance/WHTService` to the real schema, or re-p
 Tax → WHT tab (`apps/web/.../tax/page.tsx`, `/finance/tax/wht/report` + `/certificates`)
 is silently dead — log a FINDING-FRONT against this once the backend is fixed.
 Logged: 2026-06-23.
+
+### CLOSURE (2026-06-23)
+**Status: CLOSED.** Re-pointed `/tax/wht/certificates` (record) + `/certificates/:id/void` to the schema-aligned `WithholdingTaxCertificateService` (record posts a WHT clearing journal; void → `status=CANCELLED` + `cancelled*`); `whtCertificateBodySchema` rewritten to the real payload (invoiceId/certificateNumber/amount/payerName/payerPin/notes); `WHTService.getWhtReport` drops the phantom `PaymentReceipt` WHT leg and sums certificate `amount`. `/calculate` unchanged. tsc exit 0; local-verified getWhtReport returns (no 500). Live-verified post-deploy.
 
 ---
 

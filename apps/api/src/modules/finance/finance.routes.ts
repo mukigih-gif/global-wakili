@@ -205,18 +205,14 @@ const whtCalculationBodySchema = z.object({
 });
 
 const whtCertificateBodySchema = z.object({
-  invoiceId: z.string().trim().min(1).optional().nullable(),
-  vendorBillId: z.string().trim().min(1).optional().nullable(),
-  paymentReceiptId: z.string().trim().min(1).optional().nullable(),
-  supplierId: z.string().trim().min(1).optional().nullable(),
-  clientId: z.string().trim().min(1).optional().nullable(),
-  certificateNumber: z.string().trim().max(100).optional().nullable(),
+  invoiceId: z.string().trim().min(1),
+  certificateNumber: z.string().trim().min(1).max(100),
   certificateDate: z.coerce.date(),
-  baseAmount: decimalLike,
-  withholdingRate: decimalLike,
-  withholdingAmount: decimalLike.optional().nullable(),
-  reference: z.string().trim().max(255).optional().nullable(),
-  metadata: z.record(z.unknown()).optional(),
+  amount: decimalLike,
+  payerName: z.string().trim().max(255).optional().nullable(),
+  payerPin: z.string().trim().max(50).optional().nullable(),
+  documentId: z.string().trim().min(1).optional().nullable(),
+  notes: z.string().trim().max(2000).optional().nullable(),
 });
 
 const whtReportQuerySchema = z.object({

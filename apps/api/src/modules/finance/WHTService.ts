@@ -19,6 +19,7 @@ type WhtSourceRecord = {
 };
 
 type WhtCertificateRow = {
+  amount?: WhtDecimalInput | null;
   withholdingAmount?: WhtDecimalInput | null;
   metadata?: unknown;
 };
@@ -292,56 +293,26 @@ export class WHTService {
     skip?: number;
   }) {
     const whtCertificate = optionalDelegate<WhtCertificateDelegate>(prisma, 'withholdingTaxCertificate');
-    const paymentReceipt = optionalDelegate<WhtPaymentReceiptDelegate>(prisma, 'paymentReceipt');
 
-    const [certificates, receipts] = await Promise.all([
-      whtCertificate
-        ? whtCertificate.findMany({
-            where: {
-              tenantId: input.tenantId,
-              certificateDate: {
-                gte: input.from,
-                lt: input.to,
-              },
+    const certificates = whtCertificate
+      ? await whtCertificate.findMany({
+          where: {
+            tenantId: input.tenantId,
+            certificateDate: {
+              gte: input.from,
+              lt: input.to,
             },
-            orderBy: {
-              certificateDate: 'desc',
-            },
-            take: Math.min(input.take ?? 500, 500),
-            skip: input.skip ?? 0,
-          })
-        : Promise.resolve([]),
-
-      paymentReceipt
-        ? paymentReceipt.findMany({
-            where: {
-              tenantId: input.tenantId,
-              receiptDate: {
-                gte: input.from,
-                lt: input.to,
-              },
-            },
-            select: {
-              id: true,
-              receiptNumber: true,
-              amount: true,
-              whtAmount: true,
-              withholdingTaxAmount: true,
-              whtExposure: true,
-            },
-            take: 500,
-          })
-        : Promise.resolve([]),
-    ]);
+          },
+          orderBy: {
+            certificateDate: 'desc',
+          },
+          take: Math.min(input.take ?? 500, 500),
+          skip: input.skip ?? 0,
+        })
+      : [];
 
     const certificateWht = certificates.reduce(
-      (sum: Prisma.Decimal, row: WhtCertificateRow) => sum.plus(money(row.withholdingAmount)),
-      ZERO,
-    );
-
-    const receiptWht = receipts.reduce(
-      (sum: Prisma.Decimal, row: WhtReceiptExposureRow) =>
-        sum.plus(money(row.whtAmount ?? row.withholdingTaxAmount ?? row.whtExposure)),
+      (sum: Prisma.Decimal, row: WhtCertificateRow) => sum.plus(money(row.amount)),
       ZERO,
     );
 
@@ -350,12 +321,9 @@ export class WHTService {
       from: input.from,
       to: input.to,
       certificateCount: certificates.length,
-      receiptExposureCount: receipts.length,
       certificateWht: certificateWht.toDecimalPlaces(2),
-      receiptWhtExposure: receiptWht.toDecimalPlaces(2),
-      totalWht: certificateWht.plus(receiptWht).toDecimalPlaces(2),
+      totalWht: certificateWht.toDecimalPlaces(2),
       certificates,
-      receiptExposures: receipts,
       generatedAt: new Date(),
     };
   }

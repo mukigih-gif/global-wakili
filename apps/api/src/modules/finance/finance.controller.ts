@@ -15,6 +15,7 @@ import ReconciliationService from './ReconciliationService';
 import ETimsService from './ETimsService';
 import VATService from './VATService';
 import WHTService from './WHTService';
+import { withholdingTaxCertificateService } from '../billing/withholding-tax-certificate.service';
 import FinancePostingService from './FinancePostingService';
 
 function getTenantId(req: Request): string {
@@ -548,23 +549,17 @@ export const calculateWht = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export const recordWhtCertificate = asyncHandler(async (req: Request, res: Response) => {
-  const service = new WHTService();
-
-  const data = await service.recordCertificate({
+  const data = await withholdingTaxCertificateService.recordCertificate({
     tenantId: getTenantId(req),
-    actorId: getActorId(req),
-    invoiceId: req.body.invoiceId ?? null,
-    vendorBillId: req.body.vendorBillId ?? null,
-    paymentReceiptId: req.body.paymentReceiptId ?? null,
-    supplierId: req.body.supplierId ?? null,
-    clientId: req.body.clientId ?? null,
-    certificateNumber: req.body.certificateNumber ?? null,
+    invoiceId: req.body.invoiceId,
+    certificateNumber: req.body.certificateNumber,
     certificateDate: parseRequiredDate(req.body.certificateDate, 'certificateDate'),
-    baseAmount: req.body.baseAmount,
-    withholdingRate: req.body.withholdingRate,
-    withholdingAmount: req.body.withholdingAmount ?? null,
-    reference: req.body.reference ?? null,
-    metadata: req.body.metadata,
+    amount: req.body.amount,
+    payerName: req.body.payerName ?? null,
+    payerPin: req.body.payerPin ?? null,
+    receivedById: getActorId(req),
+    documentId: req.body.documentId ?? null,
+    notes: req.body.notes ?? null,
   });
 
   responseOk(res, data, 201);
@@ -585,13 +580,11 @@ export const getWhtReport = asyncHandler(async (req: Request, res: Response) => 
 });
 
 export const voidWhtCertificate = asyncHandler(async (req: Request, res: Response) => {
-  const service = new WHTService();
-
-  const data = await service.voidCertificate({
+  const data = await withholdingTaxCertificateService.cancelCertificate({
     tenantId: getTenantId(req),
-    actorId: getActorId(req),
     certificateId: req.params.certificateId,
     reason: req.body.reason,
+    cancelledById: getActorId(req),
   });
 
   responseOk(res, data);
