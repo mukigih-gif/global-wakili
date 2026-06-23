@@ -18,10 +18,18 @@ export function Reveal({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [shown, setShown] = useState(false);
+  // Until the client has hydrated we render fully visible, so content is NEVER
+  // hidden for no-JS, hydration-failure, or missing-IntersectionObserver cases.
+  // The fade/slide animation is a progressive enhancement layered on after mount.
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    setHydrated(true);
     const el = ref.current;
-    if (!el) return;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setShown(true);
+      return;
+    }
     const obs = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {
@@ -35,11 +43,13 @@ export function Reveal({
     return () => obs.disconnect();
   }, []);
 
+  const visible = !hydrated || shown;
+
   return (
     <div
       ref={ref}
       style={{ transitionDelay: `${delay}ms` }}
-      className={`transition-all duration-700 ease-out ${shown ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'} ${className}`}
+      className={`transition-all duration-700 ease-out ${visible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'} ${className}`}
     >
       {children}
     </div>
