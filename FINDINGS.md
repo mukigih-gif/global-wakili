@@ -2089,6 +2089,128 @@ Logged: 2026-06-23.
 
 ---
 
+## FINDING-FIN-PAYROLL-001 — OPEN — HIGH — (Phase 3 Payroll Compliance — statutory engine 500 via PayrollRecord schema mismatch)
+
+**`/payroll/statutory/summary` and `/payroll/reports/p10` (and P9) 500 — the statutory/KRA-filing services query `PayrollRecord` with fields/relations it does not have.**
+
+Payroll Statutory Compliance recon (2026-06-23). NOTE: payroll is an original
+Phase 3 (Finance/Trust/Payroll) compliance domain, NOT a v3.1 lettered group — the
+actual Group G = Chart of Accounts (FIN-G-001), Group H = Journal Entry Integrity
+(FIN-H-001), logged separately. Payroll lifecycle reads work, but the
+statutory-compliance OUTPUTS (the point of the domain) are broken.
+
+`PayrollRecord` (schema:2187) = `id, tenantId, batchId, userId, employeeProfileId,
+grossPay, netPay, totalDeductions, employerCost, postedAt` with relations
+`tenant/batch/user/employeeProfile`. Per-deduction statutory amounts live in
+`StatutoryDeductionRecord` (schema:2212, keyed to `Payslip`, typed enum).
+
+`P10ReportService.generateP10` (and the statutory summary `filingService`) instead
+query `payrollRecord.findMany` with **`status:{in:[...]}`, `payrollBatchId`,
+`periodWhere` (periodStart/periodEnd), `include:{employee:true}`,
+`orderBy [{employeeId},{periodStart}]`**, and map `record.paye` — none of
+`status/payrollBatchId/periodStart/employee/employeeId/paye` exist on the model →
+PrismaClientValidationError → 500.
+
+**Live (MANAGING_PARTNER, onrender.com, 2026-06-23):**
+`GET /payroll/statutory/summary?year=2026&month=6` → **500** (req
+`07570abd-7159-431c-b321-2fd61fc2db38`);
+`GET /payroll/reports/p10?year=2026&month=6` → **500** (req
+`ec0c83d2-916a-4f20-b13a-037dfb98f25e`).
+Working: `GET /payroll/dashboard` → 200; `GET /payroll/batches` → 200 [].
+
+**Same defect class as FIN-F-001/E-001/E-002.** Verdict: Payroll statutory engine
+DEFERRED — payroll lifecycle (dashboard/batches) certifiable; statutory
+summary/P9/P10 are broken and must be re-pointed at the real
+`PayrollRecord`+`StatutoryDeductionRecord`+`Payslip` shape (a FIX, not done
+mid-recon). Frontend impact: Tax → Payroll Deductions tab + P9/P10 surfaces will be
+dead — FINDING-FRONT on fix. Logged: 2026-06-23.
+
+---
+
+## FINDING-FIN-I-001 — OPEN — MEDIUM — (Phase 3 Group I — Balance Sheet does not balance; equity not derived)
+
+**`GET /finance/balance-sheet` returns 200 but `isBalanced:false` — assets ≠ liabilities + equity, with equity computed as 0.**
+
+Group I recon (2026-06-23; I = Financial Reports, repo-confirmed FINDINGS:1100).
+Most financial-report endpoints work; the balance sheet has an integrity defect.
+
+**Live (MANAGING_PARTNER, onrender.com, 2026-06-23):**
+- `GET /finance/trial-balance?year=2026` → **200** (per-account debit/credit) ✓
+- `GET /finance/cashflow?startDate=&endDate=` → **200** (inflow/outflow) ✓ — note: requires
+  `startDate/endDate`, returns 400 on `?year=` (param/doc nit, not a defect)
+- `GET /finance/balance-sheet?year=2026` → **200** but
+  `{assets:"58225", liabilities:"38325", equity:"0", isBalanced:false}` — equity is
+  not derived (no retained-earnings / current-year-earnings roll-up), so the sheet
+  cannot balance. An accounting-integrity defect in the report (not just data).
+- `GET /finance/statements?year=2026` (P&L) → **500** (req
+  `d1d7908b-ac50-4898-8616-935aebbc6473`) — this is the already-logged
+  **FINDING-FIN-D-001 / FIN-D-002** (shadowed/dead P&L handler); not re-logged here.
+
+Verdict: Group I PARTIALLY CERTIFIABLE — trial-balance + cashflow certifiable;
+balance-sheet returns but is unbalanced (fix equity derivation before cert);
+P&L/statements deferred to FIN-D-001/002. Logged: 2026-06-23.
+
+---
+
+## FINDING-FIN-G-001 — OPEN — MEDIUM — (Phase 3 Group G — Chart of Accounts: createAccount never derives normalBalance)
+
+**Group G = Chart of Accounts. Reads/structure certifiable; `createAccount` omits `normalBalance`, so API-created LIABILITY/EQUITY/INCOME accounts take the DEBIT-normal default → wrong balance sign in statements.**
+
+Group G recon (2026-06-23). `GET /finance/accounts` → live **200** (code/name/type/
+subtype/normalBalance per account); list/create/get/update routes all mounted. Reads
++ structure are CERTIFIABLE.
+
+Defect (create path): `account.service.ts:135 createAccount` writes
+`type, subtype, description, currency, allowManualPosting, isSystem, isActive` but
+**not `normalBalance`** — it is never derived from `type`. Every account created via
+`POST /finance/accounts` takes the single `ChartOfAccount.normalBalance` schema
+default regardless of type, so a CREDIT-normal LIABILITY/EQUITY/INCOME account is
+mis-flagged DEBIT-normal. `statement.service.ts:14` negates by `normalBalance` →
+flips the displayed sign for those accounts and feeds the balance-sheet imbalance
+(FIN-I-001). This is the createAccount default defect first noted in FINDING-007-003
+(secondary) — still present. Fix: derive `normalBalance` from `type`
+(ASSET/EXPENSE→DEBIT; LIABILITY/EQUITY/INCOME→CREDIT), or accept explicit input +
+validate against type. Verdict: COA CERTIFIABLE for reads; create needs the
+normalBalance fix before write-cert. Logged: 2026-06-23.
+
+---
+
+## FINDING-FIN-H-001 — CERTIFIABLE (recon — no defect) — (Phase 3 Group H — Journal Entry Integrity)
+
+**Group H = Journal Entry Integrity. The double-entry invariant is enforced and live-verified — CERTIFIABLE.**
+
+Group H recon (2026-06-23). `GET /finance/journals` → live **200** (reference/
+description/lines; the prior list-500 was FINDING-007-014, CLOSED). Integrity
+controls present and sound:
+- Balanced-journal enforcement: `utils/double-entry.ts assertLinesBalanced` — pure
+  Σdebit==Σcredit, throws `UNBALANCED_JOURNAL` (422) before any `journalEntry.create`.
+- Period-lock: `assertPeriodOpen`/`ensureOpenPeriod` (FIN-007-005) — closed/locked
+  posting blocked (proven in Group C cert).
+- Posting policy: `PostingPolicyService` (account-lock / system-posting /
+  multi-currency) from the trust-write arc.
+- Trial-balance integrity (Σdebits=Σcredits) live 200 (Group C / FIN-I-001).
+Verdict: Journal Entry Integrity CERTIFIABLE now — propose a cert test
+(balanced-post 201, unbalanced→422, closed-period→reject, journals read). No defect
+logged. Logged: 2026-06-23.
+
+---
+
+## FINDING-FIN-TRUST-001 — OPEN (recon — unverified) — (Phase 3 Trust Compliance — three-way reconciliation not yet certified)
+
+**Trust three-way reconciliation is built and reads work, but the core three-way compute (a write) was not exercised in read-only recon — uncertified.**
+
+Trust Compliance recon (2026-06-23; original Phase 3 Finance/Trust/Payroll domain,
+not a v3.1 lettered group). `GET /trust/reconciliations` → live **200** `[]`; routes
+for list / `:runId/matches` / `record` / `three-way` (`runThreeWayReconciliation`)
+all mounted with `trust.view/record_reconciliation` RBAC. Trust WRITES
+(deposit/withdrawal/transfer/interest) already certified Phase 1 Group 7 (8/8).
+Gap: `POST /trust/reconciliations/three-way` is a compute/write and was NOT fired
+(read-only recon), so the bank↔ledger↔control three-way invariant (ADR-004) is
+UNVERIFIED. No defect found. Needs a controlled write-verification session (seed a
+reconciliation, assert matched/unmatched + variance) before cert. Logged: 2026-06-23.
+
+---
+
 ================================================================================
 # PART IV — FRONTEND PARITY REGISTER (Principle 5)
 ================================================================================
