@@ -61,6 +61,14 @@ function accountSearchWhere(search?: string) {
   };
 }
 
+function normalSideFor(type: AccountType): 'DEBIT' | 'CREDIT' {
+  // ASSET & EXPENSE are debit-normal; LIABILITY, EQUITY & REVENUE are credit-normal.
+  // Deterministic for the current AccountType enum (no contra-account subtypes exist).
+  return type === 'LIABILITY' || type === 'EQUITY' || type === 'REVENUE'
+    ? 'CREDIT'
+    : 'DEBIT';
+}
+
 export class AccountService {
   static async create(
     db: AccountDbClient,
@@ -138,6 +146,7 @@ export class AccountService {
         code,
         name,
         type: input.type,
+        normalBalance: normalSideFor(input.type),
         subtype: input.subtype ?? null,
         description: normalizeText(input.description),
         currency: normalizeText(input.currency, 'KES'),
@@ -200,6 +209,7 @@ export class AccountService {
         ...(input.code ? { code: normalizeCode(input.code) } : {}),
         ...(input.name ? { name: normalizeText(input.name) } : {}),
         ...(input.type ? { type: input.type } : {}),
+        ...(input.type ? { normalBalance: normalSideFor(input.type) } : {}),
         ...(input.subtype !== undefined ? { subtype: input.subtype } : {}),
         ...(input.description !== undefined
           ? { description: normalizeText(input.description) }

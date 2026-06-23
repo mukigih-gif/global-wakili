@@ -2150,9 +2150,23 @@ Verdict: Group I PARTIALLY CERTIFIABLE — trial-balance + cashflow certifiable;
 balance-sheet returns but is unbalanced (fix equity derivation before cert);
 P&L/statements deferred to FIN-D-001/002. Logged: 2026-06-23.
 
+### ROOT-CAUSE CORRECTION (2026-06-23) — de-coupled from FIN-G-001 (still OPEN)
+Earlier I claimed the FIN-G-001 `normalBalance` fix would also close this. **That was
+wrong** — corrected after reading the code: `balance-sheet.service.ts` and
+`trial-balance.service`/`general-ledger.service` **never read `normalBalance`** (they
+group by `type` and use `netBalance = debit−credit` with `abs()` for liabilities/
+equity). FIN-G-001 (now CLOSED) had **no effect** on `isBalanced`. The real cause of
+`isBalanced:false` (assets 58225 ≠ liabilities 38325 + equity 0): `BalanceSheetService.
+getAsOf` **excludes REVENUE & EXPENSE entirely**, so current-year net income
+(Σrevenue − Σexpense) is never rolled into equity, and there is no retained-earnings
+account being posted → equity computes to 0. Fix (separate, own Mandatory Analysis):
+add current-year earnings to equity in the balance-sheet handler (equity = Σequity
+accounts + (Σrevenue − Σexpense)). **Status: OPEN — root cause corrected; independent
+of FIN-G-001.**
+
 ---
 
-## FINDING-FIN-G-001 — OPEN — MEDIUM — (Phase 3 Group G — Chart of Accounts: createAccount never derives normalBalance)
+## FINDING-FIN-G-001 — CLOSED (2026-06-23) — (Phase 3 Group G — Chart of Accounts: createAccount never derives normalBalance)
 
 **Group G = Chart of Accounts. Reads/structure certifiable; `createAccount` omits `normalBalance`, so API-created LIABILITY/EQUITY/INCOME accounts take the DEBIT-normal default → wrong balance sign in statements.**
 
@@ -2172,6 +2186,17 @@ flips the displayed sign for those accounts and feeds the balance-sheet imbalanc
 (ASSET/EXPENSE→DEBIT; LIABILITY/EQUITY/INCOME→CREDIT), or accept explicit input +
 validate against type. Verdict: COA CERTIFIABLE for reads; create needs the
 normalBalance fix before write-cert. Logged: 2026-06-23.
+
+### CLOSURE (2026-06-23)
+**Status: CLOSED.** `normalSideFor(type)` derivation added to BOTH `createAccount`
+(sets `normalBalance` on create) and `updateAccount` (recomputes when `type` changes)
+in `account.service.ts`; `tsc --noEmit` exit 0. One-time backfill applied across all
+tenants (`updateMany` by type): BEFORE `LIABILITY/DEBIT=8, EQUITY/DEBIT=1` → AFTER
+`LIABILITY/CREDIT=10, EQUITY/CREDIT=1`, mis-flagged remaining **0**. Local-verified
+against the patched code: ASSET/EXPENSE→DEBIT, LIABILITY/EQUITY/REVENUE→CREDIT (5/5,
+test rows deleted). **NOTE (root-cause correction):** this does NOT close FIN-I-001 —
+the balance sheet/trial balance never read `normalBalance` (they use `netBalance =
+debit−credit` + `abs()`); the two findings are independent. See FIN-I-001.
 
 ---
 
