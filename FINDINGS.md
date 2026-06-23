@@ -2031,3 +2031,165 @@ NOT caused by and OUT OF SCOPE for FIN-E-002 (different bounded context —
 HR/identity). Remediation (own task): map `isActive` → `status: ACTIVE`/
 `INACTIVE` (DepartmentStatus) in OnboardingService, or add the field if onboarding
 genuinely needs it. Logged 2026-06-23.
+
+================================================================================
+# PART IV — FRONTEND PARITY REGISTER (Principle 5)
+================================================================================
+
+Per CLAUDE.md §2 Principle 5 (added 2026-06-23): every CLOSED backend finding is
+audited for "can a user actually see and use this in the browser?" — VISIBLE /
+PARTIAL / MISSING. Every PARTIAL or MISSING gap is logged below as a
+FINDING-FRONT-XXX. **Frontend work is NOT STARTED on any of these — they are
+tracked for visibility and scheduled only on explicit instruction.** This register
+is updated every session as gaps close.
+
+Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app router).
+
+---
+
+## FINDING-FRONT-001 — OPEN — MEDIUM
+
+**A user cannot record or void a VAT adjustment from the browser, and existing rows render with a blank description.**
+- Parent finding: FINDING-FIN-E-002 (VatAdjustment model + persistence) — CLOSED (d961779)
+- Current UI state: Tax → VAT tab has a "VAT Adjustments" card that LISTS rows from
+  `GET /finance/tax/vat/adjustments` (now returns real data). The "+ Record
+  Adjustment" button is a plain `<Button>` with no `onClick`/form. No void action.
+- Gap: (1) no create form — cannot POST an adjustment from the UI; (2) field
+  mismatch — the page type expects `description`/`currency`, but the API returns
+  `reason` and has no `currency`, so the Description column is blank and
+  `formatCurrency(amount, undefined)` is used; (3) no void button (the API
+  `voidVatAdjustment` is unreachable from the UI).
+- File(s): `apps/web/src/app/(app)/app/tax/page.tsx` (≈ lines 23–26, 104–106, 272–293)
+- Frontend work: NOT STARTED — awaiting explicit instruction
+- Severity: MEDIUM (secondary accounting workflow)
+- Logged: 2026-06-23
+
+---
+
+## FINDING-FRONT-002 — OPEN — HIGH
+
+**Trust withdrawal, transfer-to-office, and interest posting have no UI — only deposit is reachable in the browser.**
+- Parent finding: Trust write fixes (deposit/withdrawal/transfer/interest UNBLOCKED
+  & VERIFIED LIVE, 18 Jun 2026) + FINDING-007-002 (matter overdraw race, CLOSED
+  4135720 — the overdraw guard fires on withdrawal, which has no UI to trigger it)
+- Current UI state: `/app/trust` lists accounts + has a "New Trust Account" form and
+  a link to `/app/trust/deposit` (deposit form only). Page text mentions "Transfers
+  to office account require written client authority" but there is no transfer form.
+- Gap: withdrawal, transfer-to-office, and interest-posting journals — all
+  working/verified at the API — cannot be initiated from the browser. The overdraw
+  protection (007-002) is therefore not user-exercisable via UI.
+- File(s): `apps/web/src/app/(app)/app/trust/` (only `page.tsx` + `deposit/page.tsx`
+  exist; no `withdraw`/`transfer`/`interest` routes)
+- Frontend work: NOT STARTED — awaiting explicit instruction
+- Severity: HIGH (core trust-accounting workflow; partial money-movement surface)
+- Logged: 2026-06-23
+
+---
+
+## FINDING-FRONT-003 — OPEN — MEDIUM
+
+**Proformas, retainers, payment reminders, and billing notifications have no UI despite full backend models.**
+- Parent finding: FINDING-006-002 (billing models authored: ProformaInvoice,
+  Retainer, RetainerApplication, PaymentReminder, BillingNotification, BillingExport)
+  — CLOSED (migration 20260611161954)
+- Current UI state: `/app/billing` handles Invoices and Quotations
+  (quotation→convertToInvoice) only. No proforma list/create, no retainer
+  management/application, no payment-reminder scheduling/list, no billing-notification
+  view.
+- Gap: four billing sub-domains exist end-to-end at the API/schema layer but are
+  entirely absent from the web app.
+- File(s): `apps/web/src/app/(app)/app/billing/` (no proforma/retainer/reminder routes)
+- Frontend work: NOT STARTED — awaiting explicit instruction
+- Severity: MEDIUM (secondary billing workflows; invoices are the primary path)
+- Logged: 2026-06-23
+
+---
+
+## FINDING-FRONT-004 — OPEN — MEDIUM
+
+**No accounting-period management UI — periods auto-create on post, but view/close/lock (now meaningful) is not exposed.**
+- Parent finding: FINDING-007-005 (ensureOpenPeriod unifies period enforcement;
+  close/lock now meaningful) — CLOSED (70c2db9)
+- Current UI state: `/app/finance` tabs = overview/invoices/journals/accounts/
+  receipts/statements. Posting works (period lazily auto-created, invisible to the
+  user). There is no tab/page to list AccountingPeriods or to close/lock a period.
+- Gap: the close/lock capability the fix made meaningful has no UI; month-end period
+  control cannot be performed in the browser.
+- File(s): `apps/web/src/app/(app)/app/finance/page.tsx` (no periods tab)
+- Frontend work: NOT STARTED — awaiting explicit instruction
+- Severity: MEDIUM (month-end controllership function)
+- Logged: 2026-06-23
+
+---
+
+## FINDING-FRONT-005 — OPEN — MEDIUM
+
+**No disciplinary UI — the disciplinary endpoint works but cannot be reached from the browser.**
+- Parent finding: FINDING-008-003 (disciplinary employee-id fix + Employee seed) —
+  CLOSED (d8c7e12)
+- Current UI state: HR module (`/app/hr`, employees, performance, onboarding,
+  payroll) has no disciplinary list, form, or employee-detail disciplinary section
+  (grep for "disciplinary" in `apps/web/src` = 0 hits).
+- Gap: disciplinary actions cannot be created or viewed in the UI.
+- File(s): `apps/web/src/app/(app)/app/hr/` (no disciplinary route/section)
+- Frontend work: NOT STARTED — awaiting explicit instruction
+- Severity: MEDIUM (HR workflow)
+- Logged: 2026-06-23
+
+---
+
+## FINDING-FRONT-006 — OPEN — LOW
+
+**No department-management UI — the new Department schema (status/hierarchy/manager/archive) surfaces only as a read-only name string.**
+- Parent finding: FINDING-008-002 (Department fields: status/hierarchy/manager/
+  audit/metadata) — CLOSED (dcdf568) + reconciled migration (d961779)
+- Current UI state: Department appears only as a name string (employee detail,
+  onboarding dropdown, payroll grouping). No page to create/edit departments, set
+  `status` (ACTIVE/INACTIVE/ARCHIVED), assign a manager, or set parent (hierarchy).
+- Gap: the new department schema capabilities have no management surface.
+- File(s): `apps/web/src/app/(app)/app/hr/` (no departments route)
+- Frontend work: NOT STARTED — awaiting explicit instruction
+- Severity: LOW (configuration/reference data; name display already works)
+- Logged: 2026-06-23
+
+---
+
+## FINDING-FRONT-007 — OPEN — LOW
+
+**eTIMS fiscalize failures (including the new 422 PIN-required guard) are swallowed silently — the user gets no feedback.**
+- Parent finding: FINDING-FIN-E-004 (tenant KRA PIN guarded before eTIMS transmit →
+  422 ETIMS_SUPPLIER_PIN_REQUIRED) — CLOSED
+- Current UI state: Tax → eTIMS tab has a "Fiscalize →" action
+  (`POST /finance/etims/invoices/:id/fiscalize`). Its `catch {}` is `// silent`, so a
+  422 PIN-required (or any failure) produces no message — the row simply stays
+  pending with no explanation.
+- Gap: the PIN-required guard fires correctly server-side but the reason is not
+  surfaced to the user; they cannot tell why fiscalization did nothing.
+- File(s): `apps/web/src/app/(app)/app/tax/page.tsx` (`fiscalize`, ≈ lines 140–152)
+- Frontend work: NOT STARTED — awaiting explicit instruction
+- Severity: LOW (error-surfacing/UX; guard itself works)
+- Logged: 2026-06-23
+
+---
+
+## MASTER FRONTEND-PARITY REGISTER (updated 2026-06-23)
+
+| Finding | Backend Status | Frontend Status | FINDING-FRONT ref |
+|---|---|---|---|
+| FINDING-007-010 — invoice GL posting | CLOSED (verified) | VISIBLE — posted journal appears in Finance → Journal Entries | — |
+| FINDING-007-002 — trust overdraw race | CLOSED (verified) | N/A integrity guard — exercised via withdrawal, which is MISSING | FRONT-002 |
+| FINDING-007-005 — period enforcement | CLOSED (verified) | PARTIAL — auto-create works; no view/close/lock UI | FRONT-004 |
+| FINDING-008-001 — HR permission gate | CLOSED (verified) | VISIBLE — HR pages load/function for HR_MANAGER | — |
+| FINDING-008-002 — Department schema | CLOSED (verified) | PARTIAL — name shown read-only; no mgmt UI for status/hierarchy/manager | FRONT-006 |
+| FINDING-008-003 — disciplinary fix | CLOSED (verified) | MISSING — no disciplinary UI | FRONT-005 |
+| FINDING-FIN-E-001 — VAT return endpoints | CLOSED (verified) | VISIBLE — Tax → VAT monthly summary + KPIs | — |
+| FINDING-FIN-E-002 — VatAdjustment | CLOSED (verified) | PARTIAL — lists rows; no create/void, field mismatch | FRONT-001 |
+| FINDING-FIN-E-004 — eTIMS PIN guard | CLOSED (verified) | PARTIAL — guard fires; failure reason swallowed in UI | FRONT-007 |
+| FINDING-009-001 — reporting audit fix | CLOSED (verified) | VISIBLE — reporting handlers return 200; reports render | — |
+| Billing schema (proforma/retainer/reminder/notification) | CLOSED (verified) | MISSING — no UI for these four sub-domains | FRONT-003 |
+| Trust writes (deposit/withdrawal/transfer/interest) | CLOSED (verified) | PARTIAL — deposit only; withdrawal/transfer/interest MISSING | FRONT-002 |
+
+Audit summary: 12 closed findings reviewed → 4 VISIBLE, 5 PARTIAL, 2 MISSING, 1 N/A
+(integrity). 7 FINDING-FRONT entries logged (FRONT-001…007). No frontend code
+changed.
+Logged: 2026-06-23.

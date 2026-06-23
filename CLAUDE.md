@@ -92,6 +92,31 @@ without explicit approval.
 
 ---
 
+## Principle 5 — Backend and Frontend Parity (added 2026-06-23)
+
+REMINDER: Every backend fix, schema change, or API addition
+MUST have a corresponding frontend check before the session
+closes. This is not optional.
+
+For every finding closed in a session, ask:
+"Can a user actually see and use this in the browser?"
+
+If YES → finding is fully closed.
+If NO or PARTIAL → log a FINDING-FRONT-XXX immediately so
+the gap is tracked and scheduled. Do not leave it as a
+verbal note or a "FYI" — it must be in FINDINGS.md.
+
+This applies RETROACTIVELY to every finding marked CLOSED
+across all prior sessions and commits. Any closed finding
+where the frontend does not yet reflect the backend change
+must have a corresponding FINDING-FRONT-XXX logged.
+
+Frontend work is only undertaken when explicitly requested.
+The purpose of this principle is tracking visibility, not
+forcing frontend changes into every backend session.
+
+---
+
 # 3. AUTHORITATIVE PROJECT STATUS
 
 Verified Complete:
