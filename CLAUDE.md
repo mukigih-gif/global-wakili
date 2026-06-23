@@ -172,6 +172,9 @@ Final verification sweep.
 
 ## Recent Fixes
 
+* FIN-E-002 CLOSED (2026-06-23, d961779) — VatAdjustment model added (model + VatAdjustmentType/Status enums; tenant-scoped in the isolation extension); migration `20260621000000_reconcile_dept_vatadjustment_schema` reconciled from a 0-byte file to real SQL. VAT adjustments now persist; void works; summary adjustments leg is real. 7/7 live verification passed; tsc clean. Remaining GL-posting gap split out as FIN-E-005 (Class IV, separate scope).
+* FINDING-INFRA-001 CLOSED (2026-06-23, d961779) — migration/ledger drift resolved: live objects previously applied via `db push` were never recorded; the reconcile migration was recorded on live via `prisma migrate resolve --applied` (no SQL re-run, no data change). `prisma migrate status` now clean (38 migrations), live-vs-schema drift empty. **`prisma migrate deploy` is now the authoritative schema path.**
+* **STANDING RULE (2026-06-23): `prisma db push` is PROHIBITED on the shared Neon DB.** It silently mutates the live schema without a migration, leaving the ledger behind (root cause of INFRA-001 and the FIN-E-002 0-byte migration). All schema changes go through `prisma migrate dev` → reviewed migration → `migrate deploy`. Never `db push`.
 * FINDING-006-002: billing schema delegates added, migration applied, dashboard fix deployed — RE-VERIFIED & CLOSED 2026-06-20 (all billing models present in schema + migration 20260611161954; Wave A 16/16 + Wave B 19/19 live; prior OPEN was stale)
 * FIX D: drop Invoice.createdById in proforma convert
 * FIX E: add CreditNote void fields + migration

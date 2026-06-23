@@ -61,7 +61,7 @@ preserved for history.
 | FINDING-FIN-D-001 | — | Phase 3 Group D (P&L) UNBUILT at HTTP: P&L handler dead (shadowed, FIN-D-002); reachable /statements is a ledger statement; cert deferred | Phase 3 |
 | FINDING-FIN-D-002 | MEDIUM | Duplicate GET /finance/statements — P&L/balanceSheet handler (lines 540-616) dead/shadowed; reachable handler is a ledger statement | Phase 3 |
 | FINDING-FIN-E-001 | CLOSED | (this session) | VAT-return endpoints (/tax/vat/monthly + /tax/vat/summary) revived — fixed phantom Invoice/VendorBill columns AND invalid status enum literals; +exposure total. Live-DB verified | Phase 3 |
-| FINDING-FIN-E-002 | HIGH | Phase 3 Group E: VatAdjustment model absent → POST /tax/vat/adjustments returns 201 but persists nothing (silent no-op); void path 500s; summary adjustments always 0 | Phase 3 |
+| FINDING-FIN-E-002 | CLOSED | (d961779) | VatAdjustment model added + migration reconciled (migrate resolve --applied); 7/7 verification passed; adjustments persist, void works, summary leg real. GL posting gap split out as FIN-E-005 | Phase 3 |
 | FINDING-FIN-E-003 | — | Phase 3 Group E: eTIMS control-number externally blocked (KRA creds unset → FAILED, no control number); no persisted VatReturn/TaxPeriod model (returns compute-only) | Phase 3 / pre-go-live |
 | FINDING-FIN-E-004 | CLOSED | Tenant (supplier) KRA PIN not enforced before eTIMS transmit — could submit to KRA with null supplierPin; now guarded (422 ETIMS_SUPPLIER_PIN_REQUIRED) | (this session) |
 | FINDING-MAT-001 | MEDIUM | Matter module: 12 services export-only/dead, routes run inline; /reports/matter-profitability absent (TODO-011 Part A) | Phase 3 |
@@ -1738,7 +1738,7 @@ Impacted file: `apps/api/src/modules/finance/VATService.ts`. Logged: 2026-06-21.
 
 ---
 
-## FINDING-FIN-E-002 — OPEN — (Phase 3 Group E — VatAdjustment model absent)
+## FINDING-FIN-E-002 — CLOSED (2026-06-23) — (Phase 3 Group E — VatAdjustment model absent)
 
 **`VatAdjustment` model does not exist in schema → silent-201 writes and a 500 void path.**
 
@@ -1757,6 +1757,26 @@ Remediation: add a `VatAdjustment` model (tenantId, type enum, amount, adjustmen
 reference, status, createdById, voided* fields, metadata) + migration, matching the fields
 `VATService.recordVatAdjustment`/`voidVatAdjustment` already write. This is a real (bounded)
 schema change requiring approval per ADR/CLAUDE.md §2/§4. Logged: 2026-06-21.
+
+### CLOSURE (2026-06-23) — commit d961779
+**Status: CLOSED** — `VatAdjustment` model added (model + `VatAdjustmentType`/
+`VatAdjustmentStatus` enums; tenantId, amount, adjustmentDate, reason, reference,
+status, createdById, voided* fields, metadata), registered as tenant-scoped in the
+isolation extension. The 0-byte `20260621000000_reconcile_dept_vatadjustment_schema`
+migration was reconciled to real SQL and recorded on live via
+`prisma migrate resolve --applied` (objects already present from a prior `db push`;
+no SQL re-run, no data change); builds cleanly on a fresh DB.
+
+Verified: 7/7 verification checks passed against the live DB (persisted CREATE,
+filterable LIST, service-level + tenant-extension isolation, wrong-tenant void 404,
+correct-tenant void sets VOID fields, summary excludes VOID). `prisma migrate status`
+up-to-date (38 migrations); live-vs-schema drift empty; `tsc --noEmit` clean.
+Committed and pushed (d961779).
+
+VAT adjustments now persist; void works; the summary adjustments leg reflects real
+data. The remaining **GL posting gap is logged separately as FINDING-FIN-E-005**
+(VAT_ADJUSTMENT has no balanced GL posting handler — separate Class IV scope, owner
+decision 2026-06-23: this finding was model-only).
 
 ---
 
