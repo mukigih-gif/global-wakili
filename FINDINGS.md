@@ -2236,7 +2236,7 @@ logged. Logged: 2026-06-23.
 
 ---
 
-## FINDING-FIN-TRUST-001 — OPEN (recon — unverified) — (Phase 3 Trust Compliance — three-way reconciliation not yet certified)
+## FINDING-FIN-TRUST-001 — VERIFIED FUNCTIONAL / invariant FAILED (2026-06-23) — (Phase 3 Trust Compliance — three-way reconciliation)
 
 **Trust three-way reconciliation is built and reads work, but the core three-way compute (a write) was not exercised in read-only recon — uncertified.**
 
@@ -2249,6 +2249,65 @@ Gap: `POST /trust/reconciliations/three-way` is a compute/write and was NOT fire
 (read-only recon), so the bank↔ledger↔control three-way invariant (ADR-004) is
 UNVERIFIED. No defect found. Needs a controlled write-verification session (seed a
 reconciliation, assert matched/unmatched + variance) before cert. Logged: 2026-06-23.
+
+### VERIFICATION (2026-06-23) — endpoint works; invariant FAILED
+Fired `POST /trust/reconciliations/three-way` (MANAGING_PARTNER, onrender) on account
+`cmpynp1p10000a4xiwdzxommt` ("Client Trust Account — Main"): **201**, `ReconciliationRun`
++ 3 `ReconciliationMatch` persisted, status FLAGGED. The compute is **VERIFIED
+FUNCTIONAL** — it sums bank/trust/client, computes the 3 variances, persists, and
+correctly flags. BUT the integrity invariant **FAILED**: `trustTotal=4,129,000` vs
+`clientTotal=29,000` → `trustVsClient` variance **4,100,000** (`bankTotal=0`, no bank
+statement). The trust ledger does not reconcile to the client sub-ledger — logged as
+**FIN-TRUST-002**. Net: the three-way endpoint is certifiable; the underlying data
+integrity is OPEN (FIN-TRUST-002). Verified: 2026-06-23.
+
+---
+
+## FINDING-FIN-TRUST-002 — OPEN — HIGH — (Phase 3 Trust Compliance — trust ledger ≠ client sub-ledger; ~4.1M unallocated)
+
+**Three-way reconciliation on the Main trust account shows the trust ledger total ≠ the client sub-ledger total — ~4,100,000 not allocated to any client/matter (potential ADR-004 commingling concern).**
+
+Surfaced 2026-06-23 by the FIN-TRUST-001 three-way write-verify. Account
+`cmpynp1p10000a4xiwdzxommt` ("Client Trust Account — Main", currentBalance 4,129,000).
+Live `POST /trust/reconciliations/three-way` (statementDate 2026-06-23, tolerance 0) →
+201, status FLAGGED:
+- `bankTotal = 0` (no bank statement imported — expected)
+- `trustTotal = 4,129,000` (Σ `trustTransaction` credit−debit; equals account balance)
+- `clientTotal = 29,000` (Σ `clientTrustLedger` credit−debit)
+- `trustVsClient` variance = **4,100,000**
+
+So ~4.1M sits at the trust-account level with NO corresponding client/matter sub-ledger
+allocation. Under ADR-004 every trust dollar must be allocated to a client (trust ledger
+== client sub-ledger). Candidates: (a) seed/demo bulk deposit recorded at account level
+without client allocation (data artifact), or (b) a deposit path that writes
+`trustTransaction` but not `clientTrustLedger` (code defect). **NOT investigated or fixed
+this session** (verify-only scope). Next step: trace deposits on this account — confirm
+whether they create `clientTrustLedger` rows — to determine data-vs-code root cause
+before any remediation. Logged: 2026-06-23.
+
+### INVESTIGATION + SCOPE DECISION (2026-06-24) — "verify + defer to seed"
+Read-only investigation: every `trustTransaction` on the Main account carries a `clientId`
+(funds ARE allocated). `TrustTransactionService.create` calls
+`ClientTrustLedgerService.applyDelta` **unconditionally** (`:460`), which writes the full
+delta to `clientTrustLedger` (`:189-192`); `TrustInterestService` (`:233`) does likewise.
+So the **current code keeps both ledgers in sync**; the 4.1M gap is **historical data** from
+deposits created BEFORE that wiring (FINDING-007-002, commit 4135720, ~2026-06-18).
+
+**Verified live (2026-06-24, controlled, ADR-003-preserving):** on the clean "Litigation"
+account, a deposit of 5,000 via `POST /trust/transactions` → `trustTotal=5,000`,
+`clientTotal=5,000`, `trustVsClient=0`; a compensating WITHDRAWAL of 5,000 → both back to 0,
+balance 0, `trustVsClient=0`. Both inflow and outflow paths sync the sub-ledger. No audit
+records deleted (net-zero reversing entries only).
+
+**Scope (owner-approved):** current code is correct → do NOT hand-backfill/rebuild the live
+demo `clientTrustLedger` (risky data surgery; `clientTrustLedger` has no `trustTransactionId`
+FK). The stale historical data is resolved by the planned seed rebuild (CLAUDE.md §12).
+**Regression guard:** `21_validation.seed.ts` (built with the seed architecture) must assert
+`trustVsClient == 0` per seeded trust account, catching this drift class at seed time.
+**Status: remains OPEN — verified code-correct; auto-resolved when the seed rebuild lands.**
+(Deviation noted: a standalone live cert test was intentionally NOT added — it would
+accumulate immutable-audit rows on every run; the seed-validation assertion is the durable,
+non-polluting guard.)
 
 ---
 
