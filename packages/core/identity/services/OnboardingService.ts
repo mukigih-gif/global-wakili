@@ -277,7 +277,7 @@ export class OnboardingService {
             name: 'Administration',
             code: 'ADMIN',
             description: 'Default administration department created during tenant onboarding.',
-            isActive: true,
+            status: 'ACTIVE',
           },
         });
 

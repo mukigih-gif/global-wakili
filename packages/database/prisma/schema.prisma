@@ -230,6 +230,7 @@ model Tenant {
   billingExports       BillingExport[]
   creditNoteLines      CreditNoteLine[]
   numberSequences      NumberSequence[]
+  vatAdjustments       VatAdjustment[]
 
   @@index([subscriptionStatus])
   @@index([createdAt])
@@ -551,6 +552,8 @@ model User {
   billingNotificationsCreated BillingNotification[] @relation("BillingNotificationCreatedBy")
   billingNotificationsSent    BillingNotification[] @relation("BillingNotificationSentBy")
   billingExportsGenerated     BillingExport[]       @relation("BillingExportGeneratedBy")
+  vatAdjustmentsCreated       VatAdjustment[]       @relation("VatAdjustmentCreatedBy")
+  vatAdjustmentsVoided        VatAdjustment[]       @relation("VatAdjustmentVoidedBy")
 
   @@index([tenantId])
   @@index([email])
@@ -2014,6 +2017,49 @@ model WithholdingTaxCertificate {
   @@index([status])
   @@index([receivedById])
   @@index([cancelledById])
+}
+
+model VatAdjustment {
+  id             String              @id @default(cuid())
+  tenantId       String
+  type           VatAdjustmentType
+  amount         Decimal             @db.Decimal(18, 2)
+  adjustmentDate DateTime
+  reason         String
+  reference      String?
+  status         VatAdjustmentStatus @default(POSTED)
+  createdById    String
+  voidedAt       DateTime?
+  voidedById     String?
+  voidReason     String?
+  metadata       Json?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @default(now()) @updatedAt
+
+  tenant    Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  createdBy User   @relation("VatAdjustmentCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  voidedBy  User?  @relation("VatAdjustmentVoidedBy", fields: [voidedById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([tenantId, adjustmentDate])
+  @@index([type])
+  @@index([status])
+  @@index([createdById])
+  @@index([voidedById])
+}
+
+enum VatAdjustmentType {
+  OUTPUT_VAT
+  INPUT_VAT
+  VAT_PAYABLE
+  VAT_REFUND
+  OTHER
+}
+
+enum VatAdjustmentStatus {
+  POSTED
+  VOID
+  CANCELLED
 }
 
 model BillingRun {

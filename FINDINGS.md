@@ -1940,3 +1940,74 @@ Deferred enhancements (tracked, not blocking go-live):
   report UIs (TODO-011) to unlock more "See It In Action" screenshots.
 
 TODO-012 status: CODE COMPLETE; awaiting owner go-live actions above.
+
+---
+
+## FINDING-FIN-E-005 — OPEN (deferred, Class IV) — (Phase 3 Group E — VAT_ADJUSTMENT has no GL posting handler → 422)
+
+**The finance posting engine declares `VAT_ADJUSTMENT` as a valid source but has no handler → 422 on any GL post.**
+
+Found during FIN-E-002 work (2026-06-23). Distinct from FIN-E-002 (which is the
+absent persistence model). `finance.routes.ts` lets a caller POST a journal with
+`source: 'VAT_ADJUSTMENT'` (enum at ~line 263), but
+`FinancePostingService.post` (`FinancePostingService.ts:217-241`) has no `case`
+for it — the `default` throws **422 `UNSUPPORTED_FINANCE_POSTING_SOURCE`**.
+`VAT_ADJUSTMENT` is also listed as a `FinancePostingSource` at line 21 but never
+implemented.
+
+Impact: even after FIN-E-002 persists the adjustment record, no balanced GL
+journal is produced for it — the VAT adjustment never reaches the ledger.
+
+Remediation (deferred to its own session — Class IV, touches GL): implement a
+balanced `postVatAdjustment` handler (DR/CR per adjustment type, idempotency,
+period-lock) following the FINDING-007-010 invoice-posting pattern. Explicitly
+OUT OF SCOPE for FIN-E-002 (owner decision 2026-06-23: model only). Logged 2026-06-23.
+
+---
+
+## FINDING-CAL-001 — OPEN — (Calendar/Notifications — events don't display + reminders never fire)
+
+**Calendar entries never render in the UI, and calendar reminders/notifications are never created or dispatched.**
+
+Owner-reported 2026-06-23; recon this session. Two independent root-cause clusters.
+Different bounded context from Finance — tracked for its own session (Principle 2).
+
+Symptom 1 — events don't display:
+- FE calls `GET /calendar/events?from=…&to=…&limit=500`
+  (`apps/web/src/app/(app)/app/calendar/page.tsx:67,71`) but the backend only
+  mounts `GET /calendar/` (`calendar.routes.ts:125`) → **404**.
+- Even with the path corrected, FE sends `from/to/limit` while the backend
+  requires `startDate/endDate` (`calendar.routes.ts:56-65`) → **422** (missing
+  required query params).
+
+Symptom 2 — reminders never fire:
+- `CalendarService.createEvent` (`CalendarService.ts:127-171`) ignores
+  `payload.reminders` → **no `CalendarReminder` row is ever created** (the model
+  exists, schema ~3096-3137).
+- `NotificationReminderService` has no `remindCalendarEvents()` — only hearings/
+  invoices/tasks → nothing ever polls `CalendarReminder`.
+- `ReminderService.attachRemindersToEvent` is effectively dead for calendar (only
+  called from deadline/task/court modules).
+- FE `reminderMinutes` is used only for an immediate dispatch, not scheduling.
+
+Remediation (deferred, own session): fix FE endpoint+params (Low), persist
+`CalendarReminder` on create, and add a calendar leg to the reminder worker
+(Medium). Logged 2026-06-23.
+
+---
+
+## FINDING-HR-ONB-001 — OPEN — (HR/Identity — OnboardingService writes phantom `Department.isActive` → tsc break)
+
+**`OnboardingService` writes `isActive` on `Department.create`, but `Department` has no `isActive` field (it uses `status DepartmentStatus`).**
+
+Surfaced 2026-06-23 when the Prisma client was regenerated during FIN-E-002:
+`packages/core/identity/services/OnboardingService.ts:280` →
+`error TS2353: 'isActive' does not exist in DepartmentCreateInput`. Same
+phantom-field class as the prior Department/Tasks/Documents dead-field bugs. The
+committed code carries a latent typecheck failure that manifests whenever the
+generated client is brought in sync with the schema.
+
+NOT caused by and OUT OF SCOPE for FIN-E-002 (different bounded context —
+HR/identity). Remediation (own task): map `isActive` → `status: ACTIVE`/
+`INACTIVE` (DepartmentStatus) in OnboardingService, or add the field if onboarding
+genuinely needs it. Logged 2026-06-23.

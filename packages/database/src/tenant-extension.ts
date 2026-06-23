@@ -107,6 +107,7 @@ export const TENANT_SCOPED_MODELS = new Set<string>([
   'RecurringExpenseTemplate',
   'WithholdingTaxCertificate',
   'PaymentRefund',
+  'VatAdjustment',
 
   'RateCard',
   'WriteOff',
