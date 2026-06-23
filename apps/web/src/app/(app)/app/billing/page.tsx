@@ -138,6 +138,14 @@ export default function BillingPage() {
         </div>
       </div>
 
+      {/* Billing sub-features */}
+      <div className="flex flex-wrap gap-2">
+        <Link href="/app/billing/proformas"><Button size="sm" variant="secondary">Proformas</Button></Link>
+        <Link href="/app/billing/retainers"><Button size="sm" variant="secondary">Retainers</Button></Link>
+        <Link href="/app/billing/reminders"><Button size="sm" variant="secondary">Payment Reminders</Button></Link>
+        <Link href="/app/billing/notifications"><Button size="sm" variant="secondary">Notifications</Button></Link>
+      </div>
+
       {/* Lifecycle banner */}
       <div className="flex items-center gap-3 rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 text-xs text-gray-600">
         <span className="flex items-center gap-1.5 font-medium"><FileText className="h-3.5 w-3.5 text-primary-500" /> Quotation</span>

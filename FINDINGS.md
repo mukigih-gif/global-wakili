@@ -2385,7 +2385,7 @@ Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app route
 
 ---
 
-## FINDING-FRONT-003 — OPEN — MEDIUM
+## FINDING-FRONT-003 — CLOSED (2026-06-24) — MEDIUM
 
 **Proformas, retainers, payment reminders, and billing notifications have no UI despite full backend models.**
 - Parent finding: FINDING-006-002 (billing models authored: ProformaInvoice,
@@ -2401,6 +2401,20 @@ Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app route
 - Frontend work: NOT STARTED — awaiting explicit instruction
 - Severity: MEDIUM (secondary billing workflows; invoices are the primary path)
 - Logged: 2026-06-23
+- **CLOSED (2026-06-24):** four new sub-pages under `/app/billing/` — `proformas`
+  (list + create with line items → `POST /billing/proformas`), `retainers`
+  (`POST /billing/retainers`), `reminders` (`POST /billing/reminders`, invoice +
+  channel/tone), `notifications` (`POST /billing/notifications`) — each list + create,
+  linked from a new sub-features nav row on `/app/billing`. Web tsc exit 0.
+
+---
+
+### FRONTEND SPRINT COMPLETE (2026-06-24)
+All seven FINDING-FRONT items (FRONT-001…007) are CLOSED — VAT adjustments, trust
+withdraw/transfer/interest, billing proformas/retainers/reminders/notifications,
+accounting periods, HR disciplinary, department management, and eTIMS error surfacing.
+Each built lean against an already-certified backend, web `tsc --noEmit` exit 0, committed
+per item. Per SOP, next steps are seed architecture (§12) then Phase 2 Playwright.
 
 ---
 
