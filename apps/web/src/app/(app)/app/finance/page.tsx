@@ -149,6 +149,7 @@ export default function FinancePage() {
                   { label: 'Billing', href: '/app/billing', icon: <ArrowUpRight className="h-4 w-4" /> },
                   { label: 'Reports', href: '/app/reports', icon: <ArrowUpRight className="h-4 w-4" /> },
                   { label: 'Bank Reconciliation', href: '/app/finance/reconciliation', icon: <ArrowDownLeft className="h-4 w-4" /> },
+                  { label: 'Accounting Periods', href: '/app/finance/periods', icon: <ArrowDownLeft className="h-4 w-4" /> },
                 ].map((item) => (
                   item.onClick
                     ? <button key={item.label} onClick={item.onClick} className="flex items-center gap-2 rounded-lg border border-gray-200 p-3 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors text-left">

@@ -2404,7 +2404,7 @@ Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app route
 
 ---
 
-## FINDING-FRONT-004 — OPEN — MEDIUM
+## FINDING-FRONT-004 — CLOSED (2026-06-24) — MEDIUM
 
 **No accounting-period management UI — periods auto-create on post, but view/close/lock (now meaningful) is not exposed.**
 - Parent finding: FINDING-007-005 (ensureOpenPeriod unifies period enforcement;
@@ -2418,6 +2418,10 @@ Retroactive audit performed 2026-06-23 against `apps/web/src` (Next.js app route
 - Frontend work: NOT STARTED — awaiting explicit instruction
 - Severity: MEDIUM (month-end controllership function)
 - Logged: 2026-06-23
+- **CLOSED (2026-06-24):** new `/app/finance/periods` page (mirrors the reconciliation
+  page) — lists `GET /finance/periods` (month/year/status), per-OPEN-period **Close**
+  action → `POST /finance/period-close {month,year}`; linked from the finance overview
+  quick-links. Web tsc exit 0.
 
 ---
 
