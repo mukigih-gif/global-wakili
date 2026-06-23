@@ -56,30 +56,12 @@ function money(value: unknown): Prisma.Decimal {
   return parsed.toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
 }
 
-function periodWhere(input: P10ReportInput) {
-  if (input.month) {
-    return {
-      periodStart: {
-        gte: new Date(input.year, input.month - 1, 1),
-        lt: new Date(input.year, input.month, 1),
-      },
-    };
-  }
-
-  return {
-    periodStart: {
-      gte: new Date(input.year, 0, 1),
-      lt: new Date(input.year + 1, 0, 1),
-    },
-  };
-}
-
 export class P10ReportService {
   async generateP10(input: P10ReportInput) {
-    const payrollRecord = delegate(prisma, 'payrollRecord');
+    const payslip = delegate(prisma, 'payslip');
     const tenantDelegate = delegate(prisma, 'tenant');
 
-    const [tenant, records] = await Promise.all([
+    const [tenant, slips] = await Promise.all([
       tenantDelegate.findFirst({
         where: {
           id: input.tenantId,
@@ -90,44 +72,43 @@ export class P10ReportService {
           kraPin: true,
         },
       }).catch(() => null),
-      payrollRecord.findMany({
+      payslip.findMany({
         where: {
           tenantId: input.tenantId,
-          ...(input.payrollBatchId ? { payrollBatchId: input.payrollBatchId } : {}),
-          status: {
-            in: ['APPROVED', 'POSTED', 'PAID'],
+          ...(input.payrollBatchId ? { batchId: input.payrollBatchId } : {}),
+          batch: {
+            year: input.year,
+            ...(input.month ? { month: input.month } : {}),
+            status: {
+              in: ['APPROVED', 'POSTED', 'PAID'],
+            },
           },
-          ...periodWhere(input),
         },
         include: {
-          employee: true,
+          user: true,
+          employeeProfile: true,
+          batch: true,
         },
         orderBy: [
-          { employeeId: 'asc' },
-          { periodStart: 'asc' },
+          { userId: 'asc' },
         ],
       }),
     ]);
 
-    const employeeLines: P10EmployeeLine[] = (records as any[]).map((record: any): P10EmployeeLine => ({
-      payrollRecordId: record.id,
-      employeeId: record.employeeId,
-      staffNumber: record.employee?.staffNumber ?? null,
-      employeeName:
-        record.employee?.displayName ??
-        record.employee?.fullName ??
-        record.employee?.name ??
-        record.employee?.email ??
-        null,
-      kraPin: record.employee?.kraPin ?? null,
-      periodStart: record.periodStart,
-      periodEnd: record.periodEnd,
-      grossPay: money(record.grossPay),
-      taxablePay: money(record.taxablePay),
-      personalRelief: money(record.statutoryBreakdown?.personalRelief),
-      insuranceRelief: money(record.statutoryBreakdown?.insuranceRelief),
-      payeGrossTax: money(record.statutoryBreakdown?.payeGrossTax),
-      paye: money(record.paye),
+    const employeeLines: P10EmployeeLine[] = (slips as any[]).map((slip: any): P10EmployeeLine => ({
+      payrollRecordId: slip.id,
+      employeeId: slip.employeeProfileId ?? slip.userId,
+      staffNumber: slip.employeeProfile?.employeeNumber ?? null,
+      employeeName: slip.user?.name ?? slip.user?.email ?? null,
+      kraPin: slip.user?.kraPin ?? null,
+      periodStart: new Date(slip.batch.year, slip.batch.month - 1, 1),
+      periodEnd: new Date(slip.batch.year, slip.batch.month, 0),
+      grossPay: money(slip.grossPay),
+      taxablePay: money(slip.taxablePay),
+      personalRelief: ZERO,
+      insuranceRelief: ZERO,
+      payeGrossTax: money(slip.paye),
+      paye: money(slip.paye),
     }));
 
     const totals = employeeLines.reduce(

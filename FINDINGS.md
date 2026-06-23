@@ -2092,7 +2092,7 @@ Logged: 2026-06-23.
 
 ---
 
-## FINDING-FIN-PAYROLL-001 — OPEN — HIGH — (Phase 3 Payroll Compliance — statutory engine 500 via PayrollRecord schema mismatch)
+## FINDING-FIN-PAYROLL-001 — CLOSED (2026-06-23) — (Phase 3 Payroll Compliance — statutory engine 500 via PayrollRecord schema mismatch)
 
 **`/payroll/statutory/summary` and `/payroll/reports/p10` (and P9) 500 — the statutory/KRA-filing services query `PayrollRecord` with fields/relations it does not have.**
 
@@ -2127,6 +2127,19 @@ summary/P9/P10 are broken and must be re-pointed at the real
 `PayrollRecord`+`StatutoryDeductionRecord`+`Payslip` shape (a FIX, not done
 mid-recon). Frontend impact: Tax → Payroll Deductions tab + P9/P10 surfaces will be
 dead — FINDING-FRONT on fix. Logged: 2026-06-23.
+
+### CLOSURE (2026-06-23)
+**Status: CLOSED.** Re-pointed `P10ReportService.generateP10` and
+`StatutoryFilingService.generateSummary` from the phantom `payrollRecord` query to
+`payslip` — which carries the statutory totals (`paye/shif/nssf/housingLevy/grossPay/
+taxablePay/netPay`) + `batch{year,month,status}` + `user{name,kraPin,nssfNumber,
+shifNumber}` + `employeeProfile{employeeNumber}`. Period/status now filter via `batch`;
+identity via `user`/`employeeProfile`; dead `periodWhere`/`makePeriodWhere` helpers
+removed. tsc exit 0; local-verified both methods return (no 500). Live-verified
+post-deploy. **Known limitation (logged, not blocking):** employer-split fields
+(`nssfEmployer/housingLevyEmployer/nitaEmployer`) and PAYE relief breakdown
+(`personalRelief/insuranceRelief`) are not stored on the deployed `Payslip` → reported
+as 0; employee-side PAYE/NSSF/SHIF/Housing + gross/taxable/net are correct.
 
 ---
 

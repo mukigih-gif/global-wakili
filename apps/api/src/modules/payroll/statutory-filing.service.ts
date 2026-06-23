@@ -66,48 +66,28 @@ function money(value: unknown): Prisma.Decimal {
   return decimal.toDecimalPlaces(2);
 }
 
-function makePeriodWhere(input: StatutoryFilingInput) {
-  if (input.month) {
-    const start = new Date(input.year, input.month - 1, 1);
-    const end = new Date(input.year, input.month, 1);
-
-    return {
-      periodStart: {
-        gte: start,
-        lt: end,
-      },
-    };
-  }
-
-  const start = new Date(input.year, 0, 1);
-  const end = new Date(input.year + 1, 0, 1);
-
-  return {
-    periodStart: {
-      gte: start,
-      lt: end,
-    },
-  };
-}
-
 export class StatutoryFilingService {
   async generateSummary(input: StatutoryFilingInput) {
-    const payrollRecord = delegate(prisma, 'payrollRecord');
+    const payslip = delegate(prisma, 'payslip');
 
-    const records = await payrollRecord.findMany({
+    const records = await payslip.findMany({
       where: {
         tenantId: input.tenantId,
-        status: {
-          in: ['APPROVED', 'POSTED', 'PAID'],
+        ...(input.payrollBatchId ? { batchId: input.payrollBatchId } : {}),
+        batch: {
+          year: input.year,
+          ...(input.month ? { month: input.month } : {}),
+          status: {
+            in: ['APPROVED', 'POSTED', 'PAID'],
+          },
         },
-        ...(input.payrollBatchId ? { payrollBatchId: input.payrollBatchId } : {}),
-        ...makePeriodWhere(input),
       },
       include: {
-        employee: true,
+        user: true,
+        employeeProfile: true,
       },
       orderBy: {
-        employeeId: 'asc',
+        userId: 'asc',
       },
     });
 
@@ -117,12 +97,12 @@ export class StatutoryFilingService {
         grossPay: acc.grossPay.plus(money(record.grossPay)),
         taxablePay: acc.taxablePay.plus(money(record.taxablePay)),
         paye: acc.paye.plus(money(record.paye)),
-        nssfEmployee: acc.nssfEmployee.plus(money(record.nssfEmployee)),
-        nssfEmployer: acc.nssfEmployer.plus(money(record.nssfEmployer)),
-        sha: acc.sha.plus(money(record.sha)),
-        housingLevyEmployee: acc.housingLevyEmployee.plus(money(record.housingLevyEmployee)),
-        housingLevyEmployer: acc.housingLevyEmployer.plus(money(record.housingLevyEmployer)),
-        nitaEmployer: acc.nitaEmployer.plus(money(record.nitaEmployer)),
+        nssfEmployee: acc.nssfEmployee.plus(money(record.nssf)),
+        nssfEmployer: acc.nssfEmployer,
+        sha: acc.sha.plus(money(record.shif)),
+        housingLevyEmployee: acc.housingLevyEmployee.plus(money(record.housingLevy)),
+        housingLevyEmployer: acc.housingLevyEmployer,
+        nitaEmployer: acc.nitaEmployer,
         netPay: acc.netPay.plus(money(record.netPay)),
       }),
       {
@@ -148,26 +128,21 @@ export class StatutoryFilingService {
       kind: input.kind ?? 'PAYE',
       totals,
       employeeLines: (records as StatutoryFilingRecord[]).map((record: StatutoryFilingRecord) => ({
-        employeeId: record.employeeId,
-        staffNumber: record.employee?.staffNumber ?? null,
-        employeeName:
-          record.employee?.displayName ??
-          record.employee?.fullName ??
-          record.employee?.name ??
-          record.employee?.email ??
-          null,
-        kraPin: record.employee?.kraPin ?? null,
-        nssfNumber: record.employee?.nssfNumber ?? null,
-        shaNumber: record.employee?.shaNumber ?? null,
+        employeeId: record.employeeProfileId ?? record.userId,
+        staffNumber: record.employeeProfile?.employeeNumber ?? null,
+        employeeName: record.user?.name ?? record.user?.email ?? null,
+        kraPin: record.user?.kraPin ?? null,
+        nssfNumber: record.user?.nssfNumber ?? null,
+        shaNumber: record.user?.shifNumber ?? null,
         grossPay: money(record.grossPay),
         taxablePay: money(record.taxablePay),
         paye: money(record.paye),
-        nssfEmployee: money(record.nssfEmployee),
-        nssfEmployer: money(record.nssfEmployer),
-        sha: money(record.sha),
-        housingLevyEmployee: money(record.housingLevyEmployee),
-        housingLevyEmployer: money(record.housingLevyEmployer),
-        nitaEmployer: money(record.nitaEmployer),
+        nssfEmployee: money(record.nssf),
+        nssfEmployer: ZERO,
+        sha: money(record.shif),
+        housingLevyEmployee: money(record.housingLevy),
+        housingLevyEmployer: ZERO,
+        nitaEmployer: ZERO,
         netPay: money(record.netPay),
       })),
       generatedAt: new Date(),
