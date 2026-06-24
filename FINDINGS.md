@@ -2521,3 +2521,19 @@ Audit summary: 12 closed findings reviewed → 4 VISIBLE, 5 PARTIAL, 2 MISSING, 
 (integrity). 7 FINDING-FRONT entries logged (FRONT-001…007). No frontend code
 changed.
 Logged: 2026-06-23.
+
+---
+
+## FINDING-INFRA-002 — OPEN — LOW
+packages/database/tsconfig.json:8 has invalid
+ignoreDeprecations:"6.0" for tsc 5.9.3 (TS5103).
+Seed files in that package cannot use it as a typecheck
+gate until fixed. Pre-existing. Fix separately.
+Logged: 2026-06-23
+
+## FINDING-INFRA-003 — OPEN — LOW
+Root npx tsc --noEmit is not a valid monorepo typecheck
+gate (~9,793 pre-existing errors from missing DOM/JSX
+libs + broken test files). Valid gates are per-package
+only. CLAUDE.md memory updated to reflect this.
+Logged: 2026-06-23
