@@ -4,6 +4,9 @@ import { PrismaClient } from '@prisma/client';
 
 import { seedBootstrap } from './00_bootstrap';
 import { seedPlatform } from './00_platform.seed';
+import { seedTenants } from './01_tenants.seed';
+import { seedUsers } from './02_users.seed';
+import { seedClients } from './03_clients.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -54,6 +57,51 @@ function getNodeEnvironment(): string {
   return process.env.NODE_ENV?.trim() || 'development';
 }
 
+/*
+ * Demo / fixture data policy (best practice — production-safe by default).
+ *
+ * Foundational seed (bootstrap + control plane) ALWAYS runs; the app needs it
+ * in every environment. Demo/fixture layers (secondary tenants, role-spread
+ * login-able test users sharing the seed password, and future sample
+ * clients/matters/finance data) must NEVER touch real production data by
+ * default.
+ *
+ * Rule:
+ * - development / test: on by default.
+ * - production: hard-blocked, even with SEED_DEMO_DATA=true, unless the
+ *   deliberate override SEED_ALLOW_DEMO_IN_PRODUCTION=true is also set.
+ * - any other environment (e.g. staging): explicit opt-in via SEED_DEMO_DATA=true.
+ */
+function resolveDemoDataPolicy(): { enabled: boolean; reason: string } {
+  const nodeEnv = getNodeEnvironment().toLowerCase();
+  const optIn = process.env.SEED_DEMO_DATA?.trim().toLowerCase() === 'true';
+  const prodOverride =
+    process.env.SEED_ALLOW_DEMO_IN_PRODUCTION?.trim().toLowerCase() === 'true';
+
+  if (nodeEnv === 'production') {
+    if (optIn && prodOverride) {
+      return {
+        enabled: true,
+        reason: 'production with explicit SEED_ALLOW_DEMO_IN_PRODUCTION override',
+      };
+    }
+
+    return {
+      enabled: false,
+      reason:
+        'production: demo data blocked (set SEED_DEMO_DATA=true AND SEED_ALLOW_DEMO_IN_PRODUCTION=true to override)',
+    };
+  }
+
+  if (nodeEnv === 'development' || nodeEnv === 'test') {
+    return { enabled: true, reason: `${nodeEnv}: on by default` };
+  }
+
+  return optIn
+    ? { enabled: true, reason: `${nodeEnv}: enabled via SEED_DEMO_DATA=true` }
+    : { enabled: false, reason: `${nodeEnv}: off (set SEED_DEMO_DATA=true to enable)` };
+}
+
 function buildPrismaClient() {
   const connectionString = requireEnv('DATABASE_URL');
 
@@ -87,10 +135,37 @@ async function main() {
 
     const tenantId = bootstrap.tenant.id;
 
-    // 2. Control-plane layer for the bootstrapped tenant.
+    // 2. Control-plane layer for the bootstrapped (primary) tenant.
     layers.platform = await seedPlatform(prisma, tenantId);
 
-    // ... subsequent numbered layers wired here as they land ...
+    // 3+. Demo / fixture layers — production-safe gate (see resolveDemoDataPolicy).
+    const demoPolicy = resolveDemoDataPolicy();
+    layers.demoData = { status: 'demo_data_policy', ...demoPolicy };
+
+    if (demoPolicy.enabled) {
+      // 3. Additional tenants (multi-tenant isolation / breach testing) + RBAC.
+      const tenants = await seedTenants(prisma, tenantId);
+      layers.tenants = tenants;
+
+      // 4. Control-plane layer for each additional tenant.
+      for (const additional of tenants.additionalTenants) {
+        await seedPlatform(prisma, additional.id);
+      }
+
+      // 5. Role-spread users for primary + each additional tenant.
+      layers.users = await seedUsers(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedUsers(prisma, additional.id);
+      }
+
+      // 6. Clients for primary + each additional tenant.
+      layers.clients = await seedClients(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedClients(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (04_contacts …) wired here as they land ...
+    }
 
     const finishedAtDate = new Date();
 

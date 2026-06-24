@@ -180,6 +180,19 @@ const ROLE_DEFINITIONS: RoleSeedDefinition[] = [
     ]),
   },
   {
+    name: 'CFO',
+    description:
+      'Chief Financial Officer — full finance, trust, procurement, payroll, and integrations authority with audit oversight. Role name MUST stay "CFO" to match the finance/payment authorization gates (FinancePermissionMap.ts).',
+    selector: (permission) =>
+      hasResource([
+        'finance',
+        'trust',
+        'procurement',
+        'payroll',
+        'integrations',
+      ])(permission) || hasAny(['admin.view_audit'])(permission),
+  },
+  {
     name: 'advocate',
     description:
       'Advocate with client, matter, document, and calendar permissions.',
@@ -471,6 +484,18 @@ async function seedRoles(
   }
 
   return roles;
+}
+
+export async function provisionTenantRbac(
+  prisma: PrismaClient,
+  tenantId: string,
+): Promise<{
+  permissions: PermissionRecord[];
+  roles: Array<{ id: string; name: string }>;
+}> {
+  const permissions = await seedPermissions(prisma, tenantId);
+  const roles = await seedRoles(prisma, tenantId, permissions);
+  return { permissions, roles };
 }
 
 async function seedPlatformAdmin(
