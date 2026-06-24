@@ -7,6 +7,7 @@ import { seedPlatform } from './00_platform.seed';
 import { seedTenants } from './01_tenants.seed';
 import { seedUsers } from './02_users.seed';
 import { seedClients } from './03_clients.seed';
+import { seedContacts } from './04_contacts.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -164,7 +165,13 @@ async function main() {
         await seedClients(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (04_contacts …) wired here as they land ...
+      // 7. Client contacts for primary + each additional tenant.
+      layers.contacts = await seedContacts(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedContacts(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (05_matters …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();
