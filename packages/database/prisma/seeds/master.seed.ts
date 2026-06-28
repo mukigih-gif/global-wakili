@@ -16,6 +16,7 @@ import { seedWorkflows } from './09_workflows.seed';
 import { seedFinance } from './10_finance.seed';
 import { seedTrust } from './11_trust.seed';
 import { seedPayroll } from './12_payroll.seed';
+import { seedHr } from './13_hr.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -227,7 +228,13 @@ async function main() {
         await seedPayroll(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (13_hr …) wired here as they land ...
+      // 16. HR — departments, employees/profiles, leave, disciplinary, performance, etc.
+      layers.hr = await seedHr(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedHr(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (14_notifications …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();
