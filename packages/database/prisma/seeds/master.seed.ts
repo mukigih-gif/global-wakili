@@ -12,6 +12,7 @@ import { seedBranches } from './05_branches.seed';
 import { seedMatters } from './06_matters.seed';
 import { seedCalendar } from './07_calendar.seed';
 import { seedTasks } from './08_tasks.seed';
+import { seedWorkflows } from './09_workflows.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -199,7 +200,13 @@ async function main() {
         await seedTasks(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (09_workflows …) wired here as they land ...
+      // 12. Workflow definitions + history + approvals per tenant.
+      layers.workflows = await seedWorkflows(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedWorkflows(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (10_finance …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();
