@@ -2559,3 +2559,61 @@ and backfill existing metadata.estimatedValue into the
 column. Migration must go through migrate dev → review →
 migrate deploy (db push prohibited).
 Logged: 2026-06-28
+
+## FINDING-FIN-COA-001 — OPEN — MEDIUM
+Chart-of-accounts code drift + an unordered subtype resolver
+in the posting layer. Surfaced (not introduced) while writing
+10_finance.seed.ts.
+
+Two issues:
+1. Dual AR code families. The provisioning seed
+   (apps/api/src/modules/finance/coa.seed.ts /
+   CoaService.seedDefaults) issues Accounts Receivable at code
+   1100, but the posting engines (BillingPostingService /
+   PaymentPostingService / FinancePostingService) get-or-create
+   AR at code 1200 via ensureSystemAccount. WHT Receivable is
+   also created at 1205 under the SAME subtype ACCOUNTS_RECEIVABLE.
+   A fully-exercised tenant therefore has ≥2 (often 3) accounts
+   carrying subtype ACCOUNTS_RECEIVABLE.
+2. Unordered subtype resolution. TrustTransactionService.
+   resolveAccountId (TrustTransactionService.ts:671-693) resolves
+   accounts by `findFirst({ tenantId, subtype, isActive })` with
+   NO ordering. With multiple ACCOUNTS_RECEIVABLE accounts, the
+   trust office-settlement path (line 626) picks one
+   non-deterministically — a latent correctness risk.
+
+Related code-vs-code drift also observed: VAT input is at 2110
+(provisioning) vs 1300 (FinancePostingService lookup); WHT is at
+1205 (BillingPostingService) vs 1350 (FinancePostingService
+fallback). These are pre-existing and out of scope for the seed.
+
+Seed decision (2026-06-28): 10_finance.seed.ts follows the
+posting-engine codes (1200 AR, 1205 WHT, 4000 income, 2100 VAT
+output, 1500 trust bank, 2010 trust liability, 2300 client
+deposits) — the paths actually exercised at runtime — so seeded
+firms are posting-ready with no auto-create drift. The seed does
+NOT seed provisioning's 1100 AR, so it introduces only the
+engine-mandated 1200/1205 ACCOUNTS_RECEIVABLE pair (the dup that
+already exists in production after any invoice + WHT cert).
+
+ADR-004 guard applied: Client Trust Liability was deliberately
+NOT seeded at 2300 (the spec's original code). PaymentPostingService
+hard-owns 2300 = Client Deposits (CLIENT_DEPOSITS) and overwrites
+the subtype of any isSystem row at that code on first post
+(payment-posting.service.ts:384; billing-posting.service.ts:288).
+Seeding trust liability at 2300 would have flipped its subtype to
+CLIENT_DEPOSITS on the first receipt, leaving no TRUST_LIABILITY
+account → trust posting 500 (TRUST_LIABILITY_ACCOUNT_NOT_CONFIGURED)
+and client deposits mislabelled as trust funds. Trust liability is
+seeded at 2010 (canonical TRUST_LIABILITY); trust resolves by
+subtype so the code is transparent.
+
+Follow-up (separate, scoped finance session — NOT a seed task):
+(a) converge the two AR code families onto a single AR account, or
+formalise 1200 as canonical and retire 1100; (b) make the trust
+subtype resolver deterministic (order by code, or resolve system
+accounts by an explicit code map rather than subtype findFirst);
+(c) reconcile the 2110/1300 and 1205/1350 code drift. Any schema/
+data change goes through migrate dev → review → migrate deploy
+(db push prohibited).
+Logged: 2026-06-28

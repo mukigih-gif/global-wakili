@@ -13,6 +13,7 @@ import { seedMatters } from './06_matters.seed';
 import { seedCalendar } from './07_calendar.seed';
 import { seedTasks } from './08_tasks.seed';
 import { seedWorkflows } from './09_workflows.seed';
+import { seedFinance } from './10_finance.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -206,7 +207,13 @@ async function main() {
         await seedWorkflows(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (10_finance …) wired here as they land ...
+      // 13. Finance foundation — COA + OPEN period + opening balances per tenant.
+      layers.finance = await seedFinance(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedFinance(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (11_trust …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();
