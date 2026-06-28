@@ -754,8 +754,14 @@ Refinements agreed (2026-06-19):
 - 22_billing.seed.ts: formalizes Group 6 Billing test data
   (invoices, proformas, credit notes, retainers, payment reminders).
 
-- 23_tax_compliance.seed.ts: VAT records, WHT certificates, eTIMS
-  submissions, tax periods -- supports v3.1 Groups E/F.
+- 23_tax_compliance.seed.ts: VatAdjustment records, WHT
+  certificates, eTIMS submission records (simulation mode), VAT
+  return periods. Supports v3.1 Groups E/F.
+  Depends on: 10_finance, 22_billing.
+  Slot: after billing (22), before reporting (16 in numbering, but
+  sequenced after 22 per the agreed build order) -- i.e. tax
+  compliance is seeded once billing data exists to derive VAT/WHT
+  from.
 
 - 24/25/26/27 (procurement, tenders, court filing, approvals):
   PLACEHOLDERS ONLY -- these domains are unbuilt (procurement has no
