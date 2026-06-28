@@ -312,4 +312,11 @@ Gate 16 will be authorised when:
 
 ---
 
+## Seed Architecture — Layers 01-12 COMPLETE (2026-06-28)
+Layers 01 (platform) through 12 (payroll) built, validated
+on Neon branch, exit 0, idempotent. Committed locally,
+push pending Render build minute reset (July 1 2026).
+
+---
+
 End of File

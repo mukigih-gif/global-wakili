@@ -2617,3 +2617,22 @@ accounts by an explicit code map rather than subtype findFirst);
 data change goes through migrate dev → review → migrate deploy
 (db push prohibited).
 Logged: 2026-06-28
+
+---
+
+## SEED-PROGRESS-NOTE — Seed layers 01-12 complete (2026-06-28)
+
+Seed architecture (CLAUDE.md §12) layers 01 (tenants) through 12
+(payroll) are built and validated against Neon branch
+ep-withered-haze (master.seed.ts, exit 0, idempotent, demo-gated).
+Committed locally on `main`, 2 commits ahead of origin (push held —
+see COMPLETED_GATES.md). Layer 13 (HR) is in review at time of writing.
+
+Findings surfaced during the seed build are already logged above and
+confirmed present:
+- FINDING-MATTER-001 (OPEN, LOW) — logged.
+- FINDING-FIN-COA-001 (OPEN, MEDIUM) — logged.
+No new findings introduced by layers 11 (trust) or 12 (payroll); both
+verified balanced live (trust three-way balanced; payroll GL
+DR 270,000.00 = CR 270,000.00).
+Logged: 2026-06-28
