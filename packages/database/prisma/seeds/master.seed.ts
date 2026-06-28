@@ -14,6 +14,7 @@ import { seedCalendar } from './07_calendar.seed';
 import { seedTasks } from './08_tasks.seed';
 import { seedWorkflows } from './09_workflows.seed';
 import { seedFinance } from './10_finance.seed';
+import { seedTrust } from './11_trust.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -213,7 +214,13 @@ async function main() {
         await seedFinance(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (11_trust …) wired here as they land ...
+      // 14. Trust accounting — accounts, movements, GL, three-way reconciliation per tenant.
+      layers.trust = await seedTrust(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedTrust(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (12_payroll …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();
