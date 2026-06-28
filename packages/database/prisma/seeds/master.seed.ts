@@ -15,6 +15,7 @@ import { seedTasks } from './08_tasks.seed';
 import { seedWorkflows } from './09_workflows.seed';
 import { seedFinance } from './10_finance.seed';
 import { seedTrust } from './11_trust.seed';
+import { seedPayroll } from './12_payroll.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -220,7 +221,13 @@ async function main() {
         await seedTrust(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (12_payroll …) wired here as they land ...
+      // 15. Payroll — monthly batch, payslips, statutory deductions, GL per tenant.
+      layers.payroll = await seedPayroll(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedPayroll(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (13_hr …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();
