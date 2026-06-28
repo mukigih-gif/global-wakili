@@ -10,6 +10,8 @@ import { seedClients } from './03_clients.seed';
 import { seedContacts } from './04_contacts.seed';
 import { seedBranches } from './05_branches.seed';
 import { seedMatters } from './06_matters.seed';
+import { seedCalendar } from './07_calendar.seed';
+import { seedTasks } from './08_tasks.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -185,7 +187,19 @@ async function main() {
         await seedMatters(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (07_calendar …) wired here as they land ...
+      // 10. Calendar events + court hearings per tenant.
+      layers.calendar = await seedCalendar(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedCalendar(prisma, additional.id);
+      }
+
+      // 11. Matter tasks per tenant.
+      layers.tasks = await seedTasks(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedTasks(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (09_workflows …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();
