@@ -8,6 +8,8 @@ import { seedTenants } from './01_tenants.seed';
 import { seedUsers } from './02_users.seed';
 import { seedClients } from './03_clients.seed';
 import { seedContacts } from './04_contacts.seed';
+import { seedBranches } from './05_branches.seed';
+import { seedMatters } from './06_matters.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -171,7 +173,19 @@ async function main() {
         await seedContacts(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (05_matters …) wired here as they land ...
+      // 8. HQ branch per tenant (prerequisite for matters / finance / HR).
+      layers.branches = await seedBranches(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedBranches(prisma, additional.id);
+      }
+
+      // 9. Matters per tenant (linked to seeded clients + HQ branch + advocate).
+      layers.matters = await seedMatters(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedMatters(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (07_calendar …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();

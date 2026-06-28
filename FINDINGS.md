@@ -2537,3 +2537,25 @@ gate (~9,793 pre-existing errors from missing DOM/JSX
 libs + broken test files). Valid gates are per-package
 only. CLAUDE.md memory updated to reflect this.
 Logged: 2026-06-23
+
+## FINDING-MATTER-001 — OPEN — LOW
+Matter.estimatedValue is not a physical column. By design,
+MatterService.buildMatterMetadataForCreate preserves it in
+metadata.estimatedValue (string) + metadata.currency (see
+MatterService.ts:170-204). 06_matters.seed.ts follows the
+same shape so the value round-trips in the UI.
+Limitation: storing it in JSON makes it non-queryable /
+non-indexable / non-aggregatable (e.g. "total pipeline
+value" reporting) and untyped (string, not Decimal).
+Decision (2026-06-28): KEPT in metadata for the seed —
+adding a column now would be a dead column unless the whole
+MatterService read/write path is refactored (the dead-field
+trap), and is out of scope for a seed task.
+Follow-up (separate, scoped session if reporting needs it):
+add Matter.estimatedValue Decimal(18,2)? column + currency,
+refactor MatterService create/update/read off metadata,
+update validators/serializers + frontend (Principle 5),
+and backfill existing metadata.estimatedValue into the
+column. Migration must go through migrate dev → review →
+migrate deploy (db push prohibited).
+Logged: 2026-06-28
