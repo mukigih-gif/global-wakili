@@ -17,6 +17,7 @@ import { seedFinance } from './10_finance.seed';
 import { seedTrust } from './11_trust.seed';
 import { seedPayroll } from './12_payroll.seed';
 import { seedHr } from './13_hr.seed';
+import { seedNotifications } from './14_notifications.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -234,7 +235,13 @@ async function main() {
         await seedHr(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (14_notifications …) wired here as they land ...
+      // 17. Notifications — providers, templates, preferences, notifications, delivery, webhooks.
+      layers.notifications = await seedNotifications(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedNotifications(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (15_ai …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();
