@@ -21,6 +21,7 @@ import { seedNotifications } from './14_notifications.seed';
 import { seedAi } from './15_ai.seed';
 import { seedReporting } from './16_reporting.seed';
 import { seedDashboard } from './17_dashboard.seed';
+import { seedIntegrations } from './18_integrations.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -262,7 +263,13 @@ async function main() {
         await seedDashboard(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (18_integrations …) wired here as they land ...
+      // 21. Integrations — external job activity, webhook config + deliveries, MS365/Google accounts.
+      layers.integrations = await seedIntegrations(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedIntegrations(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (19_security …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();

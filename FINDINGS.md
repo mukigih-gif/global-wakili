@@ -2657,3 +2657,23 @@ need a schema migration (new models/columns) + frontend wiring — out of
 seed scope. Layer 17 seeds only the real models (3 role
 DashboardDefinitions + widgets) and updates User display prefs.
 Logged: 2026-06-29
+
+---
+
+## FINDING-INTEG-001 — OPEN — LOW (2026-06-29)
+
+Seed layer 18 (integrations) requested IntegrationConfig, IntegrationLog,
+WebhookConfig, WebhookDelivery — NONE exist as named. There is no unified
+integration-config model and no eTIMS / M-PESA config table. Real models
+used: ExternalJobQueue (activity log; provider enum has ETIMS/BANKING/
+NOTIFICATIONS but NO MPESA/SMS value → M-PESA mapped to BANKING, SMS to
+NOTIFICATIONS), Webhook (config), PlatformWebhookLog (delivery; platform-
+scoped), ExternalCalendarAccount (MS365/Google OAuth; calendar-scoped, no
+CONFIGURED status → DISCONNECTED + metadata). Africa's Talking SMS config
+already exists as a NotificationProviderConfig (layer 14).
+
+Impact: LOW (seed-only). A first-class integrations module (provider
+config + credentials vault + per-integration status + unified activity/
+delivery log for M-PESA/eTIMS) is a schema+feature build (WIP-006,
+TODO-008), out of seed scope. Layer 18 seeds the real models only.
+Logged: 2026-06-29
