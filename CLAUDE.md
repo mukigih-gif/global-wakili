@@ -767,9 +767,10 @@ Refinements agreed (2026-06-19):
   Models exist in schema -- seedable. Controllers/routes may be
   partial. Seed what exists, log gaps per comprehensive-seeding
   directive. (Updated 2026-06-29: superseded the prior "PLACEHOLDERS
-  ONLY -- domains unbuilt" note. 24_procurement built 2026-06-29.
-  Run a final "all placeholders removed" verification of this §12
-  once 24-27 are all seeded.)
+  ONLY -- domains unbuilt" note. ALL of 24-27 seeded 2026-06-29:
+  24_procurement, 25_tenders, 26_court_filing, 27_approvals.
+  "All placeholders removed" verification PASSED 2026-06-29 -- no
+  active placeholder/unbuilt language remains for 24-27.)
 
 - 28_accounting_periods.seed.ts: seeds a valid OPEN AccountingPeriod
   per tenant -- directly relevant to FINDING-007-005, ensures every
