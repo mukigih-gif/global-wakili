@@ -27,6 +27,7 @@ import { seedTaxCompliance } from './23_tax_compliance.seed';
 import { seedProcurement } from './24_procurement.seed';
 import { seedTenders } from './25_tenders.seed';
 import { seedCourtFiling } from './26_court_filing.seed';
+import { seedApprovals } from './27_approvals.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -304,7 +305,13 @@ async function main() {
         await seedCourtFiling(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (27_approvals / 19_security / 21_validation …) wired here as they land ...
+      // 27. Approvals — cross-domain approvals (billing/finance/trust/payroll/HR/procurement) + delegation/escalation.
+      layers.approvals = await seedApprovals(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedApprovals(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (19_security / 21_validation …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();

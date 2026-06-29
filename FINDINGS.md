@@ -2739,3 +2739,21 @@ metadata.invoiceId), and WithholdingTaxCertificate is invoice-linked
 Impact: LOW (seed-only). First-class eTIMS-submission and VAT-return
 persistence models would be a schema+feature build, out of seed scope.
 Logged: 2026-06-29
+
+---
+
+## FINDING-APPR-001 — OPEN — LOW (2026-06-29)
+
+Seed layer 27 (approvals) requested ApprovalHistory, ApprovalDelegation
+and ApprovalStep models — NONE exist. The only approval model is
+Approval; delegation, escalation and the per-approval audit trail are
+FIELDS on it (delegatedFrom/delegatedTo, escalatedTo/escalationReason/
+escalatedAt, beforeSnapshot/afterSnapshot, comment/decisionReason). The
+seed represents delegated/escalated approvals and the audit trail via
+those fields. Layer 09 already seeds MATTER-module approvals; layer 27
+extends into BILLING/FINANCE/TRUST/PAYROLL/HR/PROCUREMENT.
+
+Impact: LOW (seed-only). A dedicated immutable ApprovalHistory/step-chain
+(separate from the snapshot fields) would be a schema+feature build, out
+of seed scope.
+Logged: 2026-06-29
