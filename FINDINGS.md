@@ -2677,3 +2677,36 @@ config + credentials vault + per-integration status + unified activity/
 delivery log for M-PESA/eTIMS) is a schema+feature build (WIP-006,
 TODO-008), out of seed scope. Layer 18 seeds the real models only.
 Logged: 2026-06-29
+
+---
+
+## FINDING-PLAY-001 — OPEN — MEDIUM (Playwright phase) (2026-06-29)
+
+The seed target (Neon branch ep-withered-haze, .env default) is NOT a
+pristine DB — it carries pre-existing legacy data from earlier app/test
+activity under a THIRD tenant `cmpy9pg9u00002gom327d94va` (e.g. 23
+invoices in legacy numbering INV-00001 / INV-2026-000002, ~5 trust
+accounts, etc.). This tenant is NOT created or touched by the master
+seed (it has no my-seed artifacts: no role-firm-admin dashboard, no
+INV-<tenant-suffix>-NNN invoices).
+
+Impact on seeding: NONE — verified. The master seeds only the two
+tenants it creates (primary cmoikcsq400001oxi059kabl3 + additional
+cmqy7p8980084acxiqg8ti5md); all writes are tenant-scoped, and the seed
+numbering namespace (INV-<tag>-NNN, RCT-/PRO-/RET-/CRN-/REM-<tag>-NNN) is
+disjoint from the legacy format, so there are no global-@unique
+collisions (seed runs exit 0).
+
+Impact on Phase 2 Playwright: MEDIUM — E2E must target the two SEEDED
+tenants by their known login credentials, NOT the legacy tenant, and any
+global/cross-tenant assertions must filter by the seeded tenant IDs (a
+loose `startsWith` count will be polluted by legacy rows, as observed
+during layer-22 verification).
+
+Remediation options for a pristine E2E run (pick before Phase 2):
+  (a) point seeding at a FRESH Neon branch (cleanest), or
+  (b) purge the legacy tenant cmpy9pg9u — DESTRUCTIVE, requires explicit
+      approval; never via `prisma db push` (use a reviewed delete script
+      or Neon branch reset).
+Do NOT delete without sign-off (Principle 4).
+Logged: 2026-06-29
