@@ -62,6 +62,7 @@ const CLIENT_SEEDS: ClientSeed[] = [
     email: 'grace.wanjiru@example.co.ke',
     phoneNumber: '+254700000002',
     nationalId: '23456789',
+    kraPin: 'A004567890W',
     city: 'Nairobi',
   },
   {
@@ -70,6 +71,7 @@ const CLIENT_SEEDS: ClientSeed[] = [
     type: ClientType.STATE_AGENCY,
     email: 'legal@nairobi.go.ke',
     phoneNumber: '+254700000003',
+    kraPin: 'P051234567X',
     city: 'Nairobi',
   },
 ];
