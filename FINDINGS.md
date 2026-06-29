@@ -744,7 +744,7 @@ Logged: 2026-06-20
 
 ---
 
-## FINDING-FIN-D-002 — OPEN — MEDIUM (route shadowing / dead handler)
+## FINDING-FIN-D-002 — CLOSED (2026-06-29) — MEDIUM (route shadowing / dead handler)
 
 **Duplicate `GET /finance/statements` route — the P&L/balanceSheet handler is
 dead (shadowed); the reachable handler returns a journal-line ledger statement**
@@ -761,6 +761,20 @@ by account/client/matter — a ledger statement, NOT a P&L. Confirmed live
 P&L handler at a distinct path (e.g. `/statements/pnl` or `/reports/profit-loss`)
 or delete it.
 Logged: 2026-06-20
+
+**CLOSED (2026-06-29):** moved the ledger `getStatement` from `/statements` →
+`/statements/ledger` in `finance.routes.ts`, un-shadowing the inline
+P&L/Balance-Sheet handler at `/statements`. Parity check: the web Finance →
+Statements tab (`finance/page.tsx`, `GET /finance/statements?year=`) already
+expects `{pnl, balanceSheet}` — that tab rendered empty because the ledger
+handler shadowed the P&L one; it now resolves to the P&L handler. The ledger
+statement (`{lines, totals}`, account/client/matter-filtered) is preserved at
+`/statements/ledger` (no web/api/test consumer of the old path). Verified:
+apps/api `tsc --noEmit` exit 0; Express router introspection confirms exactly
+one `GET /statements` registration (the P&L handler) + `GET /statements/ledger`.
+Scope note: closes the route-shadow defect only; FINDING-FIN-D-001 (structured/
+period/comparative P&L + `/reports/profit-loss`) remains DEFERRED.
+Logged: 2026-06-29
 
 ---
 
@@ -1691,7 +1705,9 @@ Logged: 2026-06-21.
 
 ---
 
-## FINDING-FIN-E-001 — OPEN — (Phase 3 Group E — VAT-return endpoints dead, phantom-field 500)
+## FINDING-FIN-E-001 — CLOSED (2026-06-21) — (Phase 3 Group E — VAT-return endpoints dead, phantom-field 500)
+<!-- header status corrected 2026-06-29: was stale-OPEN; closure documented in the blockquote below since 2026-06-21 -->
+
 
 **The two primary VAT-return endpoints 500 on a Prisma phantom-field error.**
 

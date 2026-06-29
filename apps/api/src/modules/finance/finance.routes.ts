@@ -367,8 +367,11 @@ router.get(
   getCashflowStatement,
 );
 
+// Account/client/matter-filtered general-ledger statement ({lines, totals}).
+// Distinct path from the P&L/Balance-Sheet handler below; previously both were
+// registered on '/statements', shadowing the P&L handler (FINDING-FIN-D-002).
 router.get(
-  '/statements',
+  '/statements/ledger',
   requireFinancePermission(FINANCE_PERMISSIONS.viewStatement),
   validate({ query: statementQuerySchema }),
   getStatement,
