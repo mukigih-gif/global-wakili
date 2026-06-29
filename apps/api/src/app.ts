@@ -134,13 +134,30 @@ app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
       ? (err as { message: string }).message
       : 'Internal Server Error';
 
+  // Preserve a coded error's own `code`/`details` on <500 (client) responses so
+  // callers learn WHY a request failed (e.g. POSTING_POLICY_VIOLATION + the
+  // PostingPolicyService issues, PERIOD_CLOSED) instead of an opaque
+  // REQUEST_FAILED — FINDING-FIN-C-002. 5xx still hide all internals.
+  const errCode =
+    typeof err === 'object' &&
+    err !== null &&
+    'code' in err &&
+    typeof (err as { code?: unknown }).code === 'string'
+      ? (err as { code: string }).code
+      : undefined;
+  const errDetails =
+    typeof err === 'object' && err !== null && 'details' in err
+      ? (err as { details?: unknown }).details
+      : undefined;
+
   if (statusCode >= 500) {
     console.error('UNHANDLED_ERROR', { requestId: req.id, path: req.originalUrl, method: req.method, err });
   }
 
   res.status(statusCode).json({
     error: statusCode >= 500 ? 'Internal Server Error' : message,
-    code: statusCode >= 500 ? 'INTERNAL_SERVER_ERROR' : 'REQUEST_FAILED',
+    code: statusCode >= 500 ? 'INTERNAL_SERVER_ERROR' : (errCode ?? 'REQUEST_FAILED'),
+    ...(statusCode < 500 && errDetails !== undefined ? { details: errDetails } : {}),
     requestId: req.id,
   });
 });

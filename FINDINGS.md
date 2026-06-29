@@ -806,7 +806,7 @@ Logged: 2026-06-20
 
 ---
 
-## FINDING-FIN-C-002 — OPEN — LOW
+## FINDING-FIN-C-002 — CLOSED (2026-06-29) — LOW
 
 **Posting-policy / closed-period rejections are masked as opaque "Posting policy
 validation failed" (REQUEST_FAILED) — the PERIOD_LOCKED / issue detail is not
@@ -822,6 +822,20 @@ multi-currency). The control works; this is an observability/UX gap in the error
 envelope. Suggest surfacing the policy issue code(s) (or mapping PERIOD_LOCKED to
 a specific 409).
 Logged: 2026-06-20
+
+**CLOSED (2026-06-29):** root cause was the GLOBAL error handler (`app.ts`), not
+finance-specific — it hardcoded `code: 'REQUEST_FAILED'` for all <500 responses
+and dropped `details` entirely, even though the thrown errors already carried
+`code` + `details` (`PostingPolicyService`/`transaction-engine` →
+`POSTING_POLICY_VIOLATION` + issues; `PeriodClosedError` → 403 `PERIOD_CLOSED`).
+Fix: the handler now preserves a coded error's own `code` and includes `details`
+on <500 responses (5xx still hide all internals — no leakage). Kept the existing
+403 `PERIOD_CLOSED` (did not introduce a new 409 — out of scope for an
+observability fix). App-wide improvement (all modules). Verified end-to-end:
+apps/api `tsc --noEmit` exit 0; in-process POST `/api/v1/auth/login` with a bad
+body now returns `422 {code:'VALIDATION_ERROR', details:[…zod issues]}` (was
+`REQUEST_FAILED`, no details) through the real global handler.
+Logged: 2026-06-29
 
 ---
 
