@@ -19,6 +19,7 @@ import { seedPayroll } from './12_payroll.seed';
 import { seedHr } from './13_hr.seed';
 import { seedNotifications } from './14_notifications.seed';
 import { seedAi } from './15_ai.seed';
+import { seedReporting } from './16_reporting.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -248,7 +249,13 @@ async function main() {
         await seedAi(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (16_reporting …) wired here as they land ...
+      // 19. Reporting/audit/compliance — reports, dashboards, hash-chained audit log, AML, BI.
+      layers.reporting = await seedReporting(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedReporting(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (17_dashboard …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();
