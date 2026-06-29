@@ -28,6 +28,7 @@ import { seedProcurement } from './24_procurement.seed';
 import { seedTenders } from './25_tenders.seed';
 import { seedCourtFiling } from './26_court_filing.seed';
 import { seedApprovals } from './27_approvals.seed';
+import { seedValidation } from './21_validation.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -311,8 +312,14 @@ async function main() {
         await seedApprovals(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (19_security / 21_validation …) wired here as they land ...
+      // ... subsequent demo/fixture layers (19_security …) wired here as they land ...
     }
+
+    // 21. Validation — runs LAST (read-only): schema-drift sweep across every
+    //     seeded model + the 14 cross-model integrity checks (FK/soft refs,
+    //     GL DR=CR, ADR-004 trust three-way). Reports findings; never throws
+    //     on data mismatches (so it cannot abort an otherwise-good seed).
+    layers.validation = await seedValidation(prisma);
 
     const finishedAtDate = new Date();
 

@@ -233,6 +233,11 @@ export class TrustInterestService {
         const ledger = await tx.clientTrustLedger.create({
           data: {
             tenantId: input.tenantId,
+            // Link the interest allocation row to its trust account so it is
+            // captured by the per-account three-way reconciliation (ADR-004).
+            // Mirrors ClientTrustLedgerService.applyDelta; absence here orphaned
+            // interest rows (trustAccountId=NULL) — FINDING-XREL-001.
+            trustAccountId: input.trustAccountId,
             clientId: allocation.clientId,
             matterId: allocation.matterId,
             debit: ZERO,

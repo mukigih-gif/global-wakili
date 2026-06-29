@@ -2757,3 +2757,103 @@ Impact: LOW (seed-only). A dedicated immutable ApprovalHistory/step-chain
 (separate from the snapshot fields) would be a schema+feature build, out
 of seed scope.
 Logged: 2026-06-29
+
+---
+
+## FINDING-XREL-001 — CODE GAP CLOSED / DATA RESIDUE OPEN — HIGH (2026-06-29)
+
+Cross-model verification (read-only, 14 checks against the shared Neon DB)
+found a THREE-WAY RECONCILIATION BREAK (ADR-004): on 3 trust accounts the
+ClientTrustLedger sub-ledger net does NOT equal the TrustAccount control
+balance. The control balance itself is sound — check 12 (TrustAccount
+.currentBalance == Σ TrustTransaction credit−debit) PASSED on all 11
+accounts; the GL trust-bank == trust-liability check (10) also PASSED. The
+break is specifically control-account vs client sub-ledger.
+
+Offending accounts (all on tenant Demo Law Firm cmpy9pg9u):
+- Client Trust Account — Main (cmpynp1p1...): ledgerNet 29,000.00 vs
+  acct 4,129,000.00 — GAP 4,100,000.00.
+- Cert Trust 1781809191488 (cmqjv6wd3...): ledgerNet 2,000.00 vs
+  acct 2,050.00 — GAP 50.00.
+- Cert Trust 1781947742713 (cmqm5ofju...): ledgerNet 2,000.00 vs
+  acct 2,050.00 — GAP 50.00.
+
+Root cause (two facets, same mechanism — TrustAccount/GL updated without a
+ClientTrustLedger mirror):
+1. CODE GAP (reproducible): INTEREST postings update currentBalance + GL
+   but create NO ClientTrustLedger row. The Cert Trust gaps equal exactly
+   the 50.00 interest credit. The structured seed (11_trust.seed.ts) and
+   the deposit/withdrawal/transfer API paths DO mirror to ClientTrustLedger
+   (proven: 8 other accounts reconcile to the cent), so the omission is
+   isolated to the interest path.
+2. DATA RESIDUE: the Main account's 4.1M gap is historical Phase-1 Group-7
+   trust-write CERT-TEST transactions (refs SETUP-ACCT/CLEAN-DEP/RW1-5/
+   PVW1-5/IA/IM) and large deposits for clients cmpyluee9 (Jane Test) &
+   cmpynhmpb that were written before the ClientTrustLedger side-effect was
+   in place — those clients have ZERO ledger rows.
+
+Impact: HIGH — violates ADR-004 (three-way reconciliation must hold).
+Confined to the Demo Law Firm fixture tenant; the two production-shaped
+tenants (Global Wakili, Mwangi) reconcile cleanly.
+
+Logged: 2026-06-29
+
+UPDATE 2026-06-29 — root cause CORRECTED + CODE GAP CLOSED.
+The initial description ("INTEREST creates NO ledger row") was wrong on
+inspection. TrustInterestService.postInterest DOES create a
+ClientTrustLedger row — but it OMITTED trustAccountId, so the row was
+written with trustAccountId=NULL and fell outside the per-account
+three-way aggregate. The deposit/withdrawal/transfer path
+(ClientTrustLedgerService.applyDelta) sets trustAccountId; postInterest
+did not. Confirmed in data: exactly 2 ledger rows had trustAccountId=NULL,
+both "cert interest posting" cr=50 — the entire Cert Trust gap.
+
+- CODE GAP — CLOSED: added `trustAccountId: input.trustAccountId` to the
+  postInterest ClientTrustLedger.create (apps/api/src/modules/trust/
+  TrustInterestService.ts ~line 233), matching applyDelta. New interest
+  allocations now link to the account.
+- BACKFILL — DONE (approved): set trustAccountId on the 2 existing NULL
+  rows (cmqjv79w6→cmqjv6wd3, cmqm5osok→cmqm5ofju; paired by identical
+  transactionDate + same-$transaction createdAt, same client+matter;
+  guarded updateMany by id+tenantId+trustAccountId:null). Both Cert Trust
+  accounts now RECONCILE (2050.00 == 2050.00); 0 NULL-account rows remain.
+  Re-verified via 21_validation check 13.
+
+- DATA RESIDUE — STILL OPEN (untouched, non-blocking): the Main account
+  (cmpynp1p1...) 4.1M gap is historical cert-test deposits for clients with
+  ZERO ledger rows — NOT a trustAccountId-NULL issue (only the 2 interest
+  rows were NULL). Pre-existing Demo Law Firm test residue; requires a
+  separate reviewed backfill or trust re-seed of that tenant. Not in scope
+  of this fix per decision.
+
+---
+
+## FINDING-XREL-002 — OPEN (accepted residue) — LOW (2026-06-29)
+
+Same verification, check 11: the finance-active tenant Demo Law Firm
+(cmpy9pg9u — journals=45, invoices=24, trustTxns=55, CoA=20) has NO
+opening-balance journal entry (sourceEntityType 'OpeningBalance'). The two
+structured-seed tenants (Global Wakili, Mwangi) each have exactly one; the
+empty Default Tenant (CoA=0) correctly has none and is excluded.
+
+Root cause: Demo Law Firm's finance/trust data accreted from historical
+live API cert-test runs that bypass seedFinance (which is what creates the
+OPENING-BALANCE-2026 entry). Not a seed-layer defect — seedFinance works
+where it ran.
+
+Impact: LOW — trial-balance opening position absent for one fixture
+tenant; no integrity violation (its journals still balance, check 9 PASS).
+Logged: 2026-06-29
+
+UPDATE 2026-06-29 — investigated; deliberately NOT auto-fixed; stays OPEN.
+The proposed "run seedFinance against Demo Law Firm" remediation was
+checked and REJECTED: seedFinance assumes its own Chart of Accounts (trust
+bank = code 1500, 3000 = Partners Capital), but Demo Law Firm's CoA came
+from a different provisioning path — trust bank is code 1010 (no 1500) and
+3000 is a Suspense Account. Running seedFinance would create a DUPLICATE
+trust bank (1500 alongside 1010) and post 500,000 "partners capital" into
+a Suspense account — corrupting a currently-clean tenant to fix a LOW
+finding. Decision: treat Demo Law Firm as test residue with a divergent
+CoA; leave XREL-002 OPEN. A clean fix would require posting a minimal
+opening entry against Demo's real codes (needs an equity account it lacks)
+— deferred.
