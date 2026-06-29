@@ -21,9 +21,9 @@ export class EventVisibilityService {
 
       const matter = event.matter ?? null;
       const isRestrictedMatter = matter?.metadata?.isRestricted === true;
-      const isMatterPartner = matter?.partnerId === userId;
-      const isMatterAssigned = matter?.assignedLawyerId === userId;
-      const isMatterTeam = isMatterPartner || isMatterAssigned;
+      // Matter has only leadAdvocateId (no partnerId/assignedLawyerId on the
+      // deployed schema — FINDING-008-006 / CAL-001 1c). Matter-team = lead advocate.
+      const isMatterTeam = matter?.leadAdvocateId === userId;
 
       if (isRestrictedMatter) {
         if (isCreator || isAttendee || isMatterTeam) {

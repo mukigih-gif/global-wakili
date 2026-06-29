@@ -53,11 +53,14 @@ function NewEventForm() {
     setError('');
     setLoading(true);
     try {
-      const eventRes = await api.post<any>('/calendar/events', {
+      const eventRes = await api.post<any>('/calendar', {
         title:           form.title,
         type:            form.type,
         startTime:       form.isAllDay ? `${form.startTime.slice(0,10)}T00:00:00.000Z` : new Date(form.startTime).toISOString(),
-        endTime:         form.isAllDay ? null : (form.endTime ? new Date(form.endTime).toISOString() : null),
+        // Backend requires a non-null endTime; all-day events end at end-of-day.
+        endTime:         form.isAllDay
+          ? `${form.startTime.slice(0,10)}T23:59:59.999Z`
+          : (form.endTime ? new Date(form.endTime).toISOString() : new Date(form.startTime).toISOString()),
         location:        form.location || null,
         description:     form.description || null,
         matterId:        form.matterId || null,
@@ -68,7 +71,7 @@ function NewEventForm() {
 
       // Send internal notifications to attendees
       if (notifyInternal && selectedAttendees.length > 0) {
-        await api.post('/calendar/events/' + (event as any).id + '/notify', {
+        await api.post('/calendar/' + (event as any).id + '/notify', {
           type: 'INTERNAL',
           attendeeIds: selectedAttendees,
         }).catch(() => {}); // non-fatal
@@ -76,7 +79,7 @@ function NewEventForm() {
 
       // Send client invite/notification
       if (notifyClient && inviteClientId) {
-        await api.post('/calendar/events/' + (event as any).id + '/notify', {
+        await api.post('/calendar/' + (event as any).id + '/notify', {
           type: 'CLIENT',
           clientId: inviteClientId,
         }).catch(() => {}); // non-fatal

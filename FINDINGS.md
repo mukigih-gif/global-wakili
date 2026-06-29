@@ -2044,6 +2044,46 @@ Remediation (deferred, own session): fix FE endpoint+params (Low), persist
 `CalendarReminder` on create, and add a calendar leg to the reminder worker
 (Medium). Logged 2026-06-23.
 
+AMENDED 2026-06-29 (recon before Stage-1 fix — two omissions corrected):
+1. The `/calendar/events*` path mismatch is TOTAL, not just the list. The FE
+   calendar module targets `/calendar/events*` for EVERY call — list
+   (`page.tsx:67,71`), PATCH (`431`), DELETE (`453`), CREATE
+   (`new/page.tsx:56`) and NOTIFY (`71,79`) — but the backend mounts the
+   router at `/calendar` (`routes/index.ts:69`) with `POST /`, `PATCH/DELETE
+   /:eventId`, `POST /:eventId/notify`. So create/edit/delete/notify all 404
+   too — the whole calendar UI is non-functional, not only display.
+2. NEW root cause (1c) — phantom-field 500. `CalendarService` selects phantom
+   `Matter.partnerId`/`assignedLawyerId` (FINDING-008-006 class — Matter has
+   only `leadAdvocateId`) at SIX sites: `getFirmCalendar` (list, ~400),
+   `createEvent` (~53,165), `updateEvent` (~340), `getEventById` (~464).
+   `EventVisibilityService.filterVisibleEvents` (lines 24-26) consumes them for
+   `isMatterTeam`. Any of these queries → `PrismaClientValidationError` → 500,
+   so even with the FE path/params corrected the list still 500s. Fix mirrors
+   008-006: remap both fields onto `leadAdvocateId` (6 selects + 2 visibility
+   checks). No schema change.
+   Staging: Stage 1 = display + CRUD (1a FE paths, 1b FE params, 1c BE phantom
+   remap). Stage 2 (own pass) = reminders (persist CalendarReminder on create/
+   update + `remindCalendarEvents` worker leg + FE `reminders[]` payload).
+
+STAGE 1 DONE 2026-06-29 (display + CRUD) — finding stays OPEN for Stage 2:
+- 1a FE paths: all `/calendar/events*` → `/calendar*` — list (`calendar/page.tsx`),
+  PATCH/DELETE (`/calendar/:id`), create (`new/page.tsx` → `POST /calendar`),
+  notify (`/calendar/:id/notify`), and the matter-detail calendar tab
+  (`MatterDetailClient.tsx:842`). Web-wide `/calendar/events` sweep now clean.
+- 1b FE params: list `from/to`→`startDate/endDate`, `limit=500`→`100`, removed
+  the broken no-date fallback. Also: all-day create sent `endTime:null` but the
+  backend requires a non-null datetime → now sends end-of-day (was a latent 422
+  the path fix would have exposed).
+- 1c BE phantom remap: `partnerId`/`assignedLawyerId` → `leadAdvocateId` at the
+  6 `CalendarService` selects + the 2 `EventVisibilityService` checks
+  (`isMatterTeam`). No schema change.
+- Verified: apps/api + apps/web `tsc --noEmit` exit 0; real `getFirmCalendar`
+  invoked against the production DB (tenant cmqy7p89) → 200, 8 events, matter
+  object now carries `leadAdvocateId` (was PrismaClientValidationError 500).
+- Known limitation (logged, not a regression): month view caps at the backend
+  max `limit=100`; >100 events/month would need pagination (enhancement).
+- STILL OPEN: Stage 2 (reminders) — unchanged scope above.
+
 ---
 
 ## FINDING-HR-ONB-001 — CLOSED (2026-06-23, d961779) — (HR/Identity — OnboardingService writes phantom `Department.isActive` → tsc break)

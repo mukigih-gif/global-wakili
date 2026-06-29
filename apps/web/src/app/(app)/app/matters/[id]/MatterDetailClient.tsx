@@ -839,7 +839,7 @@ function MatterCalendarTab({ matterId, matterTitle }: { matterId: string; matter
   useEffect(() => {
     const from = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
     const to   = new Date(Date.now() + 730 * 24 * 60 * 60 * 1000).toISOString();
-    api.get<{ data: any[] }>(`/calendar/events?matterId=${matterId}&startDate=${from}&endDate=${to}&limit=100`)
+    api.get<{ data: any[] }>(`/calendar?matterId=${matterId}&startDate=${from}&endDate=${to}&limit=100`)
       .then((r) => setEvents(r.data ?? []))
       .catch(() => setEvents([]))
       .finally(() => setLoading(false));

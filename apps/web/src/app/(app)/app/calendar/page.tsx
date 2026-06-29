@@ -61,17 +61,12 @@ export default function CalendarPage() {
 
   const loadEvents = useCallback(() => {
     setLoading(true);
-    const from = new Date(year, month, 1).toISOString();
-    const to   = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
-    // Try both with and without date filter in case API doesn't support it
-    api.get<{ data: CalendarEvent[] }>(`/calendar/events?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&limit=500`)
+    // Backend: GET /calendar?startDate&endDate (datetime, required), limit<=100.
+    const startDate = new Date(year, month, 1).toISOString();
+    const endDate   = new Date(year, month + 1, 0, 23, 59, 59).toISOString();
+    api.get<{ data: CalendarEvent[] }>(`/calendar?startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&limit=100`)
       .then((r) => setEvents(r.data ?? []))
-      .catch(() =>
-        // Fallback: fetch all events without date filter
-        api.get<{ data: CalendarEvent[] }>('/calendar/events?limit=500')
-          .then((r) => setEvents(r.data ?? []))
-          .catch(() => setEvents([]))
-      )
+      .catch(() => setEvents([]))
       .finally(() => setLoading(false));
   }, [year, month, refreshKey]); // refreshKey forces reload
 
@@ -428,7 +423,7 @@ export default function CalendarPage() {
                     <Button size="sm" loading={editSaving} onClick={async () => {
                       setEditSaving(true);
                       try {
-                        await api.patch(`/calendar/events/${selected.id}`, {
+                        await api.patch(`/calendar/${selected.id}`, {
                           title:       editForm.title || undefined,
                           type:        editForm.type  || undefined,
                           startTime:   editForm.startTime ? new Date(editForm.startTime).toISOString() : undefined,
@@ -450,7 +445,7 @@ export default function CalendarPage() {
                   <>
                     <Button size="sm" variant="danger" onClick={async () => {
                       try {
-                        await api.delete(`/calendar/events/${selected.id}`);
+                        await api.delete(`/calendar/${selected.id}`);
                         setSelected(null); setDeleting(false);
                         setRefreshKey((k) => k + 1);
                       } catch { /* ignore */ }
