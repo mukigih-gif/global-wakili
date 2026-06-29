@@ -20,6 +20,7 @@ import { seedHr } from './13_hr.seed';
 import { seedNotifications } from './14_notifications.seed';
 import { seedAi } from './15_ai.seed';
 import { seedReporting } from './16_reporting.seed';
+import { seedDashboard } from './17_dashboard.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -255,7 +256,13 @@ async function main() {
         await seedReporting(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (17_dashboard …) wired here as they land ...
+      // 20. Dashboard — per-role dashboard definitions + widgets, user display prefs.
+      layers.dashboard = await seedDashboard(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedDashboard(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (18_integrations …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();

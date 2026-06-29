@@ -2636,3 +2636,24 @@ No new findings introduced by layers 11 (trust) or 12 (payroll); both
 verified balanced live (trust three-way balanced; payroll GL
 DR 270,000.00 = CR 270,000.00).
 Logged: 2026-06-28
+
+---
+
+## FINDING-DASH-001 — OPEN — LOW (2026-06-29)
+
+Seed layer 17 (dashboard) requested DashboardConfig, DashboardPin,
+RecentActivity and UserPreference models — NONE exist in the schema.
+Only DashboardDefinition + DashboardWidget do. Additionally the landing
+dashboard (apps/web/.../app/dashboard/page.tsx) is fully live/computed
+(reads /matters/dashboard/summary + /matters/dashboard/activity) and
+gates widgets by hardcoded frontend role arrays — it does NOT consume
+the DashboardDefinition/Widget tables. Recent-activity is served from
+AuditLog (seeded layer 16). User display prefs persist only theme /
+language / smsNotifications on User (no timezone/currency/dateFormat).
+
+Impact: LOW (seed-only). If pinned items, a persisted recent-activity
+feed, or full per-user preferences are required as real features, they
+need a schema migration (new models/columns) + frontend wiring — out of
+seed scope. Layer 17 seeds only the real models (3 role
+DashboardDefinitions + widgets) and updates User display prefs.
+Logged: 2026-06-29
