@@ -26,6 +26,7 @@ import { seedBilling } from './22_billing.seed';
 import { seedTaxCompliance } from './23_tax_compliance.seed';
 import { seedProcurement } from './24_procurement.seed';
 import { seedTenders } from './25_tenders.seed';
+import { seedCourtFiling } from './26_court_filing.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -297,7 +298,13 @@ async function main() {
         await seedTenders(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (26_court_filing / 27_approvals / 19_security / 21_validation …) wired here as they land ...
+      // 26. Court filings — filing registry across litigation matters.
+      layers.courtFiling = await seedCourtFiling(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedCourtFiling(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (27_approvals / 19_security / 21_validation …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();
