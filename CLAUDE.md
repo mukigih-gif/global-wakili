@@ -764,12 +764,12 @@ Refinements agreed (2026-06-19):
   from.
 
 - 24/25/26/27 (procurement, tenders, court filing, approvals):
-  PLACEHOLDERS ONLY -- these domains are unbuilt (procurement has no
-  tracked TODO; tenders TODO-004, court filing TODO-003, approvals
-  TODO-002 -- all OPEN). Seed files reserve the numbering/structure
-  but CANNOT be meaningfully written until each feature is built
-  and scoped. Seed-writing follows feature-building, not the
-  reverse -- do not attempt to write these files prematurely.
+  Models exist in schema -- seedable. Controllers/routes may be
+  partial. Seed what exists, log gaps per comprehensive-seeding
+  directive. (Updated 2026-06-29: superseded the prior "PLACEHOLDERS
+  ONLY -- domains unbuilt" note. 24_procurement built 2026-06-29.
+  Run a final "all placeholders removed" verification of this §12
+  once 24-27 are all seeded.)
 
 - 28_accounting_periods.seed.ts: seeds a valid OPEN AccountingPeriod
   per tenant -- directly relevant to FINDING-007-005, ensures every
