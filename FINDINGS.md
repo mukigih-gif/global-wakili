@@ -2710,3 +2710,32 @@ Remediation options for a pristine E2E run (pick before Phase 2):
       or Neon branch reset).
 Do NOT delete without sign-off (Principle 4).
 Logged: 2026-06-29
+
+---
+
+## FINDING-BILL-001 — OPEN — LOW
+
+Invoice.clientTaxPin column referenced in billing service but not present
+in deployed schema. Same phantom-field class as FIN-F-001/FIN-G-001. Fix:
+add column via migrate dev → review → deploy, or remove the reference.
+(Seed workaround in layer 22: client KRA PIN snapshotted in
+Invoice.metadata.clientKraPin.)
+Logged: 2026-06-29
+
+---
+
+## FINDING-TAX-001 — OPEN — LOW (2026-06-29)
+
+Seed layer 23 (tax compliance) requested ETIMSSubmission and VATReturn
+models — NEITHER exists. eTIMS state lives on Invoice.etims* fields (+ the
+layer-18 ExternalJobQueue ETIMS entry); the seed stamps the issued
+invoice (SIMULATED, FIN-E-003 external). VAT returns are endpoint-computed
+(FIN-E-001) with no persistence table; the seed computes output/input/net
+(reconciled against layer-22 invoice VAT) but persists nothing. Also:
+VatAdjustment has no invoiceId column (real invoice linked via
+metadata.invoiceId), and WithholdingTaxCertificate is invoice-linked
+(WHT withheld by clients on firm invoices, not vendor payments).
+
+Impact: LOW (seed-only). First-class eTIMS-submission and VAT-return
+persistence models would be a schema+feature build, out of seed scope.
+Logged: 2026-06-29

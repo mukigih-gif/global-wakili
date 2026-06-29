@@ -23,6 +23,7 @@ import { seedReporting } from './16_reporting.seed';
 import { seedDashboard } from './17_dashboard.seed';
 import { seedIntegrations } from './18_integrations.seed';
 import { seedBilling } from './22_billing.seed';
+import { seedTaxCompliance } from './23_tax_compliance.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -276,7 +277,13 @@ async function main() {
         await seedBilling(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (19_security / 23_tax_compliance …) wired here as they land ...
+      // 23. Tax compliance — VAT adjustments, WHT certificates, eTIMS stamp (VAT return computed).
+      layers.taxCompliance = await seedTaxCompliance(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedTaxCompliance(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (24_procurement / 25_tenders / 26_court_filing / 27_approvals / 19_security / 21_validation …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();
