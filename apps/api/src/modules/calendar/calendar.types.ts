@@ -80,4 +80,7 @@ export type TenantCalendarDbClient = {
     findFirst: Function;
     findMany: Function;
   };
+  calendarReminder: {
+    createMany: Function;
+  };
 };

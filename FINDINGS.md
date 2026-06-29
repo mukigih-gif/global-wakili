@@ -2015,7 +2015,7 @@ OUT OF SCOPE for FIN-E-002 (owner decision 2026-06-23: model only). Logged 2026-
 
 ---
 
-## FINDING-CAL-001 — OPEN — (Calendar/Notifications — events don't display + reminders never fire)
+## FINDING-CAL-001 — CLOSED (2026-06-30) — (Calendar/Notifications — events don't display + reminders never fire)
 
 **Calendar entries never render in the UI, and calendar reminders/notifications are never created or dispatched.**
 
@@ -2082,7 +2082,31 @@ STAGE 1 DONE 2026-06-29 (display + CRUD) — finding stays OPEN for Stage 2:
   object now carries `leadAdvocateId` (was PrismaClientValidationError 500).
 - Known limitation (logged, not a regression): month view caps at the backend
   max `limit=100`; >100 events/month would need pagination (enhancement).
-- STILL OPEN: Stage 2 (reminders) — unchanged scope above.
+STAGE 2 DONE 2026-06-30 (reminders) — FINDING CLOSED. Schema-intended
+persist-then-poll via the CalendarReminder table (model + enums already existed):
+- 2a persist: `CalendarService.createEvent` now writes one SCHEDULED
+  CalendarReminder per enabled reminder × recipient (creator+attendees) at
+  remindAt = startTime − minutesBefore (reuses `ReminderService
+  .getReminderTriggerTimes`); channel map portal→IN_APP/email→EMAIL/sms→SMS;
+  past-due skipped; `createMany({skipDuplicates})` over the @@unique. Extended
+  the narrowed `TenantCalendarDbClient` with `calendarReminder`.
+- 2b worker leg: `NotificationReminderService.remindCalendarEvents` polls
+  status=SCHEDULED && remindAt due (24h lookback), enqueues via
+  `NotificationQueueService`, transitions SENT/FAILED/SKIPPED; wired into
+  `runAll` (worker runs hourly, deployed render.yaml:149).
+- 2c FE: `new/page.tsx` sends `reminders:[{portal},{email}]` at the chosen lead
+  time (matches UI copy) instead of the ignored `reminderMinutes`.
+- Verified: apps/api + apps/web tsc exit 0; rolled-back $transaction against the
+  production DB — createEvent persisted 2 rows (IN_APP+EMAIL, disabled sms
+  skipped, remindAt −30min, SCHEDULED); a due reminder polled → sent=1,
+  status→SENT/sentAt set. Nothing persisted.
+- Granularity: worker polls hourly, so a reminder can fire up to ~60min late
+  (same as the existing day-granular hearing/invoice legs).
+- DEFERRED follow-up (logged, minor): `updateEvent` does not re-sync reminders
+  — if an event's startTime changes after creation, its existing CalendarReminder
+  rows keep their original remindAt. The edit UI does not expose reminder editing,
+  so this is latent; re-sync (cancel+recreate on startTime/reminders change)
+  is a small future enhancement, not a blocker.
 
 ---
 

@@ -65,7 +65,15 @@ function NewEventForm() {
         description:     form.description || null,
         matterId:        form.matterId || null,
         attendeeIds:     selectedAttendees,
-        reminderMinutes: form.reminderMinutes || 0,
+        // Schedule reminders (CAL-001 Stage 2): in-app + email at the chosen
+        // lead time. Persisted as CalendarReminder rows and dispatched by the
+        // notification worker. 0 = no reminder.
+        reminders:       Number(form.reminderMinutes) > 0
+          ? [
+              { channel: 'portal', minutesBefore: Number(form.reminderMinutes), enabled: true },
+              { channel: 'email',  minutesBefore: Number(form.reminderMinutes), enabled: true },
+            ]
+          : [],
       });
       const event = (eventRes?.data ?? eventRes) as { id: string };
 

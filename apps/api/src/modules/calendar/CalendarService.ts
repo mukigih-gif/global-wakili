@@ -1,6 +1,15 @@
-﻿import { CalendarAvailabilityService } from './CalendarAvailabilityService';
+﻿import { CalendarReminderChannel } from '@global-wakili/database';
+
+import { CalendarAvailabilityService } from './CalendarAvailabilityService';
 import { EventVisibilityService } from './event-visibility.service';
+import { ReminderService } from './ReminderService';
 import { normalizePrivacy } from './calendar.validators';
+
+const REMINDER_CHANNEL_MAP: Record<string, CalendarReminderChannel> = {
+  portal: CalendarReminderChannel.IN_APP,
+  email: CalendarReminderChannel.EMAIL,
+  sms: CalendarReminderChannel.SMS,
+};
 import type {
   CalendarEventFilters,
   CreateCalendarEventPayload,
@@ -123,7 +132,7 @@ export class CalendarService {
       );
     }
 
-    return db.calendarEvent.create({
+    const event = await db.calendarEvent.create({
       data: {
         tenantId: payload.tenantId,
         creatorId: payload.creatorId,
@@ -167,6 +176,44 @@ export class CalendarService {
         },
       },
     });
+
+    // Persist scheduled reminders (CAL-001 Stage 2). Each enabled reminder ×
+    // each recipient (creator + attendees) → one SCHEDULED CalendarReminder at
+    // (startTime − minutesBefore). Polled hourly by
+    // NotificationReminderService.remindCalendarEvents. Idempotent via the
+    // @@unique(tenantId,eventId,recipientId,channel,remindAt). Past-due
+    // triggers are skipped (no retroactive reminders).
+    const enabledReminders = (payload.reminders ?? []).filter((r) => r.enabled);
+    if (enabledReminders.length > 0) {
+      const triggers = ReminderService.getReminderTriggerTimes({
+        eventStartTime: startTime,
+        schedules: enabledReminders,
+      });
+      const recipientIds = Array.from(
+        new Set([payload.creatorId, ...(payload.attendeeIds ?? [])]),
+      );
+      const now = Date.now();
+      const reminderRows = recipientIds.flatMap((recipientId) =>
+        triggers
+          .filter((t) => t.triggerAt.getTime() > now)
+          .map((t) => ({
+            tenantId: payload.tenantId,
+            eventId: (event as { id: string }).id,
+            recipientId,
+            createdById: payload.creatorId,
+            channel: REMINDER_CHANNEL_MAP[t.channel] ?? CalendarReminderChannel.IN_APP,
+            remindAt: t.triggerAt,
+            offsetMinutes: t.minutesBefore,
+            title: (event as { title: string }).title,
+            message: `Reminder: "${(event as { title: string }).title}"`,
+          })),
+      );
+      if (reminderRows.length > 0) {
+        await db.calendarReminder.createMany({ data: reminderRows, skipDuplicates: true });
+      }
+    }
+
+    return event;
   }
 
   static async updateEvent(

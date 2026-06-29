@@ -16,8 +16,18 @@
  * WIP-002 — Gap 006.
  */
 
-import type { NotificationDbClient } from './notification.types';
+import type { NotificationChannel, NotificationDbClient } from './notification.types';
 import { NotificationQueueService } from './NotificationQueueService';
+
+// CalendarReminderChannel (IN_APP/EMAIL/SMS/PUSH/WEBHOOK) → delivery channel.
+// Calendar reminders are only ever created as IN_APP/EMAIL/SMS (see
+// CalendarService.createEvent); others fall back to SYSTEM_ALERT.
+const CALENDAR_CHANNEL_MAP: Record<string, NotificationChannel> = {
+  IN_APP: 'SYSTEM_ALERT',
+  EMAIL: 'EMAIL',
+  SMS: 'SMS',
+  PUSH: 'PUSH',
+};
 
 const HEARING_ADVANCE_DAYS = [7, 3, 1];
 const INVOICE_ADVANCE_DAYS = [3, 1, 0];
@@ -51,6 +61,7 @@ export class NotificationReminderService {
       NotificationReminderService.remindHearings(db),
       NotificationReminderService.remindInvoiceDue(db),
       NotificationReminderService.remindTaskDeadlines(db),
+      NotificationReminderService.remindCalendarEvents(db),
     ]);
 
     for (const result of results) {
@@ -200,6 +211,87 @@ export class NotificationReminderService {
         } catch { skipped++; }
       }
     }
+    return { sent, skipped };
+  }
+
+  /**
+   * Calendar event reminders (CAL-001 Stage 2). Unlike the deadline-based
+   * methods above, this polls the persisted CalendarReminder table: rows are
+   * SCHEDULED at create time (CalendarService.createEvent) with a concrete
+   * remindAt = startTime − minutesBefore. Here we dispatch the ones now due,
+   * then move each through its SENT/FAILED lifecycle so it is not re-sent.
+   * A 24h lookback prevents firing reminders missed during long downtime.
+   */
+  static async remindCalendarEvents(db: NotificationDbClient): Promise<{ sent: number; skipped: number }> {
+    let sent = 0; let skipped = 0;
+
+    const now = new Date();
+    const lookbackStart = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const due = await (db as any).calendarReminder.findMany({
+      where: {
+        status: 'SCHEDULED',
+        remindAt: { lte: now, gte: lookbackStart },
+      },
+      include: {
+        event: { select: { id: true, title: true, startTime: true } },
+      },
+      orderBy: { remindAt: 'asc' },
+      take: 500,
+    }).catch(() => [] as any[]);
+
+    for (const reminder of due) {
+      if (!reminder.tenantId || !reminder.recipientId || !reminder.event) {
+        await (db as any).calendarReminder.update({
+          where: { id: reminder.id },
+          data: { status: 'SKIPPED', cancelledAt: now, failureReason: 'missing recipient or event' },
+        }).catch(() => {});
+        skipped++;
+        continue;
+      }
+
+      const start = reminder.event.startTime ? new Date(reminder.event.startTime) : null;
+      const whenStr = start
+        ? start.toLocaleString('en-KE', { dateStyle: 'full', timeStyle: 'short' })
+        : 'soon';
+      const channel = CALENDAR_CHANNEL_MAP[String(reminder.channel)] ?? 'SYSTEM_ALERT';
+
+      try {
+        await NotificationQueueService.enqueue({
+          tenantId: reminder.tenantId,
+          category: 'calendar',
+          priority: 'normal',
+          entityType: 'CALENDAR_EVENT',
+          entityId: reminder.eventId,
+          debounceKey: `calendar-reminder:${reminder.id}`,
+          recipients: [{ userId: reminder.recipientId }],
+          channels: [channel],
+          template: {
+            systemTitle: `Reminder: ${reminder.event.title}`,
+            systemMessage: `"${reminder.event.title}" is scheduled for ${whenStr}.`,
+            emailSubject: `[Global Wakili] Reminder: ${reminder.event.title}`,
+            emailBody: `Reminder: <strong>${reminder.event.title}</strong> is scheduled for ${whenStr}.`,
+            variables: { eventTitle: reminder.event.title },
+          },
+        });
+        await (db as any).calendarReminder.update({
+          where: { id: reminder.id },
+          data: { status: 'SENT', sentAt: now },
+        });
+        sent++;
+      } catch (err) {
+        await (db as any).calendarReminder.update({
+          where: { id: reminder.id },
+          data: {
+            status: 'FAILED',
+            failedAt: now,
+            failureReason: err instanceof Error ? err.message.slice(0, 480) : 'enqueue failed',
+          },
+        }).catch(() => {});
+        skipped++;
+      }
+    }
+
     return { sent, skipped };
   }
 }
