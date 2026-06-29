@@ -18,6 +18,7 @@ import { seedTrust } from './11_trust.seed';
 import { seedPayroll } from './12_payroll.seed';
 import { seedHr } from './13_hr.seed';
 import { seedNotifications } from './14_notifications.seed';
+import { seedAi } from './15_ai.seed';
 
 /*
  * master.seed.ts — Master Seed Orchestrator (CLAUDE.md §12).
@@ -241,7 +242,13 @@ async function main() {
         await seedNotifications(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (15_ai …) wired here as they land ...
+      // 18. AI — providers, prompt audits, usage logs, artifacts, review tasks, recommendations.
+      layers.ai = await seedAi(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedAi(prisma, additional.id);
+      }
+
+      // ... subsequent demo/fixture layers (16_reporting …) wired here as they land ...
     }
 
     const finishedAtDate = new Date();
