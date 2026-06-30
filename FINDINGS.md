@@ -3157,13 +3157,19 @@ existing AuditLog).
 Status: OPEN — needs investigation first
 Logged: 2026-07-01
 
-## FINDING-FRONT-009 — OPEN — LOW
+## FINDING-FRONT-009 — PARTIAL (2026-07-01) — LOW
 **No loading/busy-state animation on long-running actions**
 UX gap — actions like report generation, seed runs,
 large list loads may show no busy indicator.
 Action: audit key async actions in apps/web, add
 consistent loading states (spinner/skeleton).
-Status: OPEN — low priority, batch with frontend polish
+Status: PARTIAL (2026-07-01) — shared `Spinner` UI primitive added
+(`components/ui/Spinner.tsx`, replacing the `LandingSpinner` stub
+pattern) + wired into the calendar grid load (was fetching behind
+an empty grid). `Button` already has an inline loading spinner.
+REMAINING (own sweep): apply the primitive to the other list/report/
+form pages that still fetch without a busy indicator — tracked, not
+done tonight. Stays OPEN/PARTIAL.
 Logged: 2026-07-01
 
 ## TODO-013 — CLOSED — duplicate of FINDING-007-011
@@ -3186,15 +3192,18 @@ Readiness) or just before.
 Status: DEFERRED — scheduled near go-live
 Logged: 2026-07-01
 
-## FINDING-FRONT-010 — OPEN — LOW
+## FINDING-FRONT-010 — CLOSED (2026-07-01) — LOW
 **Sidebar/menu not collapsible or toggleable**
 Main navigation menu has no collapse/expand toggle.
 Action: add a collapsible sidebar pattern (standard
 hamburger/chevron toggle) to apps/web layout component.
-Status: OPEN — UX polish, batch with other FRONT items
+Status: CLOSED (2026-07-01) — `Sidebar.tsx` now has a
+PanelLeftClose/PanelLeft toggle in the logo header; collapses to
+w-16 (icons only, labels hidden, tooltips via title), expands to
+w-60. Choice persists in localStorage (`gw_sidebar_collapsed`).
 Logged: 2026-07-01
 
-## FINDING-FRONT-011 — OPEN — LOW
+## FINDING-FRONT-011 — CLOSED (2026-07-01, Option A) — LOW
 **Inconsistent submenu icon styling — colored vs uncolored,
 missing icons, inconsistent label sizing**
 Some submenu items have colored icons, others don't; some
@@ -3202,10 +3211,17 @@ items are missing icons entirely; label text sizing is
 inconsistent across menu items (some large, some small).
 Action: audit the full navigation component, apply one
 consistent icon style and one consistent label size.
-Status: OPEN — UX polish, batch with FRONT-010
+Status: CLOSED (2026-07-01) — Option A (keep the semantic per-domain
+palette, ensure EVERY icon is colored): the 5 gray `icon-neutral`
+tenant items (Dashboard/Messages/Notifications/Legal Resources/
+Settings) recolored to domain colors, and all 6 SUPER_ADMIN_NAV
+items (previously no color class) given `icon-*` classes. Labels were
+already uniform (every item renders via `sidebar-link` text-sm) — no
+label-size change needed; finding's "inconsistent label sizing" did
+not reproduce in the component.
 Logged: 2026-07-01
 
-## FINDING-FRONT-012 — OPEN — LOW
+## FINDING-FRONT-012 — CLOSED (2026-07-01) — LOW
 **Dropdown label text overflow/truncation — Calendar
 "All Event Types" filter**
 The event-type filter dropdown on the Calendar page
@@ -3216,7 +3232,12 @@ for the label, or missing text-overflow handling.
 Action: investigate the dropdown component in
 apps/web/.../calendar — fix width/padding or add proper
 truncation with ellipsis if narrower width is intentional.
-Status: OPEN — UX polish, batch with FRONT-010/011
+Status: CLOSED (2026-07-01) — root cause was VERTICAL clip, not
+horizontal: the filter `<select>` uniquely added `h-8` (32px) which
+is shorter than `form-select`'s own `py-2.5`, clipping the text (the
+page's other selects omit `h-8` and render fine). Fix: dropped `h-8`
+(padding governs height) and widened `w-44`→`w-48`
+(`calendar/page.tsx:207`).
 Logged: 2026-07-01
 
 ## TODO-015 — DEFERRED — Payroll dashboard statutory schema catch-up (Option B of FINDING-008-005)

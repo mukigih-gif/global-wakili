@@ -4,6 +4,7 @@ export const dynamic = 'force-dynamic';
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/Button';
+import { Spinner } from '@/components/ui/Spinner';
 import { Plus, ChevronLeft, ChevronRight, List, CalendarDays, ChevronDown, RefreshCw, Globe, Edit2, Trash2, X, MapPin, Save } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -204,7 +205,7 @@ export default function CalendarPage() {
 
         {/* Filter */}
         <div className="ml-auto flex items-center gap-2">
-          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="form-select h-8 text-xs w-44">
+          <select value={filterType} onChange={(e) => setFilterType(e.target.value)} className="form-select text-xs w-48">
             <option value="">All Event Types</option>
             <option value="COURT_HEARING">Court Hearings</option>
             <option value="CLIENT_MEETING">Client Meetings</option>
@@ -217,7 +218,9 @@ export default function CalendarPage() {
         </div>
       </div>
 
-      {view === 'month' ? (
+      {loading ? (
+        <div className="flex items-center justify-center py-24"><Spinner label="Loading calendar…" /></div>
+      ) : view === 'month' ? (
         <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
           {/* Day headers */}
           <div className="grid grid-cols-7 border-b border-gray-200">
