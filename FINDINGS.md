@@ -3157,3 +3157,36 @@ wastes effort. Revisit during Phase 5 (Production
 Readiness) or just before.
 Status: DEFERRED — scheduled near go-live
 Logged: 2026-07-01
+
+## FINDING-FRONT-010 — OPEN — LOW
+**Sidebar/menu not collapsible or toggleable**
+Main navigation menu has no collapse/expand toggle.
+Action: add a collapsible sidebar pattern (standard
+hamburger/chevron toggle) to apps/web layout component.
+Status: OPEN — UX polish, batch with other FRONT items
+Logged: 2026-07-01
+
+## FINDING-FRONT-011 — OPEN — LOW
+**Inconsistent submenu icon styling — colored vs uncolored,
+missing icons, inconsistent label sizing**
+Some submenu items have colored icons, others don't; some
+items are missing icons entirely; label text sizing is
+inconsistent across menu items (some large, some small).
+Action: audit the full navigation component, apply one
+consistent icon style and one consistent label size.
+Status: OPEN — UX polish, batch with FRONT-010
+Logged: 2026-07-01
+
+## FINDING-FRONT-012 — OPEN — LOW
+**Dropdown label text overflow/truncation — Calendar
+"All Event Types" filter**
+The event-type filter dropdown on the Calendar page
+("All Event Types") shows clipped/overflowing text —
+the label doesn't fit cleanly within the dropdown
+container. Likely a fixed-width container too narrow
+for the label, or missing text-overflow handling.
+Action: investigate the dropdown component in
+apps/web/.../calendar — fix width/padding or add proper
+truncation with ellipsis if narrower width is intentional.
+Status: OPEN — UX polish, batch with FRONT-010/011
+Logged: 2026-07-01
