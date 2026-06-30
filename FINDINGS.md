@@ -3034,3 +3034,35 @@ the client-portal self-scope + `view_portal` pattern). Defer to after
 Phase 2 Playwright.
 Status: OPEN — feature gap / deferred.
 Logged: 2026-07-01
+
+---
+
+## FINDING-TIME-001 — OPEN — MEDIUM (deploy gap + stale status)
+**Passive Time Capture worker not deployed — passive WIP is dark in prod**
+Surfaced during a quick time-capture/reception review (2026-07-01).
+
+State (corrects CLAUDE.md WIP-004 "Not Started" — actually Partial):
+- Manual time capture: FULLY wired — `GET/POST /:matterId/time-entries`,
+  `POST …/:id/void`, billable/WIP aggregation. Works.
+- Passive capture: services + models + worker all CODED —
+  PassiveActivityService, PassiveTimeCaptureQueueService, TimerService,
+  TimeApprovalService, TimeTrackingService, WipGenerationService;
+  TimerSession/PassiveCaptureEvent/UnbilledWip; `passive-capture.worker.ts`
+  + `npm run worker:passive-capture`.
+
+Gap: `render.yaml` deploys the notification worker but has NO
+passive-capture worker service — so the passive queue never runs in
+production; passive WIP is never generated despite the code existing.
+
+Impact: MEDIUM — a built feature is effectively dark in prod. Not a
+Playwright blocker (manual time entry works).
+Two-part remediation (its own scoped session, grouped with deploy/ops items):
+1. VERIFY the passive pipeline end-to-end first (same dead-field/runtime
+   risk found elsewhere this session) — do NOT deploy unverified.
+2. Then add the passive-capture worker to render.yaml (an ops/cost
+   decision — provisions another running process; owner call, like the
+   F-20 OAuth creds / AUTH-001 SMTP).
+Reception (checked same pass): BUILT & mounted (11 endpoints at /reception
++ /frontdesk + /front-desk + /express; ReceptionLog model) — no gap found.
+Status: OPEN — deferred (verify-then-deploy, own session).
+Logged: 2026-07-01

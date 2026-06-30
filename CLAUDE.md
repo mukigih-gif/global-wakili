@@ -317,7 +317,16 @@ Required:
 * Approval Workflows
 
 Status:
-Not Started
+Partial (corrected 2026-07-01 — was "Not Started", inaccurate).
+Built: manual time-entry HTTP routes (GET/POST/void
+/:matterId/time-entries) + billable/WIP aggregation; passive-side
+services (PassiveActivityService, PassiveTimeCaptureQueueService,
+TimerService, TimeApprovalService, TimeTrackingService,
+WipGenerationService) + models (TimerSession, PassiveCaptureEvent,
+UnbilledWip) + passive-capture.worker.ts.
+Gap: the passive-capture worker is NOT deployed in render.yaml, so the
+passive queue never runs in prod (passive WIP stays dark). Pipeline also
+not yet end-to-end verified. See FINDING-TIME-001.
 
 ---
 
