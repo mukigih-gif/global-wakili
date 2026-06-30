@@ -22,6 +22,12 @@ export type BillingReversalInput = BillingPostingInput & {
   reversalDate?: Date;
 };
 
+export type BillingCreditNoteInput = {
+  tenantId: string;
+  creditNoteId: string;
+  postedById?: string | null;
+};
+
 export class BillingPostingService {
   async postInvoiceIssued(tx: TransactionClient, input: BillingPostingInput): Promise<void> {
     const existing = await tx.journalEntry.findFirst({
@@ -254,6 +260,138 @@ export class BillingPostingService {
         credit: line.debit,
       })),
     });
+  }
+
+  async postCreditNoteIssued(tx: TransactionClient, input: BillingCreditNoteInput): Promise<void> {
+    // Idempotent: skip if a credit-note journal already exists for this source.
+    const existing = await tx.journalEntry.findFirst({
+      where: {
+        tenantId: input.tenantId,
+        sourceModule: 'BILLING',
+        sourceEntityType: 'CREDIT_NOTE',
+        sourceEntityId: input.creditNoteId,
+      },
+      select: { id: true },
+    });
+    if (existing) return;
+
+    const cn = await tx.creditNote.findFirst({
+      where: { id: input.creditNoteId, tenantId: input.tenantId },
+      select: {
+        id: true, creditNoteNumber: true, clientId: true, matterId: true,
+        subTotal: true, taxAmount: true, totalAmount: true,
+        creditDate: true, createdAt: true, currency: true,
+      },
+    });
+    if (!cn) {
+      throw new Error('Credit note not found for billing posting.');
+    }
+
+    const subTotal = new Prisma.Decimal(cn.subTotal);
+    const vatAmount = new Prisma.Decimal(cn.taxAmount);
+    const totalAmount = new Prisma.Decimal(cn.totalAmount);
+
+    const arAccount = await this.ensureSystemAccount(tx, {
+      tenantId: input.tenantId,
+      code: '1200',
+      name: 'Accounts Receivable - Clients',
+      type: AccountType.ASSET,
+      subtype: AccountSubtype.ACCOUNTS_RECEIVABLE,
+      normalBalance: BalanceSide.DEBIT,
+    });
+
+    const feeIncomeAccount = await this.ensureSystemAccount(tx, {
+      tenantId: input.tenantId,
+      code: '4000',
+      name: 'Legal Fees Income',
+      type: AccountType.REVENUE,
+      subtype: AccountSubtype.LEGAL_FEES_INCOME,
+      normalBalance: BalanceSide.CREDIT,
+    });
+
+    const vatOutputAccount = await this.ensureSystemAccount(tx, {
+      tenantId: input.tenantId,
+      code: '2100',
+      name: 'VAT Output',
+      type: AccountType.LIABILITY,
+      subtype: AccountSubtype.VAT_OUTPUT,
+      normalBalance: BalanceSide.CREDIT,
+    });
+
+    const reference = cn.creditNoteNumber ?? cn.id;
+    const date = cn.creditDate ?? cn.createdAt ?? new Date();
+
+    await assertPeriodOpen(tx, input.tenantId, date);
+
+    // Reversal of invoice issuance: DR income (contra-revenue) + DR VAT output, CR AR.
+    assertLinesBalanced([
+      { debit: subTotal, credit: new Prisma.Decimal(0) },
+      ...(vatAmount.gt(0)
+        ? [{ debit: vatAmount, credit: new Prisma.Decimal(0) }]
+        : []),
+      { debit: new Prisma.Decimal(0), credit: totalAmount },
+    ], `BILLING-CREDIT-NOTE-${cn.id}`);
+
+    const journal = await tx.journalEntry.create({
+      data: {
+        tenantId: input.tenantId,
+        reference: `BILLING-CREDIT-NOTE-${cn.id}`,
+        description: `Credit note issued: ${reference}`,
+        date,
+        amount: totalAmount,
+        postedById: input.postedById ?? null,
+        currency: cn.currency ?? 'KES',
+        sourceModule: 'BILLING',
+        sourceEntityType: 'CREDIT_NOTE',
+        sourceEntityId: cn.id,
+        matterId: cn.matterId,
+      },
+      select: { id: true },
+    });
+
+    const lines: Prisma.JournalLineCreateManyInput[] = [
+      {
+        tenantId: input.tenantId,
+        journalId: journal.id,
+        accountId: feeIncomeAccount.id,
+        clientId: cn.clientId,
+        matterId: cn.matterId,
+        reference,
+        description: `Revenue reversal for credit note ${reference}`,
+        debit: subTotal,
+        credit: new Prisma.Decimal(0),
+      },
+      {
+        tenantId: input.tenantId,
+        journalId: journal.id,
+        accountId: arAccount.id,
+        clientId: cn.clientId,
+        matterId: cn.matterId,
+        reference,
+        description: `Reduce receivable via credit note ${reference}`,
+        debit: new Prisma.Decimal(0),
+        credit: totalAmount,
+      },
+    ];
+
+    if (vatAmount.gt(0)) {
+      lines.push({
+        tenantId: input.tenantId,
+        journalId: journal.id,
+        accountId: vatOutputAccount.id,
+        clientId: cn.clientId,
+        matterId: cn.matterId,
+        reference,
+        description: `Output VAT reversal for credit note ${reference}`,
+        debit: vatAmount,
+        credit: new Prisma.Decimal(0),
+      });
+    }
+
+    await tx.journalLine.createMany({ data: lines });
+    // NOTE: idempotency is enforced by the journal-existence check above
+    // (sourceModule BILLING / sourceEntityType CREDIT_NOTE / sourceEntityId).
+    // The CreditNote model has no journalEntryId/postedAt columns to stamp.
   }
 
   private async ensureSystemAccount(

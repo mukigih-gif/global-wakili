@@ -3261,7 +3261,7 @@ statutory-breakdown dashboard granularity is actually required.
 Status: DEFERRED — own migration session.
 Logged: 2026-07-01
 
-## FINDING-BILL-002 — OPEN — MEDIUM/HIGH (Class IV — GL)
+## FINDING-BILL-002 — CLOSED (2026-07-01) — MEDIUM/HIGH (Class IV — GL)
 **Credit notes do not post to the GL — creating a credit note reduces the invoice on paper but never posts the reversing AR/income/VAT journal; the GL is overstated after every credit note.**
 
 - **Root cause:** `CreditNoteService.createCreditNote` (CreditNoteService.ts:140-251)
@@ -3289,8 +3289,51 @@ Logged: 2026-07-01
   ADR-012 boundary (which accepted billing posting as its OWN parallel path) and must
   not double-post (idempotency vs the existing `/post-source` route +
   `assertNotAlreadyPosted`).
-- **Status:** OPEN — Class IV; requires Mandatory Analysis before any code.
+- **Status:** CLOSED (2026-07-01) — see closure below.
 - **Logged:** 2026-07-01
+
+### CLOSURE (2026-07-01) — atomic create-path posting via new BillingPostingService.postCreditNoteIssued
+Followed the FINDING-007-010 / ADR-012 pattern rather than the literal "call
+`FinancePostingService.postCreditNote`" (which is `prisma`-based, can't run in the
+`createCreditNote` tx, and would 404 on the uncommitted record). Added
+`BillingPostingService.postCreditNoteIssued(tx, input)` (mirrors `postInvoiceIssued`/
+`reverseInvoiceIssued`): resolves AR 1200 / income 4000 / VAT-output 2100 via
+`ensureSystemAccount`, `assertPeriodOpen`, posts a balanced reversal **DR income
+(subTotal) + DR VAT output (taxAmount), CR AR (totalAmount)**, idempotent by
+journal-existence (sourceModule BILLING / sourceEntityType `CREDIT_NOTE` /
+sourceEntityId). Wired into `CreditNoteService.createCreditNote` **inside the existing
+`prisma.$transaction`** — so the credit-note record + invoice-balance update + GL
+reversal now commit (or roll back) atomically.
+
+**Schema correction discovered during implementation (verify-first win):** the
+analysis proposed stamping `creditNote.journalEntryId/postedAt` for cross-path mutual
+exclusion — but `CreditNote` has **no such columns** (schema 4660-4699). The typed
+Prisma client rejected it (3 tsc errors); switched to **journal-existence idempotency**
+(no stamp). Side effect surfaced: `FinancePostingService.postCreditNote` only writes
+those phantom fields because it's typed `any`, so the manual `/post-source` CREDIT_NOTE
+path was already non-functional at runtime (its `creditNote.update({journalEntryId…})`
+would 500) — logged as BILL-002c.
+
+**Verified (rolled-back tx, base prisma — same client createCreditNote uses; zero GL
+pollution):** balanced DR income 10,000 + DR VAT 1,600 + CR AR 11,600 (= 11,600/11,600,
+3 lines); idempotent (2 calls → exactly 1 journal, no double-post); 0 journals persisted
+after rollback. `tsc --noEmit` (apps/api) exit 0. Live HTTP/deploy verification deferred
+(push held), same as petty cash.
+
+Impacted files: `billing-posting.service.ts` (new method + `BillingCreditNoteInput`),
+`CreditNoteService.ts` (import + one in-tx call). BILL-003 (VAT-return netting) remains
+OPEN pending the product decision.
+
+### Sub-note BILL-002c — /post-source CREDIT_NOTE path is broken + now redundant — LOW
+`FinancePostingService.postCreditNote` reads/stamps `journalEntryId`/`postedAt`/
+`postedById` on `CreditNote` — fields that DO NOT EXIST on the model (it compiles only
+because `delegate()` returns `any`). At runtime its final `creditNote.update` would 500,
+and its `assertNotAlreadyPosted` guard (checking those phantom fields) never fires. With
+BILL-002 now posting atomically at creation, this manual path is also redundant. Follow-up
+(own change, not done here): retire the `'CREDIT_NOTE'` source from `/post-source`
+(finance.routes.ts:272) and/or fix `postCreditNote` to journal-existence idempotency.
+Until then it is the only residual double-post vector (manual-only, and it 500s mid-way).
+Logged: 2026-07-01.
 
 ### Sub-note BILL-002a — Credit-note create/void not audit-logged — LOW
 Neither `CreditNoteService.createCreditNote`/`voidCreditNote` nor their controller

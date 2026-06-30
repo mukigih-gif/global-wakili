@@ -1,6 +1,7 @@
 // apps/api/src/modules/billing/CreditNoteService.ts
 
 import { Prisma, prisma } from '@global-wakili/database';
+import { billingPostingService } from './billing-posting.service';
 
 type DbClient = typeof prisma | Prisma.TransactionClient | any;
 
@@ -244,6 +245,16 @@ export class CreditNoteService {
             lastCreditNoteAt: new Date().toISOString(),
           },
         },
+      });
+
+      // BILL-002: post the balanced reversing GL journal in the SAME transaction
+      // (DR income + DR VAT output, CR AR). Atomic with the credit-note record +
+      // invoice-balance update; stamps creditNote.journalEntryId so the manual
+      // /post-source path is mutually excluded.
+      await billingPostingService.postCreditNoteIssued(tx, {
+        tenantId: input.tenantId,
+        creditNoteId: created.id,
+        postedById: input.actorId,
       });
 
       return created;
