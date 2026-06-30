@@ -2,7 +2,6 @@
 
 export * from './payroll.types';
 export * from './payroll.validators';
-export * from './payroll-permission.map';
 
 export * from './StatutoryService';
 export * from './PayrollService';

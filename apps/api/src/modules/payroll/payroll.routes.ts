@@ -14,10 +14,8 @@ import {
   payrollRecordListQuerySchema,
 } from './payroll.validators';
 
-import {
-  PAYROLL_PERMISSIONS,
-  requirePayrollPermission,
-} from './payroll-permission.map';
+import { requirePermissions } from '../../middleware/rbac';
+import { PERMISSIONS } from '../../config/permissions';
 
 import { bindPlatformModuleEnforcement } from '../../middleware/platform-access.middleware';
 import { platformFeatureFlag } from '../../middleware/platform-feature-flag.middleware';
@@ -77,48 +75,48 @@ router.get('/health', (req: Request, res: Response) => {
 
 router.get(
   '/dashboard',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.viewDashboard),
+  requirePermissions(PERMISSIONS.payroll.viewDashboard),
   getPayrollDashboard,
 );
 
 router.post(
   '/calculate',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.createRecord),
+  requirePermissions(PERMISSIONS.payroll.createRecord),
   validate({ body: payrollCalculationSchema }),
   calculatePayroll,
 );
 
 router.get(
   '/batches',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.viewBatch),
+  requirePermissions(PERMISSIONS.payroll.viewBatch),
   validate({ query: payrollBatchListQuerySchema }),
   listPayrollBatches,
 );
 
 router.post(
   '/batches',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.createBatch),
+  requirePermissions(PERMISSIONS.payroll.createBatch),
   validate({ body: createPayrollBatchSchema }),
   createPayrollBatch,
 );
 
 router.post(
   '/batches/with-records',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.createBatch),
+  requirePermissions(PERMISSIONS.payroll.createBatch),
   validate({ body: createPayrollBatchSchema }),
   createPayrollBatchAndRecords,
 );
 
 router.get(
   '/batches/:payrollBatchId',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.viewBatch),
+  requirePermissions(PERMISSIONS.payroll.viewBatch),
   validate({ params: payrollBatchIdParamSchema }),
   getPayrollBatchById,
 );
 
 router.post(
   '/batches/:payrollBatchId/submit',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.submitBatch),
+  requirePermissions(PERMISSIONS.payroll.submitBatch),
   validate({
     params: payrollBatchIdParamSchema,
     body: payrollApprovalSchema.partial(),
@@ -128,7 +126,7 @@ router.post(
 
 router.post(
   '/batches/:payrollBatchId/approve',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.approveBatch),
+  requirePermissions(PERMISSIONS.payroll.approveBatch),
   validate({
     params: payrollBatchIdParamSchema,
     body: payrollApprovalSchema.partial(),
@@ -138,7 +136,7 @@ router.post(
 
 router.post(
   '/batches/:payrollBatchId/reject',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.rejectBatch),
+  requirePermissions(PERMISSIONS.payroll.rejectBatch),
   validate({
     params: payrollBatchIdParamSchema,
     body: payrollApprovalSchema,
@@ -148,7 +146,7 @@ router.post(
 
 router.post(
   '/batches/:payrollBatchId/cancel',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.cancelBatch),
+  requirePermissions(PERMISSIONS.payroll.cancelBatch),
   validate({
     params: payrollBatchIdParamSchema,
     body: payrollApprovalSchema.pick({ reason: true }),
@@ -158,102 +156,102 @@ router.post(
 
 router.post(
   '/batches/:payrollBatchId/post',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.postBatch),
+  requirePermissions(PERMISSIONS.payroll.postBatch),
   validate({ params: payrollBatchIdParamSchema }),
   postPayrollBatch,
 );
 
 router.get(
   '/records',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.viewRecord),
+  requirePermissions(PERMISSIONS.payroll.viewRecord),
   validate({ query: payrollRecordListQuerySchema }),
   listPayrollRecords,
 );
 
 router.post(
   '/records',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.createRecord),
+  requirePermissions(PERMISSIONS.payroll.createRecord),
   validate({ body: createPayrollRecordSchema }),
   createPayrollRecord,
 );
 
 router.get(
   '/records/:payrollRecordId',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.viewRecord),
+  requirePermissions(PERMISSIONS.payroll.viewRecord),
   getPayrollRecordById,
 );
 
 router.post(
   '/records/:payrollRecordId/recalculate',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.recalculateRecord),
+  requirePermissions(PERMISSIONS.payroll.recalculateRecord),
   recalculatePayrollRecord,
 );
 
 router.post(
   '/records/:payrollRecordId/cancel',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.cancelRecord),
+  requirePermissions(PERMISSIONS.payroll.cancelRecord),
   cancelPayrollRecord,
 );
 
 router.post(
   '/records/:payrollRecordId/payslip',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.generatePayslip),
+  requirePermissions(PERMISSIONS.payroll.generatePayslip),
   generatePayslip,
 );
 
 router.get(
   '/payslips',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.viewPayslip),
+  requirePermissions(PERMISSIONS.payroll.viewPayslip),
   listPayslips,
 );
 
 router.get(
   '/payslips/:payslipId',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.viewPayslip),
+  requirePermissions(PERMISSIONS.payroll.viewPayslip),
   getPayslipById,
 );
 
 router.post(
   '/payslips/:payslipId/publish',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.publishPayslip),
+  requirePermissions(PERMISSIONS.payroll.publishPayslip),
   publishPayslip,
 );
 
 router.post(
   '/payslips/:payslipId/revoke',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.revokePayslip),
+  requirePermissions(PERMISSIONS.payroll.revokePayslip),
   revokePayslip,
 );
 
 router.get(
   '/statutory/summary',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.viewStatutory),
+  requirePermissions(PERMISSIONS.payroll.viewStatutory),
   generateStatutorySummary,
 );
 
 router.post(
   '/statutory/filings',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.createStatutoryFiling),
+  requirePermissions(PERMISSIONS.payroll.createStatutoryFiling),
   createStatutoryFiling,
 );
 
 router.post(
   '/statutory/filings/:filingId/filed',
-  requirePayrollPermission(PAYROLL_PERMISSIONS.markStatutoryFiled),
+  requirePermissions(PERMISSIONS.payroll.markStatutoryFiled),
   markStatutoryFiled,
 );
 
 router.get(
   '/reports/p9/:employeeId',
   payrollStatutoryEngineFeature,
-  requirePayrollPermission(PAYROLL_PERMISSIONS.viewReports),
+  requirePermissions(PERMISSIONS.payroll.viewReports),
   generateP9Report,
 );
 
 router.get(
   '/reports/p10',
   payrollStatutoryEngineFeature,
-  requirePayrollPermission(PAYROLL_PERMISSIONS.viewReports),
+  requirePermissions(PERMISSIONS.payroll.viewReports),
   generateP10Report,
 );
 
