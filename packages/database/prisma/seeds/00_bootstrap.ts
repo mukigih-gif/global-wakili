@@ -7,6 +7,11 @@ import {
 } from '@prisma/client';
 
 import { ALL_PERMISSION_DEFINITIONS } from '../../../../apps/api/src/config/permissions';
+import {
+  CANONICAL_ROLES,
+  ZERO_PERM_OK_ROLES,
+  resolveRolePermissions,
+} from '../../../../apps/api/src/config/roles';
 
 type SeedPrisma = PrismaClient;
 
@@ -20,12 +25,6 @@ type PermissionDefinitionRecord = {
   resource: string;
   action: string;
   description: string;
-};
-
-type RoleSeedDefinition = {
-  name: string;
-  description: string;
-  selector: 'ALL' | ((permission: PermissionRecord) => boolean);
 };
 
 export type BootstrapSeedResult = {
@@ -116,18 +115,6 @@ function permissionKey(
   return `${permission.resource}.${permission.action}`;
 }
 
-function hasResource(resources: string[]) {
-  const allowed = new Set(resources);
-
-  return (permission: PermissionRecord) => allowed.has(permission.resource);
-}
-
-function hasAny(keys: string[]) {
-  const allowed = new Set(keys);
-
-  return (permission: PermissionRecord) => allowed.has(permissionKey(permission));
-}
-
 function chunkArray<T>(items: T[], size: number): T[][] {
   if (!Number.isInteger(size) || size < 1) {
     throw new Error('Chunk size must be a positive integer.');
@@ -142,119 +129,9 @@ function chunkArray<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
-const ROLE_DEFINITIONS: RoleSeedDefinition[] = [
-  {
-    name: 'firm_admin',
-    description: 'Firm administrator with full tenant permissions.',
-    selector: 'ALL',
-  },
-  {
-    name: 'branch_manager',
-    description: 'Branch manager with operational oversight permissions.',
-    selector: (permission) =>
-      hasResource([
-        'finance',
-        'trust',
-        'procurement',
-        'client',
-        'matter',
-        'document',
-        'calendar',
-        'integrations',
-      ])(permission) ||
-      hasAny([
-        'admin.view_audit',
-        'admin.manage_settings',
-      ])(permission),
-  },
-  {
-    name: 'accountant',
-    description:
-      'Accounting, finance, trust, procurement, payroll, and integrations operator.',
-    selector: hasResource([
-      'finance',
-      'trust',
-      'procurement',
-      'payroll',
-      'integrations',
-    ]),
-  },
-  {
-    name: 'CFO',
-    description:
-      'Chief Financial Officer — full finance, trust, procurement, payroll, and integrations authority with audit oversight. Role name MUST stay "CFO" to match the finance/payment authorization gates (FinancePermissionMap.ts).',
-    selector: (permission) =>
-      hasResource([
-        'finance',
-        'trust',
-        'procurement',
-        'payroll',
-        'integrations',
-      ])(permission) || hasAny(['admin.view_audit'])(permission),
-  },
-  {
-    name: 'advocate',
-    description:
-      'Advocate with client, matter, document, and calendar permissions.',
-    selector: hasResource([
-      'client',
-      'matter',
-      'document',
-      'calendar',
-    ]),
-  },
-  {
-    name: 'associate',
-    description: 'Associate advocate with matter execution permissions.',
-    selector: (permission) =>
-      hasAny([
-        'client.view_client',
-        'client.view_ledger',
-        'matter.view_matter',
-        'matter.create_time_entry',
-        'matter.view_profitability',
-        'document.upload_document',
-        'document.view_document',
-        'document.download_document',
-        'document.search_document',
-        'document.view_contract',
-        'calendar.create_event',
-        'calendar.update_event',
-        'calendar.view_event',
-        'calendar.manage_attendees',
-        'calendar.check_availability',
-        'calendar.view_dashboard',
-      ])(permission),
-  },
-  {
-    name: 'clerk',
-    description: 'Legal clerk with limited operational permissions.',
-    selector: (permission) =>
-      hasAny([
-        'client.view_client',
-        'matter.view_matter',
-        'matter.create_time_entry',
-        'document.upload_document',
-        'document.view_document',
-        'document.search_document',
-        'calendar.create_event',
-        'calendar.update_event',
-        'calendar.view_event',
-        'calendar.check_availability',
-      ])(permission),
-  },
-  {
-    name: 'client',
-    description: 'Client portal user with restricted portal-facing permissions.',
-    selector: (permission) =>
-      hasAny([
-        'client.view_portal',
-        'document.view_document',
-        'document.download_document',
-        'calendar.view_event',
-      ])(permission),
-  },
-];
+// Role definitions live in the canonical single source of truth:
+// apps/api/src/config/roles.ts (CANONICAL_ROLES) — shared with seed-default-roles.ts
+// so seeded and onboarded tenants get identical UPPERCASE roles + grants (FINDING-007-011).
 
 function normalizePermissionDefinitions(): PermissionDefinitionRecord[] {
   if (!Array.isArray(ALL_PERMISSION_DEFINITIONS)) {
@@ -436,18 +313,15 @@ async function seedRoles(
 ) {
   const roles: Array<{ id: string; name: string }> = [];
 
-  for (const roleDefinition of ROLE_DEFINITIONS) {
-    const selectedPermissions =
-      roleDefinition.selector === 'ALL'
-        ? permissions
-        : permissions.filter(roleDefinition.selector);
+  for (const roleDefinition of CANONICAL_ROLES) {
+    const selectedPermissions = resolveRolePermissions(permissions, roleDefinition);
 
     if (
-      roleDefinition.name !== 'client' &&
+      !ZERO_PERM_OK_ROLES.has(roleDefinition.name) &&
       selectedPermissions.length === 0
     ) {
       throw new Error(
-        `Role ${roleDefinition.name} resolved to zero permissions. Check ALL_PERMISSION_DEFINITIONS and role selectors.`,
+        `Role ${roleDefinition.name} resolved to zero permissions. Check ALL_PERMISSION_DEFINITIONS and CANONICAL_ROLES.`,
       );
     }
 
@@ -673,7 +547,7 @@ export async function seedBootstrap(
   const permissions = await seedPermissions(prisma, tenant.id);
   const roles = await seedRoles(prisma, tenant.id, permissions);
 
-  const firmAdminRole = roles.find((role) => role.name === 'firm_admin');
+  const firmAdminRole = roles.find((role) => role.name === 'FIRM_ADMIN');
 
   if (!firmAdminRole) {
     throw new Error('firm_admin role was not created.');

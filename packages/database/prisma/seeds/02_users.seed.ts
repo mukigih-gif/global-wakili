@@ -49,11 +49,11 @@ export type UsersSeedResult = {
 
 const TENANT_USER_SEEDS: TenantUserSeed[] = [
   { roleName: 'CFO', tenantRole: TenantRole.ACCOUNTANT, localPart: 'cfo', name: 'Halima Abdalla' },
-  { roleName: 'branch_manager', tenantRole: TenantRole.BRANCH_MANAGER, localPart: 'branch.manager', name: 'Wanjiku Kamau' },
-  { roleName: 'accountant', tenantRole: TenantRole.ACCOUNTANT, localPart: 'accountant', name: 'Otieno Odhiambo' },
-  { roleName: 'advocate', tenantRole: TenantRole.ADVOCATE, localPart: 'advocate', name: 'Achieng Were' },
-  { roleName: 'associate', tenantRole: TenantRole.ASSOCIATE, localPart: 'associate', name: 'Kiprop Cherono' },
-  { roleName: 'clerk', tenantRole: TenantRole.CLERK, localPart: 'clerk', name: 'Njeri Mwangi' },
+  { roleName: 'BRANCH_MANAGER', tenantRole: TenantRole.BRANCH_MANAGER, localPart: 'branch.manager', name: 'Wanjiku Kamau' },
+  { roleName: 'ACCOUNTANT', tenantRole: TenantRole.ACCOUNTANT, localPart: 'accountant', name: 'Otieno Odhiambo' },
+  { roleName: 'ADVOCATE', tenantRole: TenantRole.ADVOCATE, localPart: 'advocate', name: 'Achieng Were' },
+  { roleName: 'ASSOCIATE', tenantRole: TenantRole.ASSOCIATE, localPart: 'associate', name: 'Kiprop Cherono' },
+  { roleName: 'CLERK', tenantRole: TenantRole.CLERK, localPart: 'clerk', name: 'Njeri Mwangi' },
 ];
 
 function requirePasswordHash(): string {

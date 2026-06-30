@@ -3394,3 +3394,52 @@ mutated — this is a compute change only.
 credit (VAT 600) nets to **1,000** (VOID + out-of-range credit notes excluded); full
 credit (VAT 1,600) nets to **0**; 0 rows persisted. `tsc --noEmit` (apps/api) exit 0.
 Live HTTP/deploy verification deferred (push held). File: `VATService.ts`.
+
+## FINDING-007-011 — STEP (a) DONE (2026-07-01) — Axis C seeders unified to UPPERCASE single source of truth
+
+Per the implementation plan (docs/governance/FINDING-007-011-role-permission-
+unification.md). Steps (b) catalog back-fill [39d0a8e] and (a) seeder unification
+[this commit] are complete.
+
+(a) implementation:
+- NEW `apps/api/src/config/roles.ts` — `CANONICAL_ROLES` (14-role UPPERCASE union),
+  `resolveRolePermissions`, `ZERO_PERM_OK_ROLES`. Single source of truth.
+- `00_bootstrap.ts` — deleted lowercase `ROLE_DEFINITIONS` + predicate selectors +
+  `hasResource`/`hasAny`; `seedRoles` now iterates `CANONICAL_ROLES` via the shared
+  resolver; `firmAdminRole` find `'firm_admin'`→`'FIRM_ADMIN'`.
+- `seed-default-roles.ts` — deleted local `ROLE_SPECS`/`resolvePerms`; imports
+  `CANONICAL_ROLES` + `resolveRolePermissions`.
+- `02_users.seed.ts` — `TENANT_USER_SEEDS` roleNames → UPPERCASE (CFO unchanged).
+- Grant updates wired: **HR_MANAGER now grants hr.\*** (fixes the F-14/008-001 root
+  cause — HR access becomes DB-grantable, no longer role-name-bypass-only);
+  ACCOUNTANT/CFO/BRANCH_MANAGER grant payments.\*; all roles pick up the step-(b)
+  payroll.\* keys via `{ module: 'payroll' }`.
+
+Canonical set (14, union — drops nothing): FIRM_ADMIN, MANAGING_PARTNER,
+SENIOR_PARTNER, PARTNER, CFO, BRANCH_MANAGER, ACCOUNTANT, HR_MANAGER, ADVOCATE,
+ASSOCIATE, PARALEGAL, RECEPTIONIST, CLERK, CLIENT.
+
+Verified: `tsc --noEmit` (apps/api) exit 0; grant resolution against the code catalog
+(read-only) — 14 roles all UPPERCASE, HR_MANAGER→32 hr.* keys, ACCOUNTANT→7
+payments.*, FIRM_ADMIN→full 324, CLIENT→4 portal keys, no unexpected zero-perm roles;
+both seeders import cleanly cross-package. Full `master.seed` integration run deferred
+to the fresh-branch seeding (FINDING-PLAY-001) — running it on the existing shared
+branch would leave orphan lowercase role rows (harmless, user-less after re-seed; no
+destructive delete). Existing prod tenants' HR_MANAGER won't retroactively gain hr.*
+(seed-default is skip-if-exists) — a re-grant migration for existing tenants is a
+separate ops task.
+
+NEXT: step (c) — migrate the 4 route modules (finance/hr/payroll/payments) from the
+broken module maps to `requirePermissions()`, per-module, YES-gated.
+
+## FINDING-007-011-ONB — OPEN — LOW — 3rd role-seeding source (packages/core/identity)
+
+Surfaced during step (a). `packages/core/identity/services/OnboardingService.ts` has
+its OWN `DEFAULT_ROLE_DEFINITIONS` (only `ADMIN`/`USER`) and an ad-hoc, NON-catalog
+permission vocabulary (`action:'MANAGE', resource:'users'` — uppercase verb/resource,
+not the dot-key catalog). It is a third, divergent tenant-provisioning path, separate
+from the two catalog-based seeders unified in step (a). Whether it is still wired/used
+needs checking; if live, it provisions tenants with a role/permission model that the
+rbac.ts DB-permission mechanism cannot read. Out of scope for 007-011 step (a)
+(unifying it = a separate effort on a different model). Action: confirm callers; then
+either retire it or migrate it onto CANONICAL_ROLES + the catalog. Logged 2026-07-01.

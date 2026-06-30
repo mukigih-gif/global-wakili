@@ -23,64 +23,14 @@
 import { PermissionScope } from '@prisma/client';
 import defaultPrisma from '../config/database';
 import { ALL_PERMISSION_DEFINITIONS } from '../config/permissions';
+import { CANONICAL_ROLES, resolveRolePermissions } from '../config/roles';
 
 type Db = typeof defaultPrisma;
-type PermSpec = { module: string } | { key: string }; // module = all actions of a resource; key = 'resource.action'
-type RoleSpec = { name: string; description: string; perms: PermSpec[] | 'ALL' };
 type CatalogRow = { id: string; resource: string; action: string };
 
-// ── Roles (REAL catalog keys only). Add new roles here — "room for any role". ──
-const ROLE_SPECS: RoleSpec[] = [
-  { name: 'FIRM_ADMIN', description: 'Firm administrator — full access', perms: 'ALL' },
-  { name: 'MANAGING_PARTNER', description: 'Managing partner — full access (also unlocks HR via super-user bypass)', perms: 'ALL' },
-  { name: 'SENIOR_PARTNER', description: 'Senior partner — practice, finance, trust, reporting, analytics oversight', perms: [
-    { module: 'matter' }, { module: 'client' }, { module: 'billing' }, { module: 'finance' },
-    { module: 'trust' }, { module: 'reporting' }, { module: 'document' }, { module: 'analytics' },
-    { module: 'calendar' }, { module: 'task' },
-  ] },
-  { name: 'PARTNER', description: 'Partner — matters, clients, billing, finance, trust, reporting, documents', perms: [
-    { module: 'matter' }, { module: 'client' }, { module: 'billing' }, { module: 'finance' },
-    { module: 'trust' }, { module: 'reporting' }, { module: 'document' },
-  ] },
-  { name: 'ASSOCIATE', description: 'Associate fee earner — matters, documents, calendar, tasks; client/billing view', perms: [
-    { module: 'matter' }, { module: 'document' }, { module: 'calendar' }, { module: 'task' },
-    { key: 'client.view_client' }, { key: 'billing.view_invoice' },
-    { key: 'trust.view_statement' }, { key: 'trust.view_dashboard' },
-  ] },
-  { name: 'ADVOCATE', description: 'Advocate fee earner — matters, documents, calendar, tasks; client + billing create', perms: [
-    { module: 'matter' }, { module: 'document' }, { module: 'calendar' }, { module: 'task' },
-    { key: 'client.view_client' }, { key: 'client.create_client' },
-    { key: 'billing.view_invoice' }, { key: 'billing.create_invoice' },
-    { key: 'trust.view_statement' }, { key: 'trust.view_dashboard' },
-  ] },
-  { name: 'ACCOUNTANT', description: 'Finance, billing, trust, reporting; client view', perms: [
-    { module: 'finance' }, { module: 'billing' }, { module: 'trust' }, { module: 'reporting' },
-    { key: 'client.view_client' },
-  ] },
-  { name: 'HR_MANAGER', description: 'Payroll + client view + reporting; full HR module access granted by role in hr-permission.map.ts (F-14 / FINDING-008-001)', perms: [
-    { module: 'payroll' }, { key: 'client.view_client' }, { key: 'reporting.view_overview' },
-  ] },
-  { name: 'RECEPTIONIST', description: 'Front desk — client intake, calendar, reception, notifications', perms: [
-    { key: 'client.view_client' }, { key: 'client.create_client' }, { key: 'matter.view_matter' },
-    { module: 'calendar' }, { key: 'task.view_task' }, { module: 'reception' }, { module: 'notifications' },
-  ] },
-  { name: 'PARALEGAL', description: 'Paralegal support — matter/client/document view, light task + document handling', perms: [
-    { key: 'matter.view_matter' }, { key: 'client.view_client' },
-    { key: 'document.view_document' }, { key: 'document.upload_document' },
-    { key: 'calendar.view_event' }, { key: 'task.view_task' }, { key: 'task.create_task' }, { key: 'task.comment_task' },
-  ] },
-  { name: 'CLERK', description: 'Read-only clerk — zero client permissions (required for F-05)', perms: [
-    { key: 'matter.view_matter' }, { key: 'calendar.view_event' },
-    { key: 'task.view_task' }, { key: 'document.view_document' },
-  ] },
-];
-
-function resolvePerms(catalog: CatalogRow[], spec: RoleSpec): CatalogRow[] {
-  if (spec.perms === 'ALL') return catalog;
-  const specs = spec.perms;
-  return catalog.filter((p) =>
-    specs.some((s) => ('module' in s ? s.module === p.resource : s.key === `${p.resource}.${p.action}`)));
-}
+// Roles live in the canonical single source of truth: apps/api/src/config/roles.ts
+// (CANONICAL_ROLES) — shared with 00_bootstrap.ts so seeded and onboarded tenants
+// get identical UPPERCASE roles + grants (FINDING-007-011 step a).
 
 export async function seedDefaultRoles(prisma: Db, tenantId: string): Promise<void> {
   // 1. Ensure the permission catalog exists for this tenant (idempotent — no-op if seeded).
@@ -105,7 +55,7 @@ export async function seedDefaultRoles(prisma: Db, tenantId: string): Promise<vo
   });
 
   // 2. Create each role if absent (skip-if-exists; existing roles are untouched).
-  for (const spec of ROLE_SPECS) {
+  for (const spec of CANONICAL_ROLES) {
     const existing = await prisma.role.findUnique({
       where: { tenantId_name: { tenantId, name: spec.name } },
       select: { id: true },
@@ -114,7 +64,7 @@ export async function seedDefaultRoles(prisma: Db, tenantId: string): Promise<vo
       console.info(`[ROLES] SKIP   ${spec.name} (already exists)`);
       continue;
     }
-    const ids = resolvePerms(catalog, spec).map((p) => ({ id: p.id }));
+    const ids = resolveRolePermissions(catalog, spec).map((p) => ({ id: p.id }));
     await prisma.role.create({
       data: {
         tenantId,
