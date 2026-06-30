@@ -5,7 +5,7 @@
     "rootDir": ".",
     "composite": false,
     "tsBuildInfoFile": "node_modules/.cache/tsbuildinfo",
-    "ignoreDeprecations": "6.0"
+    "ignoreDeprecations": "5.0"
   },
   "include": ["src", "prisma"],
   "exclude": ["node_modules", "dist"]

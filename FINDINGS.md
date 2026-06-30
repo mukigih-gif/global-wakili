@@ -71,12 +71,12 @@ preserved for history.
 | F-18 | IMPLEMENTED — verify | Reset flow real; E2E happy-path + prod email delivery unverified | Phase 2 |
 | FINDING-008-005 | MEDIUM | Payroll dashboard queries phantom statutory fields (Option B deferred) | Phase 3 |
 | FINDING-007-011 | MEDIUM | Unify parallel role/permission systems onto rbac.ts | Phase 3/4 |
-| F-15 | MEDIUM | Password expiry not enforced at login | pre-go-live |
-| F-16 | MEDIUM | No password complexity policy / shared validator | pre-go-live |
-| F-19 | MEDIUM | Account lockout threshold/auto-unlock not verified E2E | pre-go-live |
+| F-15 | CLOSED (2026-06-30) | Password expiry enforced at login (403 PASSWORD_EXPIRED) | pre-go-live |
+| F-16 | CLOSED (2026-06-30) | Shared validatePasswordPolicy enforced at registration (400 WEAK_PASSWORD) | pre-go-live |
+| F-19 | CLOSED (2026-06-30) | Lockout fires at 5 attempts / auto-unlock / success clears state | pre-go-live |
 | FINDING-007-006 | LOW | AccountBalance projection rebuild post-commit (stale projection) | Phase 3 |
 | FINDING-007-007 | LOW | AccountingPeriod month-bucketing uses server-local time | Phase 3 |
-| F-05 | LOW | Client portal routes not RBAC-gated (mitigated by self-scoping) | pre-go-live |
+| F-05 | CLOSED (2026-07-01) | Portal routes gated requirePermissions(client.viewPortal) (routes.ts:76,83) | pre-go-live |
 | FINDING-007-001 | INFO | Trust /view null sub-objects when statementDate omitted — product decision | Phase 3 |
 | F-03 | INFO | POST /auth/refresh not implemented (GET /auth/session substitute) | backlog |
 | F-21 | DEFERRED | Invite-user temp password; replace with email-token invite (needs F-18 + email) | backlog |
@@ -1362,7 +1362,7 @@ regenerated on every test run — findings logged here survive reruns.
 - File: ClientDashboardService.getInternalDashboard
 - Candidate: schema drift or null-handling crash on client with no activity
 - Fix: audit selected fields against live schema, add null guards
-- Status: OPEN
+- Status: VERIFIED LIVE — 10 Jun 2026 (see status update below)
 
 **Status update (10 Jun 2026) — ROOT CAUSE CONFIRMED & FIXED:**
 - Diagnosed from the live 500 response body (raw Prisma error — see F-08).
@@ -2425,7 +2425,7 @@ integrity is OPEN (FIN-TRUST-002). Verified: 2026-06-23.
 
 ---
 
-## FINDING-FIN-TRUST-002 — OPEN — HIGH — (Phase 3 Trust Compliance — trust ledger ≠ client sub-ledger; ~4.1M unallocated)
+## FINDING-FIN-TRUST-002 — SUPERSEDED by XREL-001/002 (CLOSED 2026-07-01) — HIGH — (Phase 3 Trust Compliance — trust ledger ≠ client sub-ledger; ~4.1M unallocated)
 
 **Three-way reconciliation on the Main trust account shows the trust ledger total ≠ the client sub-ledger total — ~4,100,000 not allocated to any client/matter (potential ADR-004 commingling concern).**
 
@@ -2470,6 +2470,13 @@ FK). The stale historical data is resolved by the planned seed rebuild (CLAUDE.m
 (Deviation noted: a standalone live cert test was intentionally NOT added — it would
 accumulate immutable-audit rows on every run; the seed-validation assertion is the durable,
 non-polluting guard.)
+
+SUPERSEDED 2026-07-01: the same control-vs-sub-ledger break was fully resolved under
+FINDING-XREL-001 (interest-path trustAccountId code gap fixed + 2 NULL rows backfilled —
+verified in code at TrustInterestService.ts:214,240) and FINDING-XREL-002 (the residual
+4.1M is legacy Demo Law Firm cert-test data, excluded from the 21_validation gate by
+scoping to seed-owned tenants). Current code keeps both ledgers in sync. No separate
+action remains here.
 
 ---
 
@@ -2864,7 +2871,7 @@ Logged: 2026-06-29
 
 ---
 
-## FINDING-BILL-001 — OPEN — LOW
+## FINDING-BILL-001 — CLOSED (2026-07-01) — LOW
 
 Invoice.clientTaxPin column referenced in billing service but not present
 in deployed schema. Same phantom-field class as FIN-F-001/FIN-G-001. Fix:
@@ -2872,6 +2879,11 @@ add column via migrate dev → review → deploy, or remove the reference.
 (Seed workaround in layer 22: client KRA PIN snapshotted in
 Invoice.metadata.clientKraPin.)
 Logged: 2026-06-29
+
+CLOSED 2026-07-01: re-verified — `clientTaxPin` (case-insensitive, incl.
+`client_tax_pin`) no longer appears in any source file; repo-wide grep matches
+FINDINGS.md only. The phantom reference was already removed; no schema column
+needed. The layer-22 `metadata.clientKraPin` workaround stands.
 
 ---
 
@@ -2983,7 +2995,7 @@ both "cert interest posting" cr=50 — the entire Cert Trust gap.
 
 ---
 
-## FINDING-XREL-002 — OPEN (accepted residue) — LOW (2026-06-29)
+## FINDING-XREL-002 — CLOSED (2026-06-30, out-of-scope via validation scoping) — LOW (2026-06-29)
 
 Same verification, check 11: the finance-active tenant Demo Law Firm
 (cmpy9pg9u — journals=45, invoices=24, trustTxns=55, CoA=20) has NO

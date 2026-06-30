@@ -22,12 +22,14 @@ export const listActiveClients = asyncHandler(async (req: Request, res: Response
   const page = req.query.page ? Number(req.query.page) : undefined;
   const limit = req.query.limit ? Number(req.query.limit) : undefined;
   const search = req.query.search ? String(req.query.search) : undefined;
+  const sort = req.query.sort ? String(req.query.sort) : undefined;
   const branchFilter = getBranchFilter(req.user ?? {});
 
   const result = await ClientService.listActive(req.db, req.tenantId!, {
     page,
     limit,
     search,
+    sort,
     branchId: branchFilter.branchId,
   });
 

@@ -9,6 +9,7 @@ type ClientListQuery = {
   page?: number;
   limit?: number;
   search?: string;
+  sort?: string;
   branchId?: string | null;
 };
 
@@ -420,10 +421,21 @@ export class ClientService {
       ...buildSearchWhere(query.search),
     };
 
+    const orderBy =
+      query.sort === 'status'
+        ? [{ status: 'asc' as const }, { name: 'asc' as const }]
+        : query.sort === 'name'
+          ? [{ name: 'asc' as const }]
+          : query.sort === 'clientCode'
+            ? [{ clientCode: 'asc' as const }, { name: 'asc' as const }]
+            : query.sort === 'createdAt'
+              ? [{ createdAt: 'desc' as const }, { name: 'asc' as const }]
+              : [{ updatedAt: 'desc' as const }, { name: 'asc' as const }];
+
     const [data, total] = await Promise.all([
       clientDb.client.findMany({
         where,
-        orderBy: [{ updatedAt: 'desc' }, { name: 'asc' }],
+        orderBy,
         skip,
         take: limit,
         select: {
