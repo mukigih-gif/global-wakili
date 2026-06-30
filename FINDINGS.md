@@ -3355,7 +3355,7 @@ not recorded as an intentional decision. Action: capture as an ADR, and verify t
 DRAFT-cancel edge (cancelInvoice calls `reverseInvoiceIssued` even on a never-posted
 DRAFT). Logged 2026-07-01.
 
-## FINDING-BILL-003 — OPEN — MEDIUM (Class IV — VAT / product decision)
+## FINDING-BILL-003 — CLOSED (2026-07-01) — MEDIUM (Class IV — VAT)
 **Credit notes are not netted in the VAT return — a credit note's VAT reversal never reaches the KRA VAT return; output VAT is overstated for credited invoices.**
 
 - **Root cause:** `VATService.getVatSummary` (FIN-E-001) computes output VAT by summing
@@ -3373,6 +3373,24 @@ DRAFT). Logged 2026-07-01.
   credit notes should flow to the return automatically (exclude/net `CREDITED`) or
   whether the manual `VatAdjustment` is the intended control. Scope-then-decide, not a
   blind fix.
-- **Status:** OPEN — Class IV / product decision; requires Mandatory Analysis + owner
-  ruling before any code.
+- **Status:** CLOSED (2026-07-01) — see closure below.
 - **Logged:** 2026-07-01
+
+### CLOSURE (2026-07-01) — auto-net issued credit notes in getVatSummary
+Owner decision: **auto-net** (not manual VatAdjustment). Implemented approach (b):
+`VATService.getVatSummary` now queries issued credit notes in range
+(`status notIn ['DRAFT','VOID','CANCELLED']`, keyed on **`creditDate`**) and
+**subtracts Σ creditNote.taxAmount** from invoice output VAT; `netVatPayable`
+recomputed from the netted output; added `creditNoteVat`/`creditNoteCount` to the
+result. CREDITED invoices remain in the invoice sum at full VAT and are netted here.
+Chose (b) over (a) exclude-`CREDITED` because **CreditNote supports partial credits**
+(invoice only flips to `CREDITED` when `balanceDue` hits 0; partial credits leave the
+invoice `INVOICED` with `creditedAmount` incremented) — (a) would miss every partial.
+Netting by `creditDate` is KRA-correct (credit reduces output VAT in the period
+issued) and **does not retroactively alter the original invoice's period**. No
+persisted VatReturn exists (FIN-E-003), so no stored/filed historical return is
+mutated — this is a compute change only.
+**Verified (rolled-back tx, zero pollution):** invoiceOutputVat 1,600 → partial
+credit (VAT 600) nets to **1,000** (VOID + out-of-range credit notes excluded); full
+credit (VAT 1,600) nets to **0**; 0 rows persisted. `tsc --noEmit` (apps/api) exit 0.
+Live HTTP/deploy verification deferred (push held). File: `VATService.ts`.

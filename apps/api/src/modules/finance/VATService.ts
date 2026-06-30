@@ -107,6 +107,8 @@ export type VatSummaryResult = {
   vendorBillCount: number;
   adjustmentCount: number;
   adjustmentsTotal: Prisma.Decimal;
+  creditNoteVat: Prisma.Decimal;
+  creditNoteCount: number;
   generatedAt: Date;
 };
 
@@ -215,8 +217,9 @@ export class VATService {
     const invoice = optionalDelegate<VatInvoiceDelegate>(prisma, 'invoice');
     const vendorBill = optionalDelegate<VatVendorBillDelegate>(prisma, 'vendorBill');
     const vatAdjustment = optionalDelegate<VatAdjustmentDelegate>(prisma, 'vatAdjustment');
+    const creditNote = optionalDelegate<PrismaFindManyDelegate<VatAmountSourceRow>>(prisma, 'creditNote');
 
-    const [invoices, vendorBills, adjustments] = await Promise.all([
+    const [invoices, vendorBills, adjustments, creditNotes] = await Promise.all([
       invoice
         ? invoice.findMany({
             where: {
@@ -273,6 +276,21 @@ export class VATService {
             },
           })
         : Promise.resolve([]),
+
+      creditNote
+        ? creditNote.findMany({
+            where: {
+              tenantId: input.tenantId,
+              ...dateRangeWhere(input.from, input.to, 'creditDate'),
+              status: {
+                notIn: ['DRAFT', 'VOID', 'CANCELLED'],
+              },
+            },
+            select: {
+              taxAmount: true,
+            },
+          })
+        : Promise.resolve([]),
     ]);
 
     const invoiceOutputVat = invoices.reduce(
@@ -293,19 +311,32 @@ export class VATService {
       return sum.plus(amount);
     }, ZERO);
 
-    const netVatPayable = invoiceOutputVat.minus(vendorInputVat).plus(adjustmentsTotal);
+    // BILL-003: net issued credit notes (output VAT reversal) by their own period
+    // (creditDate). Handles partial credits natively — a credit note only carries the
+    // VAT actually credited; full credits net here too (CREDITED invoices remain in the
+    // invoice sum at full VAT, then are reduced by their credit note's taxAmount).
+    const creditNoteVat = (creditNotes as VatAmountSourceRow[]).reduce(
+      (sum: Prisma.Decimal, row: VatAmountSourceRow) => sum.plus(money(row.taxAmount ?? row.vatAmount)),
+      ZERO,
+    );
+
+    const netOutputVat = invoiceOutputVat.minus(creditNoteVat);
+
+    const netVatPayable = netOutputVat.minus(vendorInputVat).plus(adjustmentsTotal);
 
     return {
       tenantId: input.tenantId,
       periodStart: input.from,
       periodEnd: input.to,
-      outputVat: invoiceOutputVat.toDecimalPlaces(2),
+      outputVat: netOutputVat.toDecimalPlaces(2),
       inputVat: vendorInputVat.toDecimalPlaces(2),
       netVatPayable: netVatPayable.toDecimalPlaces(2),
       invoiceCount: invoices.length,
       vendorBillCount: vendorBills.length,
       adjustmentCount: adjustments.length,
       adjustmentsTotal: adjustmentsTotal.toDecimalPlaces(2),
+      creditNoteVat: creditNoteVat.toDecimalPlaces(2),
+      creditNoteCount: creditNotes.length,
       generatedAt: new Date(),
     };
   }
