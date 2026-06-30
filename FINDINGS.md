@@ -3157,19 +3157,29 @@ existing AuditLog).
 Status: OPEN — needs investigation first
 Logged: 2026-07-01
 
-## FINDING-FRONT-009 — PARTIAL (2026-07-01) — LOW
+## FINDING-FRONT-009 — CLOSED (2026-07-01) — LOW
 **No loading/busy-state animation on long-running actions**
 UX gap — actions like report generation, seed runs,
 large list loads may show no busy indicator.
 Action: audit key async actions in apps/web, add
 consistent loading states (spinner/skeleton).
-Status: PARTIAL (2026-07-01) — shared `Spinner` UI primitive added
-(`components/ui/Spinner.tsx`, replacing the `LandingSpinner` stub
-pattern) + wired into the calendar grid load (was fetching behind
-an empty grid). `Button` already has an inline loading spinner.
-REMAINING (own sweep): apply the primitive to the other list/report/
-form pages that still fetch without a busy indicator — tracked, not
-done tonight. Stays OPEN/PARTIAL.
+Status: CLOSED (2026-07-01) — full audit of all 67 fetch pages under
+`app/(app)/app`. The original concern was largely a false alarm:
+busy-state coverage already exists and is consistent, by context —
+  • LIST/table pages (clients, matters, documents, hr, procurement,
+    notifications, tasks, tenders, reports, approvals, trust list, …)
+    render the shared `LoadingRow` table-skeleton while `loading`.
+  • FORM/action pages (all `*/new`, trust deposit/withdraw/transfer/
+    interest, billing invoice detail, settings/security) bind
+    `loading` to `<Button loading>` — submit-in-flight spinner.
+  • SECTION loads: shared `components/ui/Spinner.tsx` primitive added
+    + wired into the calendar grid (the one genuine page-load gap,
+    previously fetching behind an empty grid) — commit 8c55ca8.
+Audit method: 67 fetch pages; after excluding LoadingRow + Spinner +
+"Loading" indicators, 13 remained — ALL 13 are form pages already
+bound to `<Button loading>` (verified). No page renders nothing while
+loading. Three fit-for-purpose indicators (LoadingRow / Button /
+Spinner), not an inconsistency. No further code required.
 Logged: 2026-07-01
 
 ## TODO-013 — CLOSED — duplicate of FINDING-007-011
