@@ -3552,3 +3552,28 @@ OR retire `/register` if superseded by PlatformOnboardingService. Crosses packag
 boundaries (packages/core/identity ↔ the shared provisioner) + changes the live
 registration tx → its own scoped session. ACTION: confirm whether `/register` is active,
 then converge-or-retire. Status: OPEN — deferred to its own session.
+
+### CLOSURE (2026-07-01) — RETIRED (not migrated)
+Traced `/register` end-to-end → **retire**, not migrate:
+- **Route:** `POST /auth/register` (auth.controller.ts) → `OnboardingService.registerNewFirm`
+  — public, **unauthenticated**.
+- **Frontend:** NONE — no `apps/web` call site, no signup page; every landing CTA points
+  to `#contact` (sales/implementation-team onboarding, per landing copy "our
+  implementation team handles everything").
+- **Git:** untouched since the initial monorepo except incidental edits — no active
+  development, no tests.
+- **Superseded:** firm onboarding is control-plane — superAdmin `/onboard` (creates
+  tenant+branch) + `PlatformOnboardingService.provisionTenant` → `seedDefaultRoles`
+  (canonical UPPERCASE / DB-grant roles). Fully covers the use case, correctly.
+- **Harm in keeping it:** unauthenticated tenant+firm-admin creation (abuse/spam vector)
+  that produces RBAC-broken tenants (ad-hoc ADMIN/USER + non-catalog perms).
+
+Retired by **deleting** `packages/core/identity/services/OnboardingService.ts` (entire
+self-contained file — only `registerNewFirm` was consumed) + the route handler +
+the now-unused `OnboardingService`/`RegisterFirmSchema` imports in auth.controller +
+the `API_OVERVIEW.md` row. Verified: `tsc --noEmit` (apps/api) exit 0; 0 remaining
+`OnboardingService`/`registerNewFirm`/`/auth/register` references in code. No external
+API client depended on it. (`RegisterFirmSchema` left as a harmless unused export in
+auth.dto.ts — out of scope to prune.)
+**Status: CLOSED — RETIRED.** This was the last of the parallel role systems; rbac.ts
+DB-grant (CANONICAL_ROLES + catalog) is now the sole authorization model.

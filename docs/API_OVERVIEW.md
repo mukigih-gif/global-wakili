@@ -10,7 +10,6 @@
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/auth/login` | Email + password login → JWT |
-| POST | `/auth/register` | Register a new law firm |
 | POST | `/auth/logout` | Invalidate session |
 | GET | `/auth/me` | Current user profile |
 | GET | `/auth/oauth/google` | Google OAuth redirect |

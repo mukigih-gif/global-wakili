@@ -2,14 +2,13 @@ import { Router, Request, Response, NextFunction } from 'express';
 import bcrypt from 'bcryptjs';
 import type { Prisma } from '@prisma/client';
 
-import { OnboardingService } from '../../../../packages/core/identity/services/OnboardingService';
 import { prisma } from '../../../../packages/database/src/prisma';
 import {
   validationError,
   HttpError,
 } from '../../../../packages/core/exceptions/ErrorHandler';
 
-import { LoginSchema, RegisterFirmSchema } from '../common/dto/auth.dto';
+import { LoginSchema } from '../common/dto/auth.dto';
 import {
   parseJwtExpiryToMs,
   resolveJwtExpiresIn,
@@ -401,50 +400,13 @@ async function buildCurrentIdentity(req: Request): Promise<LoginIdentityResponse
   return buildLoginIdentityResponse(user, roleClaims);
 }
 
-/**
- * POST /auth/register
- * Initial onboarding for a new Law Firm / Tenant.
- */
-authRouter.post(
-  '/register',
-  async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const validatedData = RegisterFirmSchema.parse(req.body);
-      // F-16: enforce the shared complexity policy at registration (the dto's
-      // min(8) is only a length floor) → 400 WEAK_PASSWORD, same as change-password.
-      validatePasswordPolicy(validatedData.adminPassword);
-
-      const result = await OnboardingService.registerNewFirm({
-        ...validatedData,
-        password: validatedData.adminPassword,
-        mainBranchName:
-          validatedData.tenantName ??
-          validatedData.firmName,
-      });
-
-      return res.status(201).json({
-        success: true,
-        message: 'Organization successfully onboarded',
-        data: result,
-      });
-    } catch (error: unknown) {
-      if (isRecord(error) && error.name === 'ZodError') {
-        return next(
-          validationError(
-            'Invalid payload',
-            (error as { errors?: unknown }).errors,
-          ),
-        );
-      }
-
-      if (isRecord(error) && error.code === 'P2002') {
-        return next(new HttpError(409, 'Resource already exists'));
-      }
-
-      return next(error);
-    }
-  },
-);
+// POST /auth/register — RETIRED (FINDING-007-011-ONB). The self-service firm-
+// registration endpoint was an unauthenticated tenant-creation surface that
+// provisioned RBAC-broken tenants (ad-hoc ADMIN/USER roles + non-catalog perms,
+// never seeding the dot-key catalog or CANONICAL_ROLES). No frontend ever called
+// it. Firm onboarding is control-plane only: superAdmin /onboard +
+// PlatformOnboardingService.provisionTenant -> seedDefaultRoles (canonical
+// UPPERCASE / DB-grant roles).
 
 /**
  * POST /auth/login

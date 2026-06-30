@@ -10,9 +10,10 @@
  *   { module: 'finance' } -> all dot keys whose resource === 'finance'
  *   { key: 'client.view_client' } -> that single resource.action key
  *
- * NOTE: packages/core/identity/services/OnboardingService.ts has its OWN ad-hoc
- * ADMIN/USER role + non-catalog permission vocabulary — a separate 3rd path,
- * tracked under FINDING-007-011-ONB (NOT unified here).
+ * NOTE: a 3rd ad-hoc role path (OnboardingService.registerNewFirm, POST
+ * /auth/register) was RETIRED under FINDING-007-011-ONB (deleted, not migrated) —
+ * it provisioned RBAC-broken tenants. Firm onboarding is control-plane only
+ * (PlatformOnboardingService -> seedDefaultRoles, canonical roles).
  */
 
 export type RolePermSpec = { module: string } | { key: string };
