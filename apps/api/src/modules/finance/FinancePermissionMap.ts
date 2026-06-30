@@ -1,6 +1,10 @@
 // apps/api/src/modules/finance/FinancePermissionMap.ts
+//
+// Permission CONSTANTS only. The broken guard (requireFinancePermission/
+// hasFinancePermission — read the never-populated req.user.permissions + a
+// role-name allowlist) was retired in FINDING-007-011 step (c); finance routes
+// now enforce via requirePermissions (rbac.ts, DB-backed).
 
-import type { NextFunction, Request, Response } from 'express';
 import { PERMISSIONS, toPermissionString } from '../../config/permissions';
 
 export const FINANCE_PERMISSIONS = {
@@ -38,91 +42,6 @@ export const FINANCE_PERMISSIONS = {
 
 export type FinancePermission =
   (typeof FINANCE_PERMISSIONS)[keyof typeof FINANCE_PERMISSIONS];
-
-type FinanceRequestUser = {
-  permissions?: unknown;
-  roles?: unknown;
-  role?: unknown;
-  tenantRole?: unknown;
-  isSuperAdmin?: unknown;
-  isSystemAdmin?: unknown;
-};
-
-type FinancePermissionRequest = Request & {
-  user?: FinanceRequestUser;
-  permissions?: unknown;
-};
-
-function financeRequest(req: Request): FinancePermissionRequest {
-  return req as FinancePermissionRequest;
-}
-
-function getUserPermissions(req: Request): string[] {
-  const financeReq = financeRequest(req);
-  const user = financeReq.user;
-
-  return [
-    ...(Array.isArray(user?.permissions) ? user.permissions : []),
-    ...(Array.isArray(financeReq.permissions) ? financeReq.permissions : []),
-  ].map(String);
-}
-
-function isSuperUser(req: Request): boolean {
-  const user = financeRequest(req).user;
-  const roles = Array.isArray(user?.roles) ? user.roles.map(String) : [];
-  const role = user?.role ? String(user.role) : '';
-  // Authoritative tenantRole enum, in addition to the custom role name above:
-  // a FIRM_ADMIN whose custom Role.name is "ADMIN" must not be denied. FINDING-007-009.
-  const tenantRole = user?.tenantRole ? String(user.tenantRole).toUpperCase() : '';
-
-  return (
-    user?.isSuperAdmin === true ||
-    user?.isSystemAdmin === true ||
-    roles.includes('SUPER_ADMIN') ||
-    roles.includes('SYSTEM_ADMIN') ||
-    roles.includes('MANAGING_PARTNER') ||
-    roles.includes('CFO') ||
-    role === 'SUPER_ADMIN' ||
-    role === 'SYSTEM_ADMIN' ||
-    role === 'MANAGING_PARTNER' ||
-    role === 'CFO' ||
-    tenantRole === 'FIRM_ADMIN'
-  );
-}
-
-export function hasFinancePermission(
-  req: Request,
-  permission: FinancePermission,
-): boolean {
-  if (isSuperUser(req)) return true;
-
-  const permissions = getUserPermissions(req);
-
-  return (
-    permissions.includes(permission) ||
-    permissions.includes(FINANCE_PERMISSIONS.manageFinance) ||
-    permissions.includes('finance:*') ||
-    permissions.includes('*')
-  );
-}
-
-export function requireFinancePermission(permission: FinancePermission) {
-  return (req: Request, res: Response, next: NextFunction) => {
-    if (hasFinancePermission(req, permission)) {
-      return next();
-    }
-
-    return res.status(403).json({
-      success: false,
-      module: 'finance',
-      error: 'Insufficient finance permission',
-      code: 'FINANCE_PERMISSION_DENIED',
-      requiredPermission: permission,
-      requestId: req.id,
-      timestamp: new Date().toISOString(),
-    });
-  };
-}
 
 export const FINANCE_PERMISSION_GROUPS = {
   dashboard: [FINANCE_PERMISSIONS.viewDashboard],
@@ -162,8 +81,6 @@ export const FINANCE_PERMISSION_GROUPS = {
 const FinancePermissionMap = {
   FINANCE_PERMISSIONS,
   FINANCE_PERMISSION_GROUPS,
-  hasFinancePermission,
-  requireFinancePermission,
 };
 
 export default FinancePermissionMap;

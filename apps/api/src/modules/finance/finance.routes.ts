@@ -7,10 +7,8 @@ import { platformFeatureFlag } from '../../middleware/platform-feature-flag.midd
 import { PLATFORM_FEATURE_KEYS } from '../platform/PlatformFeatureKeys';
 import { validate } from '../../middleware/validate';
 
-import {
-  FINANCE_PERMISSIONS,
-  requireFinancePermission,
-} from './FinancePermissionMap';
+import { FINANCE_PERMISSIONS } from './FinancePermissionMap';
+import { requirePermissions } from '../../middleware/rbac';
 
 import {
   closePeriod,
@@ -314,28 +312,28 @@ router.get('/', (req: Request, res: Response) => {
  */
 router.get(
   '/accounts',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewAccount),
+  requirePermissions(FINANCE_PERMISSIONS.viewAccount),
   validate({ query: accountQuerySchema }),
   listAccounts,
 );
 
 router.post(
   '/accounts',
-  requireFinancePermission(FINANCE_PERMISSIONS.createAccount),
+  requirePermissions(FINANCE_PERMISSIONS.createAccount),
   validate({ body: accountBodySchema }),
   createAccount,
 );
 
 router.get(
   '/accounts/:id',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewAccount),
+  requirePermissions(FINANCE_PERMISSIONS.viewAccount),
   validate({ params: idParamSchema }),
   getAccount,
 );
 
 router.patch(
   '/accounts/:id',
-  requireFinancePermission(FINANCE_PERMISSIONS.updateAccount),
+  requirePermissions(FINANCE_PERMISSIONS.updateAccount),
   validate({ params: idParamSchema, body: accountUpdateSchema }),
   updateAccount,
 );
@@ -345,21 +343,21 @@ router.patch(
  */
 router.get(
   '/journals',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewJournal),
+  requirePermissions(FINANCE_PERMISSIONS.viewJournal),
   validate({ query: journalQuerySchema }),
   listJournals,
 );
 
 router.post(
   '/journals',
-  requireFinancePermission(FINANCE_PERMISSIONS.postJournal),
+  requirePermissions(FINANCE_PERMISSIONS.postJournal),
   validate({ body: journalBodySchema }),
   postJournal,
 );
 
 router.get(
   '/journals/:id',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewJournal),
+  requirePermissions(FINANCE_PERMISSIONS.viewJournal),
   validate({ params: idParamSchema }),
   getJournal,
 );
@@ -371,14 +369,14 @@ router.get(
  */
 router.post(
   '/petty-cash',
-  requireFinancePermission(FINANCE_PERMISSIONS.postJournal),
+  requirePermissions(FINANCE_PERMISSIONS.postJournal),
   validate({ body: pettyCashBodySchema }),
   recordPettyCashVoucher,
 );
 
 router.get(
   '/petty-cash/float',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewDashboard),
+  requirePermissions(FINANCE_PERMISSIONS.viewDashboard),
   validate({ query: pettyCashFloatQuerySchema }),
   getPettyCashFloat,
 );
@@ -388,21 +386,21 @@ router.get(
  */
 router.get(
   '/trial-balance',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewTrialBalance),
+  requirePermissions(FINANCE_PERMISSIONS.viewTrialBalance),
   validate({ query: asOfQuerySchema }),
   getTrialBalance,
 );
 
 router.get(
   '/balance-sheet',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewBalanceSheet),
+  requirePermissions(FINANCE_PERMISSIONS.viewBalanceSheet),
   validate({ query: asOfQuerySchema }),
   getBalanceSheet,
 );
 
 router.get(
   '/cashflow',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewCashflow),
+  requirePermissions(FINANCE_PERMISSIONS.viewCashflow),
   validate({ query: cashflowQuerySchema }),
   getCashflowStatement,
 );
@@ -412,14 +410,14 @@ router.get(
 // registered on '/statements', shadowing the P&L handler (FINDING-FIN-D-002).
 router.get(
   '/statements/ledger',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewStatement),
+  requirePermissions(FINANCE_PERMISSIONS.viewStatement),
   validate({ query: statementQuerySchema }),
   getStatement,
 );
 
 router.get(
   '/dashboard',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewDashboard),
+  requirePermissions(FINANCE_PERMISSIONS.viewDashboard),
   getFinanceDashboard,
 );
 
@@ -428,20 +426,20 @@ router.get(
  */
 router.get(
   '/periods',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewPeriod),
+  requirePermissions(FINANCE_PERMISSIONS.viewPeriod),
   listAccountingPeriods,
 );
 
 router.post(
   '/period-close',
-  requireFinancePermission(FINANCE_PERMISSIONS.closePeriod),
+  requirePermissions(FINANCE_PERMISSIONS.closePeriod),
   closePeriod,
 );
 
 router.post(
   '/reports/export',
   financeExportFeature,
-  requireFinancePermission(FINANCE_PERMISSIONS.exportReports),
+  requirePermissions(FINANCE_PERMISSIONS.exportReports),
   validate({ body: exportReportSchema }),
   exportReport,
 );
@@ -451,41 +449,41 @@ router.post(
  */
 router.get(
   '/tax/vat/monthly',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewTax),
+  requirePermissions(FINANCE_PERMISSIONS.viewTax),
   validate({ query: vatMonthlyQuerySchema }),
   getMonthlyVatSummary,
 );
 
 router.get(
   '/tax/vat/summary',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewTax),
+  requirePermissions(FINANCE_PERMISSIONS.viewTax),
   validate({ query: vatRangeQuerySchema }),
   getVatSummary,
 );
 
 router.get(
   '/tax/vat/invoices/:invoiceId/exposure',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewTax),
+  requirePermissions(FINANCE_PERMISSIONS.viewTax),
   validate({ params: z.object({ invoiceId: z.string().trim().min(1) }) }),
   getInvoiceVatExposure,
 );
 
 router.get(
   '/tax/vat/adjustments',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewTax),
+  requirePermissions(FINANCE_PERMISSIONS.viewTax),
   listVatAdjustments,
 );
 
 router.post(
   '/tax/vat/adjustments',
-  requireFinancePermission(FINANCE_PERMISSIONS.manageTax),
+  requirePermissions(FINANCE_PERMISSIONS.manageTax),
   validate({ body: vatAdjustmentBodySchema }),
   recordVatAdjustment,
 );
 
 router.post(
   '/tax/vat/adjustments/:adjustmentId/void',
-  requireFinancePermission(FINANCE_PERMISSIONS.manageTax),
+  requirePermissions(FINANCE_PERMISSIONS.manageTax),
   validate({
     params: z.object({ adjustmentId: z.string().trim().min(1) }),
     body: reasonBodySchema,
@@ -498,28 +496,28 @@ router.post(
  */
 router.post(
   '/tax/wht/calculate',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewTax),
+  requirePermissions(FINANCE_PERMISSIONS.viewTax),
   validate({ body: whtCalculationBodySchema }),
   calculateWht,
 );
 
 router.get(
   '/tax/wht/report',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewTax),
+  requirePermissions(FINANCE_PERMISSIONS.viewTax),
   validate({ query: whtReportQuerySchema }),
   getWhtReport,
 );
 
 router.post(
   '/tax/wht/certificates',
-  requireFinancePermission(FINANCE_PERMISSIONS.manageTax),
+  requirePermissions(FINANCE_PERMISSIONS.manageTax),
   validate({ body: whtCertificateBodySchema }),
   recordWhtCertificate,
 );
 
 router.post(
   '/tax/wht/certificates/:certificateId/void',
-  requireFinancePermission(FINANCE_PERMISSIONS.manageTax),
+  requirePermissions(FINANCE_PERMISSIONS.manageTax),
   validate({
     params: z.object({ certificateId: z.string().trim().min(1) }),
     body: reasonBodySchema,
@@ -532,21 +530,21 @@ router.post(
  */
 router.get(
   '/reconciliations',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewReconciliation),
+  requirePermissions(FINANCE_PERMISSIONS.viewReconciliation),
   validate({ query: reconciliationQuerySchema }),
   listFinanceReconciliations,
 );
 
 router.post(
   '/reconciliations/run',
-  requireFinancePermission(FINANCE_PERMISSIONS.runReconciliation),
+  requirePermissions(FINANCE_PERMISSIONS.runReconciliation),
   validate({ body: reconciliationBodySchema }),
   runFinanceReconciliation,
 );
 
 router.get(
   '/reconciliations/:reconciliationId',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewReconciliation),
+  requirePermissions(FINANCE_PERMISSIONS.viewReconciliation),
   validate({ params: z.object({ reconciliationId: z.string().trim().min(1) }) }),
   getFinanceReconciliationById,
 );
@@ -556,7 +554,7 @@ router.get(
  */
 router.post(
   '/etims/invoices/:invoiceId/fiscalize',
-  requireFinancePermission(FINANCE_PERMISSIONS.fiscalizeEtims),
+  requirePermissions(FINANCE_PERMISSIONS.fiscalizeEtims),
   validate({
     params: z.object({ invoiceId: z.string().trim().min(1) }),
     body: etimsFiscalizeBodySchema,
@@ -569,7 +567,7 @@ router.post(
  */
 router.post(
   '/postings',
-  requireFinancePermission(FINANCE_PERMISSIONS.postJournal),
+  requirePermissions(FINANCE_PERMISSIONS.postJournal),
   validate({ body: financePostingBodySchema }),
   postFinanceSource,
 );
@@ -578,7 +576,7 @@ router.post(
 
 router.get(
   '/statements',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewAccount),
+  requirePermissions(FINANCE_PERMISSIONS.viewAccount),
   async (req: Request, res: Response) => {
     try {
       const year = parseInt(String(req.query.year ?? new Date().getFullYear()));
@@ -655,7 +653,7 @@ router.get(
 
 router.get(
   '/reconciliations',
-  requireFinancePermission(FINANCE_PERMISSIONS.viewAccount),
+  requirePermissions(FINANCE_PERMISSIONS.viewAccount),
   async (req: Request, res: Response) => {
     try {
       const runs = await req.db.reconciliationRun.findMany({
@@ -670,7 +668,7 @@ router.get(
 
 router.post(
   '/reconciliations/run',
-  requireFinancePermission(FINANCE_PERMISSIONS.postJournal),
+  requirePermissions(FINANCE_PERMISSIONS.postJournal),
   async (req: Request, res: Response) => {
     try {
       const { period } = req.body;

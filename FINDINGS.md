@@ -3443,3 +3443,26 @@ needs checking; if live, it provisions tenants with a role/permission model that
 rbac.ts DB-permission mechanism cannot read. Out of scope for 007-011 step (a)
 (unifying it = a separate effort on a different model). Action: confirm callers; then
 either retire it or migrate it onto CANONICAL_ROLES + the catalog. Logged 2026-07-01.
+
+## FINDING-007-011 — STEP (c) finance DONE (2026-07-01) — finance routes on requirePermissions
+
+First of the 4 module migrations (per-module, YES-gated). `finance.routes.ts`: all 35
+`requireFinancePermission(FINANCE_PERMISSIONS.X)` guards → `requirePermissions(...)`
+(same dot-key args, now DB-checked via rbac.ts instead of the never-populated
+req.user.permissions). `FinancePermissionMap.ts`: deleted the broken guard
+(requireFinancePermission/hasFinancePermission/isSuperUser/getUserPermissions);
+kept FINANCE_PERMISSIONS + FINANCE_PERMISSION_GROUPS constants (referenced by routes +
+index re-export). No manageFinance/wildcard usage in routes — clean swap.
+
+Behavior change (intended): finance access is now authority-by-DB-grant (roles granting
+finance.* — post step-a: FIRM_ADMIN/MANAGING_PARTNER via ALL, CFO/ACCOUNTANT/SENIOR_
+PARTNER/PARTNER/BRANCH_MANAGER via finance module) + rbac super-admin; the old
+role-NAME allowlist (incl. tenantRole===FIRM_ADMIN bypass) is gone.
+
+Verified (push-held): tsc exit 0; 35/35 guards swapped (0 requireFinancePermission code
+refs); map no longer exports guard fns; rbac-engine enforcement for finance.post_journal
+— grant→allow, finance.*→allow, clerk-like→deny. Full live HTTP cert (admin 200 /
+unprivileged 403) DEFERRED to deploy + fresh-branch reseed (PLAY-001) — that completes
+step (d) for finance.
+
+NEXT: step (c) payments (then payroll, then hr).
