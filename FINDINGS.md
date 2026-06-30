@@ -3066,3 +3066,45 @@ Reception (checked same pass): BUILT & mounted (11 endpoints at /reception
 + /frontdesk + /front-desk + /express; ReceptionLog model) — no gap found.
 Status: OPEN — deferred (verify-then-deploy, own session).
 Logged: 2026-07-01
+
+## FINDING-FRONT-008 — OPEN — MEDIUM
+**Audit/change history not visible to users on invoices,
+documents, accounts**
+Backend audit hash-chain (logSecurityEvent, AuditLog)
+exists and is verified (FINDING-009-001, FIN-G/I work).
+No confirmation users can view a change-history timeline
+on individual invoices, documents, or accounts in the UI.
+Action: investigate apps/web for any audit-trail UI
+component; if absent, scope as a frontend feature
+(read-only history view per entity, sourced from
+existing AuditLog).
+Status: OPEN — needs investigation first
+Logged: 2026-07-01
+
+## FINDING-FRONT-009 — OPEN — LOW
+**No loading/busy-state animation on long-running actions**
+UX gap — actions like report generation, seed runs,
+large list loads may show no busy indicator.
+Action: audit key async actions in apps/web, add
+consistent loading states (spinner/skeleton).
+Status: OPEN — low priority, batch with frontend polish
+Logged: 2026-07-01
+
+## TODO-013 — OPEN — User groups & separation clarification needed
+User raised "user groups & separation" — overlaps with
+FINDING-007-011 (role/permission unification) if referring
+to role-based access. If referring to tenant/branch-level
+data segregation, that's largely covered by ADR-001
+(tenant isolation, already enforced + tested). Needs
+clarification on which before scoping further.
+Status: OPEN — awaiting clarification
+Logged: 2026-07-01
+
+## TODO-014 — DEFERRED — How-to / User Manual documentation
+End-user documentation (how-to guides, manual) for the
+platform. Deliberately deferred to near go-live, once
+features and UI are stable — documenting a moving target
+wastes effort. Revisit during Phase 5 (Production
+Readiness) or just before.
+Status: DEFERRED — scheduled near go-live
+Logged: 2026-07-01
