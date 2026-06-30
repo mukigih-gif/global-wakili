@@ -17,6 +17,7 @@ import VATService from './VATService';
 import WHTService from './WHTService';
 import { withholdingTaxCertificateService } from '../billing/withholding-tax-certificate.service';
 import FinancePostingService from './FinancePostingService';
+import PettyCashService from './petty-cash.service';
 
 function getTenantId(req: Request): string {
   const tenantId =
@@ -669,4 +670,24 @@ export const postFinanceSource = asyncHandler(async (req: Request, res: Response
   });
 
   responseOk(res, data, 201);
+});
+// Petty cash (FIN-001) — wires the previously-dead PettyCashService.
+export const recordPettyCashVoucher = asyncHandler(async (req: Request, res: Response) => {
+  const result = await PettyCashService.recordVoucher(
+    { actor: { id: getActorId(req) }, tenantId: getTenantId(req), req: req as any },
+    req.body,
+  );
+  responseOk(res, result, 201);
+});
+
+export const getPettyCashFloat = asyncHandler(async (req: Request, res: Response) => {
+  const result = await PettyCashService.getFloatStatus(
+    { tenantId: getTenantId(req), req: req as any },
+    {
+      pettyCashAssetAccountId: String(req.query.pettyCashAssetAccountId),
+      imprestLimit: req.query.imprestLimit as never,
+      lowFloatThreshold: req.query.lowFloatThreshold as never,
+    },
+  );
+  responseOk(res, result, 200);
 });

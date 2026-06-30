@@ -39,6 +39,8 @@ import {
   listVatAdjustments,
   postFinanceSource,
   recordVatAdjustment,
+  recordPettyCashVoucher,
+  getPettyCashFloat,
   recordWhtCertificate,
   runFinanceReconciliation,
   voidVatAdjustment,
@@ -192,6 +194,23 @@ const vatAdjustmentBodySchema = z.object({
   metadata: z.record(z.unknown()).optional(),
 });
 
+const pettyCashBodySchema = z.object({
+  amount: decimalLike,
+  description: z.string().trim().min(1).max(2000),
+  category: z.enum(['TRANSPORT', 'OFFICE_SUPPLIES', 'MEALS', 'COMMUNICATION']),
+  pettyCashAssetAccountId: z.string().trim().min(1),
+  expenseAccountId: z.string().trim().min(1),
+  matterId: z.string().trim().min(1).optional().nullable(),
+  branchId: z.string().trim().min(1).optional().nullable(),
+  reference: z.string().trim().max(255).optional().nullable(),
+});
+
+const pettyCashFloatQuerySchema = z.object({
+  pettyCashAssetAccountId: z.string().trim().min(1),
+  imprestLimit: decimalLike.optional(),
+  lowFloatThreshold: decimalLike.optional(),
+});
+
 const whtCalculationBodySchema = z.object({
   invoiceId: z.string().trim().min(1).optional(),
   vendorBillId: z.string().trim().min(1).optional(),
@@ -341,6 +360,25 @@ router.get(
   requireFinancePermission(FINANCE_PERMISSIONS.viewJournal),
   validate({ params: idParamSchema }),
   getJournal,
+);
+
+/**
+ * Petty cash — wires the existing (previously dead) PettyCashService (FIN-001).
+ * recordVoucher posts a balanced Dr expense / Cr petty-cash-asset journal via the
+ * shared TransactionEngine.
+ */
+router.post(
+  '/petty-cash',
+  requireFinancePermission(FINANCE_PERMISSIONS.postJournal),
+  validate({ body: pettyCashBodySchema }),
+  recordPettyCashVoucher,
+);
+
+router.get(
+  '/petty-cash/float',
+  requireFinancePermission(FINANCE_PERMISSIONS.viewDashboard),
+  validate({ query: pettyCashFloatQuerySchema }),
+  getPettyCashFloat,
 );
 
 /**

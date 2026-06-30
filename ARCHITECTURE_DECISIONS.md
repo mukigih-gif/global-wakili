@@ -260,4 +260,49 @@ Logged: 2026-06-21.
 
 ---
 
+ADR-012
+
+Decision:
+
+Billing Posting Accepted as a Parallel, Independently-Guarded Posting Mechanism
+
+Status:
+
+Accepted
+
+Reason:
+
+BillingPostingService.postInvoiceIssued posts invoice AR/income/VAT journals
+directly, NOT through the shared TransactionEngine.postJournalAtomically used by
+Trust and Payments posting. It therefore bypasses PostingPolicyService
+(account-lock / allowManualPosting / multi-currency / systemPosting checks) and
+FinanceIdempotencyService, compensating with its own balance, period, and
+idempotency guards. Those guards are verified working (FINDING-007-010 closed:
+balanced AR 11,600 / income 10,000 / VAT 1,600; idempotent re-run = 1 journal).
+The standing concern (FINDING-007-013) is drift: two posting mechanisms
+maintained independently can diverge over time.
+
+Outcome:
+
+The parallel billing-posting path is ACCEPTED as an intentional architecture, not
+a defect, on these conditions:
+- Billing posting MUST keep enforcing its own balance, period-lock, and
+  idempotency guards (no un-guarded direct journal writes).
+- Any change to shared posting rules (period-lock semantics, multi-currency
+  policy, idempotency keys) MUST be mirrored in BillingPostingService in the same
+  change, or explicitly noted N/A.
+- Convergence onto the shared TransactionEngine remains a permitted future
+  refactor but is NOT required; if undertaken it is its own scoped session with
+  full re-certification of the billing->GL path.
+This closes FINDING-007-013 by decision (accept), superseding its "needs ADR
+either way" status.
+
+Related:
+
+FINDING-007-013; FINDING-007-010; ADR-004.
+
+Logged: 2026-07-01.
+
+---
+
 End of File

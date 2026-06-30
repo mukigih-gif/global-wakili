@@ -679,6 +679,7 @@ const accountsReceivable = await this.resolveAccountId(tx, tenantId, AccountSubt
         subtype,
         isActive: true,
       },
+      orderBy: { code: 'asc' },
       select: { id: true },
     });
 

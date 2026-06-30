@@ -53,9 +53,9 @@ preserved for history.
 | ID | Severity | Summary | Owning phase |
 |---|---|---|---|
 | FINDING-AUTH-001 | HIGH | Production email delivery unconfigured — all email simulated | pre-go-live |
-| FINDING-007-013 | MEDIUM | Billing posting bypasses shared TransactionEngine (parallel mechanism, drift risk) | Phase 3/4 |
+| FINDING-007-013 | CLOSED (2026-07-01) | Billing parallel-posting path accepted via ADR-012 (own guards; mirror shared rules) | Phase 3/4 |
 | FINDING-COV-001 | MEDIUM | Codebase-wide: 43 service files across 10 modules export-only/dead (TODO-011 Part A; see MODULE_COVERAGE_AUDIT.md) | Phase 3 |
-| FINDING-FIN-001 | MEDIUM | petty-cash.service built (correct TransactionEngine posting) but never wired — wire-in/delete/ADR decision | Phase 3 |
+| FINDING-FIN-001 | CLOSED (2026-07-01) | petty-cash.service wired: POST /finance/petty-cash + GET /finance/petty-cash/float | Phase 3 |
 | FINDING-FIN-B-001 | — | Phase 3 Group B (CapEx/OpEx) unbuilt: no expenditure/asset/depreciation/budget — cert deferred, feature build | Phase 3 |
 | FINDING-FIN-C-001 | — | Phase 3 Group C (Ledger Book) partial: /finance/ledger + export + client sub-ledger missing; period-lock + trial-balance certifiable | Phase 3 |
 | FINDING-FIN-D-001 | — | Phase 3 Group D (P&L) UNBUILT at HTTP: P&L handler dead (shadowed, FIN-D-002); reachable /statements is a ledger statement; cert deferred | Phase 3 |
@@ -69,7 +69,7 @@ preserved for history.
 | F-17 | HIGH | No MFA enforced at login | pre-go-live |
 | F-20 | HIGH | No domain/SSO (SAML/OIDC) for firm staff | pre-go-live |
 | F-18 | IMPLEMENTED — verify | Reset flow real; E2E happy-path + prod email delivery unverified | Phase 2 |
-| FINDING-008-005 | MEDIUM | Payroll dashboard queries phantom statutory fields (Option B deferred) | Phase 3 |
+| FINDING-008-005 | CLOSED (2026-07-01) | Option A accepted (crash fixed); Option B statutory schema → TODO-015 | Phase 3 |
 | FINDING-007-011 | MEDIUM | Unify parallel role/permission systems onto rbac.ts | Phase 3/4 |
 | F-15 | CLOSED (2026-06-30) | Password expiry enforced at login (403 PASSWORD_EXPIRED) | pre-go-live |
 | F-16 | CLOSED (2026-06-30) | Shared validatePasswordPolicy enforced at registration (400 WEAK_PASSWORD) | pre-go-live |
@@ -681,7 +681,7 @@ Logged: 2026-06-20
 
 ---
 
-## FINDING-007-013 — OPEN — MEDIUM
+## FINDING-007-013 — CLOSED (2026-07-01, accepted via ADR-012) — MEDIUM
 
 **Billing posting (postInvoiceIssued) is a parallel mechanism, does not route
 through TransactionEngine.postJournalAtomically**
@@ -694,6 +694,14 @@ independently. Recommend future convergence onto shared TransactionEngine, or
 formal acceptance of the parallel path as an intentional architecture decision
 (needs ADR either way).
 Logged: 2026-06-20
+
+CLOSED 2026-07-01 by decision: the parallel billing-posting path is formally
+ACCEPTED in **ADR-012** (ARCHITECTURE_DECISIONS.md) as an intentional, independently-
+guarded mechanism — on the conditions that billing posting keeps its own balance/
+period/idempotency guards and that any shared-posting-rule change is mirrored (or
+marked N/A). Convergence onto TransactionEngine remains a permitted-but-not-required
+future refactor (its own session + re-cert). This resolves the "needs ADR either
+way" status.
 
 ---
 
@@ -895,6 +903,15 @@ Decision needed (not taken here): **wire-in** (add `/finance/petty-cash` route +
 controller) when petty cash is required, **delete** as dead code, or **accept/defer
 via ADR**. Not blocking.
 Logged: 2026-06-20
+
+CLOSED 2026-07-01 (wire-in chosen): `PettyCashService` is now HTTP-reachable —
+`POST /finance/petty-cash` (recordVoucher, gated finance.post_journal) and
+`GET /finance/petty-cash/float` (getFloatStatus, gated finance.view_dashboard)
+wired in `finance.routes.ts` + thin handlers in `finance.controller.ts`. No schema
+change; the service already posts via the shared TransactionEngine. Verified:
+apps/api tsc exit 0; recordVoucher exercised inside a rolled-back $transaction
+(balanced Dr expense / Cr petty-cash-asset, no rows persisted); getFloatStatus read
+live. No longer dead code.
 
 ---
 
@@ -1111,7 +1128,7 @@ model duality**
 
 ---
 
-## FINDING-008-005 — OPEN — MEDIUM
+## FINDING-008-005 — CLOSED (2026-07-01, Option A accepted) — MEDIUM
 
 **Payroll dashboard queries fields absent from deployed schema —
 same class as FINDING-008-002 (Department)**
@@ -1127,7 +1144,10 @@ same class as FINDING-008-002 (Department)**
   discipline as Department fix.
 - **Risk:** Response shape change for any frontend reading
   payroll dashboard totals/breakdowns.
-- **Status:** OPEN (Option B deferred) / Option A applied
+- **Status:** CLOSED (2026-07-01) — Option A (surface existing Payslip totals +
+  batch status; drop phantom fields) accepted as the resolution; the dashboard
+  no longer queries absent fields. Option B (statutory-breakdown schema
+  catch-up) split out as TODO-015.
 - **Logged:** 2026-06-18
 
 ---
@@ -2776,6 +2796,14 @@ data change goes through migrate dev → review → migrate deploy
 (db push prohibited).
 Logged: 2026-06-28
 
+PARTIAL FIX 2026-07-01 (issue 2 only): `TrustTransactionService.resolveAccountId`
+now adds `orderBy: { code: 'asc' }` to its subtype `findFirst`, so the
+office-settlement account pick is DETERMINISTIC (lowest code wins) when a tenant
+carries >1 account of a subtype (e.g. dual ACCOUNTS_RECEIVABLE 1200/1205). apps/api
+tsc exit 0. Finding stays **OPEN** — issue 1 (dual AR code families 1100/1200) and
+the 2110/1300 + 1205/1350 drift (issues a/c, multi-file + data migration) remain
+for the dedicated finance session.
+
 ---
 
 ## SEED-PROGRESS-NOTE — Seed layers 01-12 complete (2026-06-28)
@@ -3189,4 +3217,15 @@ Action: investigate the dropdown component in
 apps/web/.../calendar — fix width/padding or add proper
 truncation with ellipsis if narrower width is intentional.
 Status: OPEN — UX polish, batch with FRONT-010/011
+Logged: 2026-07-01
+
+## TODO-015 — DEFERRED — Payroll dashboard statutory schema catch-up (Option B of FINDING-008-005)
+Option A (surface existing Payslip totals + batch status; drop phantom fields)
+is the accepted resolution for the dashboard crash (FINDING-008-005 CLOSED).
+Option B — add the per-employee statutory breakdown granularity (NITA, per-record
+status lifecycle) the dashboard originally assumed — remains a future schema
+migration (migrate dev → review → migrate deploy; db push prohibited), same
+discipline as the Department catch-up (FINDING-008-002). Build only if the
+statutory-breakdown dashboard granularity is actually required.
+Status: DEFERRED — own migration session.
 Logged: 2026-07-01
