@@ -3090,15 +3090,16 @@ consistent loading states (spinner/skeleton).
 Status: OPEN — low priority, batch with frontend polish
 Logged: 2026-07-01
 
-## TODO-013 — OPEN — User groups & separation clarification needed
-User raised "user groups & separation" — overlaps with
-FINDING-007-011 (role/permission unification) if referring
-to role-based access. If referring to tenant/branch-level
-data segregation, that's largely covered by ADR-001
-(tenant isolation, already enforced + tested). Needs
-clarification on which before scoping further.
-Status: OPEN — awaiting clarification
+## TODO-013 — CLOSED — duplicate of FINDING-007-011
+User clarified: "user groups & separation" refers to
+role-based module access control (HR/Accounts restricted
+from users who don't need them). This is exactly the
+scope of FINDING-007-011 (role/permission system
+unification) — the two parallel role systems are the
+root cause of inconsistent module access. No separate
+work needed; fully covered by 007-011's scoping session.
 Logged: 2026-07-01
+Closed: 2026-07-01
 
 ## TODO-014 — DEFERRED — How-to / User Manual documentation
 End-user documentation (how-to guides, manual) for the
