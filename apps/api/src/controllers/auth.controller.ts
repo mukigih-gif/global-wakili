@@ -31,6 +31,12 @@ import { validatePasswordPolicy } from '../utils/password';
 
 export const authRouter = Router();
 
+// F-19: brute-force lockout policy. After this many consecutive failed logins
+// the account is locked for the duration below; the login handler auto-unlocks
+// once lockedUntil passes, and a successful login clears the lock + counter.
+const MAX_FAILED_LOGIN_ATTEMPTS = 5;
+const ACCOUNT_LOCKOUT_DURATION_MS = 30 * 60 * 1000; // 30 minutes
+
 type LoginUserWithRelations = Prisma.UserGetPayload<{
   include: {
     roles: true;
@@ -404,6 +410,9 @@ authRouter.post(
   async (req: Request, res: Response, next: NextFunction) => {
     try {
       const validatedData = RegisterFirmSchema.parse(req.body);
+      // F-16: enforce the shared complexity policy at registration (the dto's
+      // min(8) is only a length floor) → 400 WEAK_PASSWORD, same as change-password.
+      validatePasswordPolicy(validatedData.adminPassword);
 
       const result = await OnboardingService.registerNewFirm({
         ...validatedData,
@@ -630,6 +639,9 @@ authRouter.post(
       if (!passwordMatches) {
   const failedLoginRoleClaims = deriveRoleClaims(user);
 
+  // F-19: trip the lock once the threshold is reached. lockedUntil gates the
+  // login check (line ~571); a successful login later clears both.
+  const willLock = (user.failedLoginAttempts ?? 0) + 1 >= MAX_FAILED_LOGIN_ATTEMPTS;
   await prisma.user.update({
     where: {
       id: user.id,
@@ -638,6 +650,9 @@ authRouter.post(
       failedLoginAttempts: {
         increment: 1,
       },
+      ...(willLock
+        ? { isLocked: true, lockedUntil: new Date(Date.now() + ACCOUNT_LOCKOUT_DURATION_MS) }
+        : {}),
     },
   });
 
@@ -673,12 +688,39 @@ authRouter.post(
   return next(new HttpError(401, 'Invalid credentials'));
 }
 
+      // F-15: block expired passwords (password matched, but it is past its
+      // expiry). null passwordExpiresAt = never expires. User must reset via
+      // the forgot/reset-password flow (F-18).
+      if (user.passwordExpiresAt && user.passwordExpiresAt <= new Date()) {
+        await safeLogAuthAudit({
+          req,
+          tenantId: user.tenantId,
+          userId: user.id,
+          email: user.email,
+          action: AuditAction.REQUEST_FAILURE,
+          severity: AuditSeverity.WARNING,
+          eventCode: AUTH_AUDIT_EVENT_CODES.LOGIN_BLOCKED_PASSWORD_EXPIRED,
+          entityType: 'User',
+          entityId: user.id,
+          success: false,
+          failureReason: 'Password expired',
+          metadata: {
+            passwordExpiresAt: user.passwordExpiresAt.toISOString(),
+          },
+        });
+
+        return next(Object.assign(new HttpError(403, 'Password expired'), { code: 'PASSWORD_EXPIRED' }));
+      }
+
+      // F-19: clear the lock + counter on a clean login (fixes locked-forever).
       await prisma.user.update({
         where: {
           id: user.id,
         },
         data: {
           failedLoginAttempts: 0,
+          isLocked: false,
+          lockedUntil: null,
           lastLoginAt: new Date(),
           lastActivityAt: new Date(),
         },

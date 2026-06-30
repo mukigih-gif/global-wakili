@@ -270,16 +270,27 @@ renumber.
 
 ### F-15 — MEDIUM — Password expiry not enforced
 - `passwordExpiresAt`/`passwordChangedAt` exist but never checked at login.
-- **Status:** OPEN — enforce at login; set whenever a password is set.
+- **Status:** CLOSED (2026-06-30) — login now blocks an expired password (after the
+  password matches) with `403 PASSWORD_EXPIRED` (audit LOGIN_BLOCKED_PASSWORD_EXPIRED);
+  null `passwordExpiresAt` = never expires. Verified in-process: expired user → 403
+  PASSWORD_EXPIRED.
 
 ### F-16 — MEDIUM — No password complexity policy
 - Only adminPassword min(8) at registration; login password min(1). No shared validator.
-- **Status:** OPEN — add shared password-policy validator at all set-password points.
+- **Status:** CLOSED (2026-06-30) — registration now calls the shared
+  `validatePasswordPolicy` (8+/upper/lower/digit/special), same as change-password →
+  `400 WEAK_PASSWORD`. dto keeps `min(8)` as a length floor (full policy enforced in the
+  handler so the code stays WEAK_PASSWORD). Verified: weak register → 400 WEAK_PASSWORD,
+  no firm created.
 
 ### F-19 — MEDIUM — Account lockout after failed attempts unverified
 - `failedLoginAttempts`/`isLocked`/`lockedUntil` exist and increment, but threshold firing +
   auto-unlock not verified end-to-end (brute-force risk if not enforced).
-- **Status:** OPEN — verify lockout fires (~5 attempts) and auto-unlocks (~30 min).
+- **Status:** CLOSED (2026-06-30) — login now LOCKS at MAX_FAILED_LOGIN_ATTEMPTS=5
+  (isLocked + lockedUntil=now+30m); the existing check auto-unlocks once lockedUntil passes;
+  a successful login clears isLocked/lockedUntil/counter (fixes a latent locked-forever bug —
+  success previously reset only the counter). Verified in-process: 5 fails → locked, 6th/while-
+  locked → 423, post-expiry → 200 + lock cleared.
 
 ### F-05 — LOW — Client portal routes not RBAC-gated (mitigated by self-scoping)
 - client.routes.ts:74-84 GET /clients/:id/portal/{dashboard,matters} lack requirePermissions.
