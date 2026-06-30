@@ -13,7 +13,7 @@ export const getClientInternalDashboard = asyncHandler(async (req: Request, res:
 });
 
 export const getClientPortalDashboard = asyncHandler(async (req: Request, res: Response) => {
-  const portalUserId = req.user?.sub ?? req.query.portalUserId ?? null;
+  const portalUserId = req.user?.sub ?? null; // F-05: strictly the authenticated user (no query fallback)
 
   if (!portalUserId) {
     throw Object.assign(new Error('Portal user identity is required'), {
@@ -34,7 +34,7 @@ export const getClientPortalDashboard = asyncHandler(async (req: Request, res: R
 });
 
 export const listClientPortalMatters = asyncHandler(async (req: Request, res: Response) => {
-  const portalUserId = req.user?.sub ?? req.query.portalUserId ?? null;
+  const portalUserId = req.user?.sub ?? null; // F-05: strictly the authenticated user (no query fallback)
 
   if (!portalUserId) {
     throw Object.assign(new Error('Portal user identity is required'), {

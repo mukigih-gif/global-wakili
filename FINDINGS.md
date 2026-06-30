@@ -295,7 +295,17 @@ renumber.
 ### F-05 — LOW — Client portal routes not RBAC-gated (mitigated by self-scoping)
 - client.routes.ts:74-84 GET /clients/:id/portal/{dashboard,matters} lack requirePermissions.
 - Self-scoping (portalUserId = req.user.sub) prevents cross-client leakage; live probe = 404 not leak.
-- **Status:** OPEN — add requirePermissions(client.viewPortal) for defense-in-depth.
+- **Status:** CLOSED (2026-07-01) — added `requirePermissions(PERMISSIONS.client.viewPortal)`
+  to both portal routes (defense-in-depth on top of the existing data-layer self-scope
+  `ClientPortalService.assertPortalAccess`, which 404s any non-matching caller). Confirmed
+  SAFE before applying: (a) `unifiedTenancy` hard-enforces auth (401 without a valid bearer),
+  so the routes are always authenticated; (b) the legitimate portal user's bootstrap `client`
+  role carries `client.view_portal` (00_bootstrap.ts:247-251) — not locked out; staff lacking
+  it (CLERK/ASSOCIATE/ADVOCATE) are now blocked. Also removed the dead
+  `?? req.query.portalUserId` fallback in client.dashboard.controller.ts (auth is enforced →
+  req.user.sub always wins) so self-scope can never be tricked by a query param. Verified:
+  apps/api tsc exit 0; router introspection → both portal routes now carry the guard
+  (3 handlers). No schema change.
 
 ### F-03 — INFO — POST /auth/refresh not implemented
 - Substituted with GET /auth/session for token validation. **Status:** OPEN (deferred; needed for mobile).
@@ -2999,3 +3009,28 @@ Logged: 2026-07-01
 "Still OPEN — ported for tracking" section; re-scoped
 to MEDIUM here as the OAuth path is implemented and only
 the domain-SSO build + creds remain.)
+
+---
+
+## FINDING-HR-ESS-001 — OPEN — MEDIUM (feature gap)
+**Employee Self-Service (ESS) portal — not built**
+Surfaced during F-05 (2026-07-01). Unlike the CLIENT portal
+(`/clients/:id/portal/*`, now gated), there is NO employee-facing
+self-service portal: no `/hr/.../portal`, no "my payslips"
+(`/payslips/me`), no ESS route, and no employee-portal role or
+`view_payslip`/self-service permission. HR has only admin-side
+surfaces — a payroll payslip summary (hr.controller ~764) and
+performance self-review start/submit (`/performance/:id/self-review/*`).
+Employees cannot view their own payslips / leave / profile in a
+self-service portal.
+
+Impact: MEDIUM — a standard HRMS expectation; not a Playwright
+blocker (nothing to gate, nothing to break). It is a feature BUILD,
+not a hardening fix. Matches the standing "Employee Portal & Payslip"
+HR backlog note.
+Action: scope as its own feature session (ESS routes + an `employee`
+portal role with self-scoped payslip/leave/profile reads, mirroring
+the client-portal self-scope + `view_portal` pattern). Defer to after
+Phase 2 Playwright.
+Status: OPEN — feature gap / deferred.
+Logged: 2026-07-01

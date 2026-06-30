@@ -73,12 +73,14 @@ router.get(
 
 router.get(
   '/:clientId/portal/dashboard',
+  requirePermissions(PERMISSIONS.client.viewPortal),
   validate({ query: portalQuerySchema }),
   getClientPortalDashboard,
 );
 
 router.get(
   '/:clientId/portal/matters',
+  requirePermissions(PERMISSIONS.client.viewPortal),
   validate({ query: portalQuerySchema }),
   listClientPortalMatters,
 );
