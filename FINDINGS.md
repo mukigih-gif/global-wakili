@@ -3494,3 +3494,61 @@ fresh-branch reseed (PLAY-001) — that completes step (d).
 NEXT: step (e) 19_security.seed.ts (now unblocked — role/permission model stable),
 then step (f) Phase 2 Playwright. Also pending: per-module live cert (d) post-deploy;
 existing prod tenants' HR_MANAGER hr.* re-grant migration; FINDING-007-011-ONB.
+
+## FINDING-007-011 — Follow-up #1 ADDRESSED (2026-07-01) — existing-tenant re-grant migration staged
+
+Confirmed existing tenants ARE affected: seed-default-roles is skip-if-exists for
+roles, and pre-step-(b) tenants lack the hr.*/payments.*/new-payroll.* catalog rows.
+New `apps/api/src/scripts/regrant-canonical-permissions.ts` — idempotent, ADDITIVE
+(`connect`, never `set`/disconnect), reuses CANONICAL_ROLES + resolveRolePermissions.
+Flags: `--dry-run`, `--tenant=<id>`, `--create-missing`.
+
+Dry-run (read-only, branch DB, 4 tenants) confirmed the gap precisely:
+- `demo-law-firm` (seed-default-provisioned, UPPERCASE roles): HR_MANAGER **+hr.*:32**,
+  ACCOUNTANT **+payments.*:7**, FIRM_ADMIN +60 — the exact stale-grant case.
+- bootstrap-seeded tenants (global-wakili, mwangi, default) show canonical roles as
+  "MISSING ROLE" (they still hold the orphaned lowercase roles + lone CFO from the
+  pre-step-(a) bootstrap) — default mode correctly SKIPS them (no writes); they get
+  correct roles on the fresh-branch re-seed (PLAY-001), so they don't need this migration.
+Verified the write mechanism via a focused rolled-back tx: HR_MANAGER hr.* 0 → 32 on
+connect, 32 on re-run (additive + idempotent), 0 after rollback (no pollution). tsc exit 0.
+(Full applyTenant rolled-back test hit the interactive-tx P2028 timeout — 324 catalog
+upserts ×2 in one tx — a harness artifact; the real migration runs un-tx'd via root
+prisma, dry-run-verified end-to-end.)
+
+STATUS: script written + verified; **staged for one-time post-deploy run** (deploy-gated,
+push held). Run order: deploy step-(a/b/c) → `regrant-canonical-permissions.ts` (no
+`--create-missing` first; add it for seed-default tenants needing CFO/BRANCH_MANAGER/CLIENT
+after review). NOT executed against live this session.
+
+## FINDING-007-011-ONB — UPGRADED to MEDIUM/HIGH (2026-07-01) — 3rd role path is the LIVE public registration
+
+Was logged LOW; investigation upgrades it. `OnboardingService.registerNewFirm` is the
+**live self-service firm-registration path** (called from `auth.controller.ts:417`), NOT
+dead code. In one tx (OnboardingService.ts:284-342) it provisions a tenant with its OWN
+model:
+- roles **`'ADMIN'` / `'USER'`** (`DEFAULT_ROLE_DEFINITIONS`) — a THIRD naming scheme,
+  neither lowercase nor the canonical UPPERCASE set;
+- **ad-hoc, non-catalog** permissions (`DEFAULT_PERMISSION_DEFINITIONS`: resource
+  `users`/`reports`/`matters`, action `MANAGE`/`READ`/`CREATE` → keys like `users.manage`)
+  — NOT the dot-key catalog;
+- admin user gets `tenantRole:'FIRM_ADMIN'` (enum, correct) connected to the `'ADMIN'`
+  Role.name;
+- it does **NOT** call provisionTenantRbac/seedDefaultRoles — so the tenant has **no
+  dot-key catalog and no canonical roles at all**.
+
+Impact (higher than casing): under rbac.ts requirePermissions (the 21 always-DB-gated
+modules + the 4 just migrated in step c), the admin's `ADMIN` role grants only
+`users.manage`/`reports.read` → **every catalog-keyed route denies them**. These tenants
+were relying on the module-map `tenantRole===FIRM_ADMIN` bypass for finance/hr/payroll/
+payments (removed by step c) and were already broken on the other 21 modules. So
+self-registered firms are effectively non-functional for RBAC. (Blast radius depends on
+whether `/register` is the active path vs PlatformOnboardingService — needs confirming.)
+
+Fix (NOT a casing rename — a model migration): make `registerNewFirm` provision RBAC via
+the canonical path (seed dot-key catalog + CANONICAL_ROLES in-tx; connect admin to the
+canonical `FIRM_ADMIN` role; delete DEFAULT_ROLE_DEFINITIONS/DEFAULT_PERMISSION_DEFINITIONS),
+OR retire `/register` if superseded by PlatformOnboardingService. Crosses package
+boundaries (packages/core/identity ↔ the shared provisioner) + changes the live
+registration tx → its own scoped session. ACTION: confirm whether `/register` is active,
+then converge-or-retire. Status: OPEN — deferred to its own session.
