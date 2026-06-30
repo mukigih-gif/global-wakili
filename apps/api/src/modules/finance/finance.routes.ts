@@ -269,7 +269,9 @@ const financePostingBodySchema = z.object({
   source: z.enum([
     'BILLING_INVOICE',
     'PAYMENT_RECEIPT',
-    'CREDIT_NOTE',
+    // 'CREDIT_NOTE' retired (BILL-002c) — credit-note GL posting is now atomic at
+    // creation via BillingPostingService.postCreditNoteIssued. The old
+    // FinancePostingService.postCreditNote path was broken (phantom CreditNote fields).
     'RETAINER_RECEIPT',
     'RETAINER_APPLICATION',
     'PAYROLL_BATCH',

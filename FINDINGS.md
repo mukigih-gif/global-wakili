@@ -3324,15 +3324,20 @@ Impacted files: `billing-posting.service.ts` (new method + `BillingCreditNoteInp
 `CreditNoteService.ts` (import + one in-tx call). BILL-003 (VAT-return netting) remains
 OPEN pending the product decision.
 
-### Sub-note BILL-002c — /post-source CREDIT_NOTE path is broken + now redundant — LOW
+### Sub-note BILL-002c — CLOSED (2026-07-01) — /post-source CREDIT_NOTE path retired — LOW
 `FinancePostingService.postCreditNote` reads/stamps `journalEntryId`/`postedAt`/
 `postedById` on `CreditNote` — fields that DO NOT EXIST on the model (it compiles only
 because `delegate()` returns `any`). At runtime its final `creditNote.update` would 500,
 and its `assertNotAlreadyPosted` guard (checking those phantom fields) never fires. With
-BILL-002 now posting atomically at creation, this manual path is also redundant. Follow-up
-(own change, not done here): retire the `'CREDIT_NOTE'` source from `/post-source`
-(finance.routes.ts:272) and/or fix `postCreditNote` to journal-existence idempotency.
-Until then it is the only residual double-post vector (manual-only, and it 500s mid-way).
+BILL-002 now posting atomically at creation, this manual path was also redundant.
+**CLOSED (2026-07-01):** removed `'CREDIT_NOTE'` from the `/post-source` zod enum
+(finance.routes.ts) AND the `case 'CREDIT_NOTE'` dispatch in `FinancePostingService.post`
+(now falls to `default` → 422 `UNSUPPORTED_FINANCE_POSTING_SOURCE`), so the broken path
+is unreachable by every route. `postCreditNote` is now orphaned and annotated
+`@deprecated RETIRED` (kept as documented dead code; safe to delete in a future COV-001
+cleanup — not deleted now to keep the diff minimal/reversible). `BillingPostingService
+.postCreditNoteIssued` is the sole credit-note GL posting path. tsc --noEmit (apps/api)
+exit 0. The residual double-post vector is eliminated.
 Logged: 2026-07-01.
 
 ### Sub-note BILL-002a — Credit-note create/void not audit-logged — LOW

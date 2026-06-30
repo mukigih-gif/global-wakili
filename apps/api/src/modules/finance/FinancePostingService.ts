@@ -220,8 +220,9 @@ export class FinancePostingService {
         return this.postInvoice(input);
       case 'PAYMENT_RECEIPT':
         return this.postPaymentReceipt(input);
-      case 'CREDIT_NOTE':
-        return this.postCreditNote(input);
+      // 'CREDIT_NOTE' dispatch retired (BILL-002c) — falls through to default (422).
+      // Credit-note GL posting is now atomic at creation via
+      // BillingPostingService.postCreditNoteIssued. See postCreditNote (@deprecated).
       case 'RETAINER_RECEIPT':
         return this.postRetainerReceipt(input);
       case 'RETAINER_APPLICATION':
@@ -359,6 +360,15 @@ export class FinancePostingService {
     return journal;
   }
 
+  /**
+   * @deprecated RETIRED (BILL-002c) — DO NOT WIRE. Broken path: it reads/writes
+   * CreditNote.journalEntryId/postedAt/postedById, which DO NOT exist on the model
+   * (compiles only because delegate() is `any`); its update would 500 at runtime and
+   * assertNotAlreadyPosted never fires. Credit-note GL posting now happens atomically
+   * at creation via BillingPostingService.postCreditNoteIssued (FINDING-BILL-002).
+   * No caller remains (removed from post() switch + /post-source enum). Kept as
+   * documented dead code; safe to delete in a future cleanup.
+   */
   async postCreditNote(input: FinancePostingInput) {
     const creditNote = delegate(prisma, 'creditNote');
 
