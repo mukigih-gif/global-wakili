@@ -2979,3 +2979,23 @@ Investigation note: no intrinsic signal distinguishes seeded vs legacy
 an explicit allowlist; no metadata marker) — hence the explicit/deterministic
 allowlist. The legacy tenant's data is retained, untouched, simply out of the
 gate's scope.
+
+---
+
+## F-20 — OPEN — MEDIUM
+**Domain SSO (SAML/OIDC) — not built**
+OAuth (Google/Microsoft) login code is structurally
+sound but requires external provider credentials
+(GOOGLE_CLIENT_ID/SECRET, MICROSOFT_CLIENT_ID/SECRET)
+not committed to repo — same class as AUTH-001 SMTP.
+SAML/OIDC enterprise SSO is a separate, large build.
+Neither is a Playwright blocker.
+Action: provision OAuth credentials in Render dashboard
+when available (ops task, not code); schedule F-20 as
+its own dedicated session after Phase 2 Playwright.
+Status: OPEN — externally blocked / deferred.
+Logged: 2026-07-01
+(Supersedes the earlier "F-20 — HIGH" stub in the
+"Still OPEN — ported for tracking" section; re-scoped
+to MEDIUM here as the OAuth path is implemented and only
+the domain-SSO build + creds remain.)
