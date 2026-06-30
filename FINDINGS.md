@@ -3260,3 +3260,71 @@ discipline as the Department catch-up (FINDING-008-002). Build only if the
 statutory-breakdown dashboard granularity is actually required.
 Status: DEFERRED — own migration session.
 Logged: 2026-07-01
+
+## FINDING-BILL-002 — OPEN — MEDIUM/HIGH (Class IV — GL)
+**Credit notes do not post to the GL — creating a credit note reduces the invoice on paper but never posts the reversing AR/income/VAT journal; the GL is overstated after every credit note.**
+
+- **Root cause:** `CreditNoteService.createCreditNote` (CreditNoteService.ts:140-251)
+  creates the `CreditNote` record and updates the invoice (`creditedAmount`/
+  `balanceDue`/`status`), but contains NO posting call. A correct, balanced reversal
+  handler exists — `FinancePostingService.postCreditNote` (FinancePostingService.ts:
+  362-411): DR `CREDIT_NOTE_CONTRA_REVENUE` + DR `VAT_OUTPUT` + CR
+  `ACCOUNTS_RECEIVABLE`, with an `assertNotAlreadyPosted` guard — but the billing
+  create path never calls it.
+- **Evidence:** `postCreditNote` is reachable only via `FinancePostingService.post()`
+  → wired solely to the finance `POST /post-source` endpoint (finance.routes.ts:272
+  lists `'CREDIT_NOTE'` as a valid source). The billing `/credit-notes` route →
+  controller (billing.controller.ts:182) → `CreditNoteService` chain has zero
+  references to `FinancePostingService`/`postCreditNote`/TransactionEngine. GL posting
+  requires a separate, manual second call that nothing triggers automatically.
+- **Pattern:** exact FINDING-007-010 twin (create path ≠ post path). 007-010 was the
+  invoice-issue version; this is its credit-note counterpart, still open.
+- **Blast radius:** every credit note created through the normal billing UI/API. AR
+  and income are overstated; trial balance / balance sheet / P&L overstate revenue
+  and receivables by the credited amount until someone manually fires `/post-source`.
+  Likely-changed files if fixed: `CreditNoteService.ts`, possibly
+  `billing-posting.service.ts` (a partial-reversal method), `billing.controller.ts`.
+  Architectural wrinkle: `postCreditNote` lives in `FinancePostingService` and queries
+  via `prisma` (not the `createCreditNote` tx); wiring it atomically crosses the
+  ADR-012 boundary (which accepted billing posting as its OWN parallel path) and must
+  not double-post (idempotency vs the existing `/post-source` route +
+  `assertNotAlreadyPosted`).
+- **Status:** OPEN — Class IV; requires Mandatory Analysis before any code.
+- **Logged:** 2026-07-01
+
+### Sub-note BILL-002a — Credit-note create/void not audit-logged — LOW
+Neither `CreditNoteService.createCreditNote`/`voidCreditNote` nor their controller
+(`billing.controller.ts:182,193`) calls `withAudit`/`logSecurityEvent` — a
+financially material action absent from the hash-chain audit. (The inline
+`POST /invoices` create route is likewise un-audited.) Bounded, non-GL fix
+(wrap the controller calls in `withAudit`, like the petty-cash pattern). Logged
+2026-07-01.
+
+### Sub-note BILL-002b — No invoice amendment path is undocumented design — INFO
+Invoices cannot be edited at any status (no PUT/PATCH route); correction is forced
+through cancel (full GL reversal) or credit note. This is a defensible design but is
+not recorded as an intentional decision. Action: capture as an ADR, and verify the
+DRAFT-cancel edge (cancelInvoice calls `reverseInvoiceIssued` even on a never-posted
+DRAFT). Logged 2026-07-01.
+
+## FINDING-BILL-003 — OPEN — MEDIUM (Class IV — VAT / product decision)
+**Credit notes are not netted in the VAT return — a credit note's VAT reversal never reaches the KRA VAT return; output VAT is overstated for credited invoices.**
+
+- **Root cause:** `VATService.getVatSummary` (FIN-E-001) computes output VAT by summing
+  `Invoice.total` filtered `status notIn ['DRAFT','CANCELLED']`. `CREDITED` is NOT
+  excluded and `creditedAmount` is NOT subtracted; credit-note VAT only enters the
+  return if separately recorded as a manual `VatAdjustment` (FIN-E-002).
+- **Evidence:** the credit-note path computes its own `taxAmount` on the credit lines
+  (CreditNoteService.ts:110-115) but writes it only to the CreditNote record — no
+  `VatAdjustment`, no GL post (BILL-002), no return linkage. `getVatSummary`'s status
+  filter omits `CREDITED`.
+- **Blast radius:** any VAT period containing a credited invoice → overstated output
+  VAT on the VAT3 return (over-declaration to KRA). Ties to FIN-E-001 (return
+  computation) and FIN-E-002 (VatAdjustment).
+- **Decision dependency:** not a clear-cut bug — needs an owner ruling on whether
+  credit notes should flow to the return automatically (exclude/net `CREDITED`) or
+  whether the manual `VatAdjustment` is the intended control. Scope-then-decide, not a
+  blind fix.
+- **Status:** OPEN — Class IV / product decision; requires Mandatory Analysis + owner
+  ruling before any code.
+- **Logged:** 2026-07-01
