@@ -2,7 +2,6 @@
 
 export * from './hr.types';
 export * from './hr.validators';
-export * from './hr-permission.map';
 
 export * from './employee.service';
 export * from './department.service';

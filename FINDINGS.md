@@ -3466,3 +3466,31 @@ unprivileged 403) DEFERRED to deploy + fresh-branch reseed (PLAY-001) — that c
 step (d) for finance.
 
 NEXT: step (c) payments (then payroll, then hr).
+
+## FINDING-007-011 — STEP (c) COMPLETE (2026-07-01) — all 4 modules on requirePermissions
+
+payments, payroll, hr migrated (finance done earlier, 8d33291). All four broken
+module maps are now retired — the parallel "Mechanism ②" (read the never-populated
+req.user.permissions + a hard-coded role-name allowlist) is GONE. Authorization for
+finance/payments/payroll/hr is now uniformly DB-grant via rbac.ts requirePermissions
+(the same mechanism as the other 21 modules), keyed on the catalog dot keys from
+step (b), granted by the canonical roles from step (a).
+
+Per module (route guards swapped, map deleted, index re-export removed):
+- finance — 35 guards → requirePermissions(FINANCE_PERMISSIONS.X dot strings);
+  FinancePermissionMap trimmed to constants (8d33291).
+- payments — 12 guards → requirePermissions(PERMISSIONS.payments.X); map deleted (246de9d).
+- payroll — 26 guards → requirePermissions(PERMISSIONS.payroll.X); map deleted (54c20d6).
+- hr — 54 guards → requirePermissions(PERMISSIONS.hr.X); map deleted (this commit).
+  This structurally closes F-14/FINDING-008-001: HR access is now DB-grantable
+  (HR_MANAGER grants hr.* via step-a), no longer role-name-bypass-only.
+
+Verified (push-held): tsc --noEmit (apps/api) exit 0; 0 leftover require*Permission
+refs; rbac-engine enforcement for payments.create_receipt / payroll.approve_batch /
+hr.view_employee — grant→allow, resource.*→allow, clerk-like→deny. Full live HTTP cert
+(admin 200 / unprivileged 403, no over-grant) per module DEFERRED to deploy +
+fresh-branch reseed (PLAY-001) — that completes step (d).
+
+NEXT: step (e) 19_security.seed.ts (now unblocked — role/permission model stable),
+then step (f) Phase 2 Playwright. Also pending: per-module live cert (d) post-deploy;
+existing prod tenants' HR_MANAGER hr.* re-grant migration; FINDING-007-011-ONB.

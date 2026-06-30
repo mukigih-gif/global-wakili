@@ -21,10 +21,8 @@ import {
   updateEmployeeSchema,
 } from './hr.validators';
 
-import {
-  HR_PERMISSIONS,
-  requireHrPermission,
-} from './hr-permission.map';
+import { requirePermissions } from '../../middleware/rbac';
+import { PERMISSIONS } from '../../config/permissions';
 
 import {
   accrueLeave,
@@ -291,14 +289,14 @@ router.get('/health', (req: Request, res: Response) => {
 
 router.get(
   '/dashboard',
-  requireHrPermission(HR_PERMISSIONS.viewDashboard),
+  requirePermissions(PERMISSIONS.hr.viewDashboard),
   validate({ query: dashboardQuerySchema }),
   getHrDashboard,
 );
 
 router.get(
   '/employees',
-  requireHrPermission(HR_PERMISSIONS.viewEmployee),
+  requirePermissions(PERMISSIONS.hr.viewEmployee),
   async (req: Request, res: Response) => {
     try {
       const { status, search, limit = '100' } = req.query as Record<string, string>;
@@ -343,14 +341,14 @@ router.get(
 
 router.post(
   '/employees',
-  requireHrPermission(HR_PERMISSIONS.createEmployee),
+  requirePermissions(PERMISSIONS.hr.createEmployee),
   validate({ body: createEmployeeSchema }),
   createEmployee,
 );
 
 router.get(
   '/employees/:employeeId',
-  requireHrPermission(HR_PERMISSIONS.viewEmployee),
+  requirePermissions(PERMISSIONS.hr.viewEmployee),
   async (req: Request, res: Response) => {
     try {
       const user = await req.db.user.findFirst({
@@ -376,98 +374,98 @@ router.get(
 
 router.patch(
   '/employees/:employeeId',
-  requireHrPermission(HR_PERMISSIONS.updateEmployee),
+  requirePermissions(PERMISSIONS.hr.updateEmployee),
   validate({ params: employeeIdParamSchema, body: updateEmployeeSchema }),
   updateEmployee,
 );
 
 router.post(
   '/employees/:employeeId/status',
-  requireHrPermission(HR_PERMISSIONS.changeEmployeeStatus),
+  requirePermissions(PERMISSIONS.hr.changeEmployeeStatus),
   validate({ params: employeeIdParamSchema, body: employeeStatusChangeSchema }),
   changeEmployeeStatus,
 );
 
 router.post(
   '/employees/:employeeId/terminate',
-  requireHrPermission(HR_PERMISSIONS.terminateEmployee),
+  requirePermissions(PERMISSIONS.hr.terminateEmployee),
   validate({ params: employeeIdParamSchema, body: terminateEmployeeSchema }),
   terminateEmployee,
 );
 
 router.get(
   '/departments',
-  requireHrPermission(HR_PERMISSIONS.viewDepartment),
+  requirePermissions(PERMISSIONS.hr.viewDepartment),
   validate({ query: departmentListQuerySchema }),
   listDepartments,
 );
 
 router.post(
   '/departments',
-  requireHrPermission(HR_PERMISSIONS.createDepartment),
+  requirePermissions(PERMISSIONS.hr.createDepartment),
   validate({ body: createDepartmentSchema }),
   createDepartment,
 );
 
 router.get(
   '/departments/:departmentId',
-  requireHrPermission(HR_PERMISSIONS.viewDepartment),
+  requirePermissions(PERMISSIONS.hr.viewDepartment),
   validate({ params: departmentIdParamSchema }),
   getDepartmentById,
 );
 
 router.patch(
   '/departments/:departmentId',
-  requireHrPermission(HR_PERMISSIONS.updateDepartment),
+  requirePermissions(PERMISSIONS.hr.updateDepartment),
   validate({ params: departmentIdParamSchema, body: updateDepartmentSchema }),
   updateDepartment,
 );
 
 router.post(
   '/departments/:departmentId/archive',
-  requireHrPermission(HR_PERMISSIONS.archiveDepartment),
+  requirePermissions(PERMISSIONS.hr.archiveDepartment),
   validate({ params: departmentIdParamSchema, body: reasonSchema }),
   archiveDepartment,
 );
 
 router.get(
   '/contracts',
-  requireHrPermission(HR_PERMISSIONS.viewContract),
+  requirePermissions(PERMISSIONS.hr.viewContract),
   validate({ query: employeeContractListQuerySchema }),
   listContracts,
 );
 
 router.post(
   '/contracts',
-  requireHrPermission(HR_PERMISSIONS.createContract),
+  requirePermissions(PERMISSIONS.hr.createContract),
   validate({ body: createEmployeeContractSchema }),
   createContract,
 );
 
 router.get(
   '/contracts/:contractId',
-  requireHrPermission(HR_PERMISSIONS.viewContract),
+  requirePermissions(PERMISSIONS.hr.viewContract),
   validate({ params: idParam('contractId') }),
   getContractById,
 );
 
 router.patch(
   '/contracts/:contractId',
-  requireHrPermission(HR_PERMISSIONS.updateContract),
+  requirePermissions(PERMISSIONS.hr.updateContract),
   validate({ params: idParam('contractId'), body: updateEmployeeContractSchema }),
   updateContract,
 );
 
 router.post(
   '/contracts/:contractId/activate',
-  requireHrPermission(HR_PERMISSIONS.activateContract),
+  requirePermissions(PERMISSIONS.hr.activateContract),
   validate({ params: idParam('contractId') }),
   activateContract,
 );
 
 router.post(
   '/contracts/:contractId/terminate',
-  requireHrPermission(HR_PERMISSIONS.terminateContract),
+  requirePermissions(PERMISSIONS.hr.terminateContract),
   validate({
     params: idParam('contractId'),
     body: reasonSchema.extend({ terminationDate: z.coerce.date() }),
@@ -477,219 +475,219 @@ router.post(
 
 router.get(
   '/leave-policies',
-  requireHrPermission(HR_PERMISSIONS.viewLeavePolicy),
+  requirePermissions(PERMISSIONS.hr.viewLeavePolicy),
   listLeavePolicies,
 );
 
 router.post(
   '/leave-policies',
-  requireHrPermission(HR_PERMISSIONS.manageLeavePolicy),
+  requirePermissions(PERMISSIONS.hr.manageLeavePolicy),
   validate({ body: leavePolicySchema }),
   createLeavePolicy,
 );
 
 router.get(
   '/leave-policies/:leavePolicyId',
-  requireHrPermission(HR_PERMISSIONS.viewLeavePolicy),
+  requirePermissions(PERMISSIONS.hr.viewLeavePolicy),
   validate({ params: idParam('leavePolicyId') }),
   getLeavePolicyById,
 );
 
 router.patch(
   '/leave-policies/:leavePolicyId',
-  requireHrPermission(HR_PERMISSIONS.manageLeavePolicy),
+  requirePermissions(PERMISSIONS.hr.manageLeavePolicy),
   validate({ params: idParam('leavePolicyId'), body: leavePolicySchema.partial() }),
   updateLeavePolicy,
 );
 
 router.post(
   '/leave/accrue',
-  requireHrPermission(HR_PERMISSIONS.accrueLeave),
+  requirePermissions(PERMISSIONS.hr.accrueLeave),
   validate({ body: leaveAccrualSchema }),
   accrueLeave,
 );
 
 router.post(
   '/geofences',
-  requireHrPermission(HR_PERMISSIONS.manageGeoFence),
+  requirePermissions(PERMISSIONS.hr.manageGeoFence),
   validate({ body: geoFenceSchema }),
   createGeoFence,
 );
 
 router.get(
   '/attendance',
-  requireHrPermission(HR_PERMISSIONS.viewAttendance),
+  requirePermissions(PERMISSIONS.hr.viewAttendance),
   validate({ query: attendanceQuerySchema }),
   listAttendance,
 );
 
 router.get(
   '/attendance/summary',
-  requireHrPermission(HR_PERMISSIONS.viewAttendance),
+  requirePermissions(PERMISSIONS.hr.viewAttendance),
   validate({ query: attendanceSummaryQuerySchema }),
   getAttendanceSummary,
 );
 
 router.post(
   '/attendance/clock-in',
-  requireHrPermission(HR_PERMISSIONS.clockAttendance),
+  requirePermissions(PERMISSIONS.hr.clockAttendance),
   validate({ body: clockSchema }),
   clockIn,
 );
 
 router.post(
   '/attendance/clock-out',
-  requireHrPermission(HR_PERMISSIONS.clockAttendance),
+  requirePermissions(PERMISSIONS.hr.clockAttendance),
   validate({ body: clockSchema }),
   clockOut,
 );
 
 router.post(
   '/attendance/manual',
-  requireHrPermission(HR_PERMISSIONS.manageAttendance),
+  requirePermissions(PERMISSIONS.hr.manageAttendance),
   validate({ body: manualAttendanceSchema }),
   createManualAttendance,
 );
 
 router.get(
   '/performance',
-  requireHrPermission(HR_PERMISSIONS.viewPerformance),
+  requirePermissions(PERMISSIONS.hr.viewPerformance),
   listPerformanceReviews,
 );
 
 router.post(
   '/performance',
-  requireHrPermission(HR_PERMISSIONS.managePerformance),
+  requirePermissions(PERMISSIONS.hr.managePerformance),
   validate({ body: performanceReviewSchema }),
   createPerformanceReview,
 );
 
 router.get(
   '/performance/:reviewId',
-  requireHrPermission(HR_PERMISSIONS.viewPerformance),
+  requirePermissions(PERMISSIONS.hr.viewPerformance),
   validate({ params: idParam('reviewId') }),
   getPerformanceReviewById,
 );
 
 router.post(
   '/performance/:reviewId/self-review/start',
-  requireHrPermission(HR_PERMISSIONS.submitPerformance),
+  requirePermissions(PERMISSIONS.hr.submitPerformance),
   validate({ params: idParam('reviewId') }),
   startSelfReview,
 );
 
 router.post(
   '/performance/:reviewId/self-review/submit',
-  requireHrPermission(HR_PERMISSIONS.submitPerformance),
+  requirePermissions(PERMISSIONS.hr.submitPerformance),
   validate({ params: idParam('reviewId'), body: performanceSubmitSchema }),
   submitSelfReview,
 );
 
 router.post(
   '/performance/:reviewId/manager-review/submit',
-  requireHrPermission(HR_PERMISSIONS.managePerformance),
+  requirePermissions(PERMISSIONS.hr.managePerformance),
   validate({ params: idParam('reviewId'), body: performanceSubmitSchema }),
   submitManagerReview,
 );
 
 router.post(
   '/performance/:reviewId/cancel',
-  requireHrPermission(HR_PERMISSIONS.managePerformance),
+  requirePermissions(PERMISSIONS.hr.managePerformance),
   validate({ params: idParam('reviewId'), body: reasonSchema }),
   cancelPerformanceReview,
 );
 
 router.get(
   '/disciplinary',
-  requireHrPermission(HR_PERMISSIONS.viewDisciplinary),
+  requirePermissions(PERMISSIONS.hr.viewDisciplinary),
   listDisciplinaryCases,
 );
 
 router.post(
   '/disciplinary',
-  requireHrPermission(HR_PERMISSIONS.manageDisciplinary),
+  requirePermissions(PERMISSIONS.hr.manageDisciplinary),
   validate({ body: disciplinaryCaseSchema }),
   createDisciplinaryCase,
 );
 
 router.get(
   '/disciplinary/:caseId',
-  requireHrPermission(HR_PERMISSIONS.viewDisciplinary),
+  requirePermissions(PERMISSIONS.hr.viewDisciplinary),
   validate({ params: idParam('caseId') }),
   getDisciplinaryCaseById,
 );
 
 router.post(
   '/disciplinary/:caseId/hearing',
-  requireHrPermission(HR_PERMISSIONS.manageDisciplinary),
+  requirePermissions(PERMISSIONS.hr.manageDisciplinary),
   validate({ params: idParam('caseId'), body: hearingSchema }),
   scheduleDisciplinaryHearing,
 );
 
 router.post(
   '/disciplinary/:caseId/actions',
-  requireHrPermission(HR_PERMISSIONS.manageDisciplinary),
+  requirePermissions(PERMISSIONS.hr.manageDisciplinary),
   validate({ params: idParam('caseId'), body: disciplinaryActionSchema }),
   issueDisciplinaryAction,
 );
 
 router.post(
   '/disciplinary/:caseId/close',
-  requireHrPermission(HR_PERMISSIONS.manageDisciplinary),
+  requirePermissions(PERMISSIONS.hr.manageDisciplinary),
   validate({ params: idParam('caseId'), body: disciplinaryCloseSchema }),
   closeDisciplinaryCase,
 );
 
 router.post(
   '/disciplinary/:caseId/cancel',
-  requireHrPermission(HR_PERMISSIONS.manageDisciplinary),
+  requirePermissions(PERMISSIONS.hr.manageDisciplinary),
   validate({ params: idParam('caseId'), body: reasonSchema }),
   cancelDisciplinaryCase,
 );
 
 router.get(
   '/documents',
-  requireHrPermission(HR_PERMISSIONS.viewDocument),
+  requirePermissions(PERMISSIONS.hr.viewDocument),
   listHrDocuments,
 );
 
 router.post(
   '/documents',
-  requireHrPermission(HR_PERMISSIONS.createDocument),
+  requirePermissions(PERMISSIONS.hr.createDocument),
   validate({ body: hrDocumentSchema }),
   createHrDocument,
 );
 
 router.get(
   '/documents/:hrDocumentId',
-  requireHrPermission(HR_PERMISSIONS.viewDocument),
+  requirePermissions(PERMISSIONS.hr.viewDocument),
   validate({ params: idParam('hrDocumentId') }),
   getHrDocumentById,
 );
 
 router.post(
   '/documents/:hrDocumentId/signature-requests',
-  requireHrPermission(HR_PERMISSIONS.requestSignature),
+  requirePermissions(PERMISSIONS.hr.requestSignature),
   validate({ params: idParam('hrDocumentId'), body: signatureRequestSchema }),
   requestHrDocumentSignature,
 );
 
 router.post(
   '/documents/signatures/:signatureId/sign',
-  requireHrPermission(HR_PERMISSIONS.signDocument),
+  requirePermissions(PERMISSIONS.hr.signDocument),
   validate({ params: idParam('signatureId'), body: signDocumentSchema }),
   signHrDocument,
 );
 
 router.post(
   '/documents/:hrDocumentId/revoke',
-  requireHrPermission(HR_PERMISSIONS.revokeDocument),
+  requirePermissions(PERMISSIONS.hr.revokeDocument),
   validate({ params: idParam('hrDocumentId'), body: reasonSchema }),
   revokeHrDocument,
 );
 
 // ── Onboarding ────────────────────────────────────────────────────────────────
-router.get('/onboarding', requireHrPermission(HR_PERMISSIONS.viewEmployee), async (req: Request, res: Response) => {
+router.get('/onboarding', requirePermissions(PERMISSIONS.hr.viewEmployee), async (req: Request, res: Response) => {
   try {
     const records = await req.db.employeeOnboarding.findMany({
       where: { tenantId: req.tenantId },
@@ -700,7 +698,7 @@ router.get('/onboarding', requireHrPermission(HR_PERMISSIONS.viewEmployee), asyn
   } catch { res.json({ data: [] }); }
 });
 
-router.post('/onboarding', requireHrPermission(HR_PERMISSIONS.createEmployee), async (req: Request, res: Response) => {
+router.post('/onboarding', requirePermissions(PERMISSIONS.hr.createEmployee), async (req: Request, res: Response) => {
   try {
     const { name, email, position, department, startDate } = req.body;
     if (!name || !email) return res.status(400).json({ error: 'Name and email required' });
@@ -722,7 +720,7 @@ router.post('/onboarding', requireHrPermission(HR_PERMISSIONS.createEmployee), a
   } catch (e) { res.status(500).json({ error: String(e) }); }
 });
 
-router.patch('/onboarding/:id/steps', requireHrPermission(HR_PERMISSIONS.updateEmployee), async (req: Request, res: Response) => {
+router.patch('/onboarding/:id/steps', requirePermissions(PERMISSIONS.hr.updateEmployee), async (req: Request, res: Response) => {
   try {
     const { step, completed } = req.body;
     const record = await req.db.employeeOnboarding.findFirst({ where: { id: req.params.id, tenantId: req.tenantId } }).catch(() => null);
@@ -737,7 +735,7 @@ router.patch('/onboarding/:id/steps', requireHrPermission(HR_PERMISSIONS.updateE
 });
 
 // ── Leave records (list) ──────────────────────────────────────────────────────
-router.get('/leave', requireHrPermission(HR_PERMISSIONS.viewLeavePolicy), async (req: Request, res: Response) => {
+router.get('/leave', requirePermissions(PERMISSIONS.hr.viewLeavePolicy), async (req: Request, res: Response) => {
   try {
     const { employeeId, status, limit = '50' } = req.query as Record<string, string>;
     const records = await req.db.leaveRequest.findMany({
@@ -755,7 +753,7 @@ router.get('/leave', requireHrPermission(HR_PERMISSIONS.viewLeavePolicy), async 
 });
 
 // ── Payroll statutory deductions summary (for tax page) ───────────────────────
-router.get('/payroll/deductions', requireHrPermission(HR_PERMISSIONS.viewEmployee), async (req: Request, res: Response) => {
+router.get('/payroll/deductions', requirePermissions(PERMISSIONS.hr.viewEmployee), async (req: Request, res: Response) => {
   try {
     const now = new Date();
     const year = parseInt(String(req.query.year ?? now.getFullYear())) || now.getFullYear();
