@@ -974,6 +974,42 @@ authorization bugs twice — unify on rbac.ts DB-permission model**
 
 ---
 
+## FINDING-007-011 — SCOPED — Decision recorded 2026-07-01
+
+Full analysis: docs/governance/FINDING-007-011-role-permission-
+unification.md
+
+Root cause: 3 role-naming axes (SystemRole clean, TenantRole
+clean, Role.name diverges via 2 different seeders) + 3 permission
+mechanisms (① rbac.ts DB-backed, correct, used by 21/25 modules;
+② module maps reading req.user.permissions which is NEVER
+populated — structurally broken; ③ trust's partial bridge,
+unused elsewhere). FINDING-008-001 and FINDING-007-009 are both
+symptoms of Mechanism ② being broken, not independent bugs.
+
+DECISIONS:
+1. Resolution: Option 1 — converge all 4 modules (finance/hr/
+   payroll/payments) onto Mechanism ① (rbac.ts), delete the
+   broken module maps entirely.
+2. Role-name convention: UPPERCASE (seed-default-roles.ts set)
+   wins — matches production onboarding. 00_bootstrap.ts must
+   be updated to match, closing the seed/prod parity hole.
+
+Sequenced implementation (own dedicated session, not started):
+(a) unify Axis C seeders to UPPERCASE
+(b) catalog back-fill: add hr.*/payroll.*/payments.* dot-key
+    permissions to config/permissions.ts
+(c) migrate 4 route modules to requirePermissions()
+(d) per-module cert (admin allowed / unprivileged denied,
+    no over-grant — same rigor as FINDING-007-009's verification)
+(e) 19_security.seed.ts unblocked
+(f) Phase 2 Playwright
+
+Status: SCOPED, decisions made, implementation NOT started.
+Logged: 2026-07-01
+
+---
+
 ## FINDING-008-002 — CLOSED (dcdf568) — was OPEN/HIGH; see 2026-06-20 reconciliation (top of Part I)
 
 **Department endpoints 500 in production — delegate undeployed on Render**
