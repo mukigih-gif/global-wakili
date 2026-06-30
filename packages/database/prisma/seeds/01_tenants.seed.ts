@@ -50,6 +50,11 @@ const SECONDARY_TENANTS: SecondaryTenantSeed[] = [
   },
 ];
 
+/* Deterministic slugs of the additional tenants this seed creates. Exported so
+ * 21_validation can resolve the seed-owned tenant set in standalone runs
+ * (alongside the env-driven primary SEED_TENANT_SLUG). */
+export const SECONDARY_TENANT_SLUGS: string[] = SECONDARY_TENANTS.map((t) => t.slug);
+
 function addOneYear(date: Date): Date {
   const copy = new Date(date);
   copy.setFullYear(copy.getFullYear() + 1);

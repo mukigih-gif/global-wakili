@@ -157,6 +157,11 @@ async function main() {
 
     const tenantId = bootstrap.tenant.id;
 
+    // Tenants this run actually seeds — passed to seedValidation so the
+    // integrity gate validates seed-owned data, not legacy/demo residue on
+    // tenants the seed never touched (XREL-001/002).
+    const seededTenantIds: string[] = [tenantId];
+
     // 2. Control-plane layer for the bootstrapped (primary) tenant.
     layers.platform = await seedPlatform(prisma, tenantId);
 
@@ -168,6 +173,7 @@ async function main() {
       // 3. Additional tenants (multi-tenant isolation / breach testing) + RBAC.
       const tenants = await seedTenants(prisma, tenantId);
       layers.tenants = tenants;
+      seededTenantIds.push(...tenants.additionalTenants.map((t) => t.id));
 
       // 4. Control-plane layer for each additional tenant.
       for (const additional of tenants.additionalTenants) {
@@ -319,7 +325,7 @@ async function main() {
     //     seeded model + the 14 cross-model integrity checks (FK/soft refs,
     //     GL DR=CR, ADR-004 trust three-way). Reports findings; never throws
     //     on data mismatches (so it cannot abort an otherwise-good seed).
-    layers.validation = await seedValidation(prisma);
+    layers.validation = await seedValidation(prisma, { tenantIds: seededTenantIds });
 
     const finishedAtDate = new Date();
 

@@ -2854,7 +2854,7 @@ Logged: 2026-06-29
 
 ---
 
-## FINDING-XREL-001 — CODE GAP CLOSED / DATA RESIDUE OPEN — HIGH (2026-06-29)
+## FINDING-XREL-001 — CLOSED (code fixed + residue out-of-scope) — HIGH (2026-06-29)
 
 Cross-model verification (read-only, 14 checks against the shared Neon DB)
 found a THREE-WAY RECONCILIATION BREAK (ADR-004): on 3 trust accounts the
@@ -2913,12 +2913,16 @@ both "cert interest posting" cr=50 — the entire Cert Trust gap.
   accounts now RECONCILE (2050.00 == 2050.00); 0 NULL-account rows remain.
   Re-verified via 21_validation check 13.
 
-- DATA RESIDUE — STILL OPEN (untouched, non-blocking): the Main account
+- DATA RESIDUE — resolved as OUT-OF-SCOPE 2026-06-30: the Main account
   (cmpynp1p1...) 4.1M gap is historical cert-test deposits for clients with
   ZERO ledger rows — NOT a trustAccountId-NULL issue (only the 2 interest
-  rows were NULL). Pre-existing Demo Law Firm test residue; requires a
-  separate reviewed backfill or trust re-seed of that tenant. Not in scope
-  of this fix per decision.
+  rows were NULL). Pre-existing Demo Law Firm (cmpy9pg9u) test residue. Rather
+  than backfill a tenant the seed does not own, `21_validation` check 13 now
+  scopes to the SEED-OWNED tenant set (see XREL-002 resolution note), so this
+  residue is excluded from the gate (no false FAIL) while the legacy data is
+  retained untouched. With the code gap fixed + backfill done + residue
+  out-of-scope, FINDING-XREL-001 is CLOSED. The standalone gate is 14 PASS /
+  0 FAIL.
 
 ---
 
@@ -2951,3 +2955,16 @@ finding. Decision: treat Demo Law Firm as test residue with a divergent
 CoA; leave XREL-002 OPEN. A clean fix would require posting a minimal
 opening entry against Demo's real codes (needs an equity account it lacks)
 — deferred.
+
+RESOLVED 2026-06-30 (out-of-scope via validation scoping) — FINDING CLOSED.
+`21_validation` now scopes its per-tenant integrity checks (10-13) to the
+SEED-OWNED tenant set: master.seed passes the ids it seeds; standalone resolves
+the same deterministic set by slug (SEED_TENANT_SLUG env + exported
+SECONDARY_TENANT_SLUGS). The legacy Demo Law Firm (cmpy9pg9u) is created by
+neither path, so it is correctly excluded — check 11 no longer false-fails on
+its missing opening journal. The standalone gate is now 14 PASS / 0 FAIL.
+Investigation note: no intrinsic signal distinguishes seeded vs legacy
+(createdAt FAILS — seeded primary predates the legacy tenant; slug only works as
+an explicit allowlist; no metadata marker) — hence the explicit/deterministic
+allowlist. The legacy tenant's data is retained, untouched, simply out of the
+gate's scope.

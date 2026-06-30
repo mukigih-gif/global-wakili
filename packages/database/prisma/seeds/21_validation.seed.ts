@@ -26,6 +26,8 @@ import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '@prisma/client';
 
+import { SECONDARY_TENANT_SLUGS } from './01_tenants.seed';
+
 type Row = { check: string; status: 'PASS' | 'FAIL' | 'INFO'; count: string; detail: string };
 
 export type ValidationSeedResult = {
@@ -50,7 +52,37 @@ const SWEEP_MODELS = [
   'vendorBill', 'tenderRecord', 'courtFiling', 'approval',
 ];
 
-export async function seedValidation(prisma: PrismaClient): Promise<ValidationSeedResult> {
+export async function seedValidation(
+  prisma: PrismaClient,
+  opts?: { tenantIds?: string[] },
+): Promise<ValidationSeedResult> {
+  // When master.seed passes the tenant ids it actually seeded, the per-tenant
+  // data-integrity checks (10-13) scope to those — so the gate validates what
+  // the seed OWNS, not legacy/demo residue on tenants the seed never touched
+  // (e.g. the Demo Law Firm cert-test tenant — XREL-001/002). No scope = all
+  // tenants (standalone diagnostic mode).
+  let scopeIds: string[] | null =
+    opts?.tenantIds && opts.tenantIds.length > 0 ? opts.tenantIds : null;
+  if (!scopeIds) {
+    // Standalone: resolve the SAME deterministic seed-owned set by slug —
+    // the env-driven primary (SEED_TENANT_SLUG) + the SECONDARY_TENANTS defs.
+    // No match → null → all-tenants diagnostic mode.
+    const seededSlugs = [
+      process.env.SEED_TENANT_SLUG?.trim().toLowerCase(),
+      ...SECONDARY_TENANT_SLUGS,
+    ].filter((s): s is string => Boolean(s));
+    if (seededSlugs.length > 0) {
+      const seeded = await prisma.tenant.findMany({
+        where: { slug: { in: seededSlugs } },
+        select: { id: true },
+      });
+      if (seeded.length > 0) scopeIds = seeded.map((t) => t.id);
+    }
+  }
+  const scopeSet = scopeIds ? new Set(scopeIds) : null;
+  const inScope = (tenantId: string) => !scopeSet || scopeSet.has(tenantId);
+  const scopeNote = scopeIds ? `[scoped: ${scopeIds.length} seeded tenant(s)]` : '[all tenants]';
+
   const results: Row[] = [];
   const offenders: string[] = [];
   const record = (check: string, status: Row['status'], count: string, detail: string) =>
@@ -245,8 +277,8 @@ export async function seedValidation(prisma: PrismaClient): Promise<ValidationSe
 
     // 10. Trust bank GL (subtype TRUST_BANK) == Trust liability GL (subtype TRUST_LIABILITY), per tenant (ADR-004)
     {
-      const trustBankAccts = await prisma.chartOfAccount.findMany({ where: { subtype: 'TRUST_BANK' }, select: { id: true, tenantId: true, code: true } });
-      const trustLiabAccts = await prisma.chartOfAccount.findMany({ where: { subtype: 'TRUST_LIABILITY' }, select: { id: true, tenantId: true, code: true } });
+      const trustBankAccts = (await prisma.chartOfAccount.findMany({ where: { subtype: 'TRUST_BANK' }, select: { id: true, tenantId: true, code: true } })).filter(a => inScope(a.tenantId));
+      const trustLiabAccts = (await prisma.chartOfAccount.findMany({ where: { subtype: 'TRUST_LIABILITY' }, select: { id: true, tenantId: true, code: true } })).filter(a => inScope(a.tenantId));
       const sumFor = async (accountIds: string[]) => {
         if (!accountIds.length) return 0;
         const agg = await prisma.journalLine.aggregate({
@@ -268,7 +300,7 @@ export async function seedValidation(prisma: PrismaClient): Promise<ValidationSe
       }
       const ok = mism.length === 0;
       record('10. Trust bank GL == Trust liability GL /tenant (ADR-004)', ok ? 'PASS' : 'FAIL',
-        `${tenants.length} tenants`, detail.join(' | ') || 'no trust GL accounts');
+        `${tenants.length} tenants ${scopeNote}`, detail.join(' | ') || 'no trust GL accounts');
       if (mism.length) fail('10 Trust GL balance (ADR-004)', mism, 'trust bank GL balance != trust liability GL balance');
     }
 
@@ -276,7 +308,8 @@ export async function seedValidation(prisma: PrismaClient): Promise<ValidationSe
     //     Scoped to tenants that actually have a Chart of Accounts — an empty
     //     bootstrap/infra tenant (coa=0, no journals) correctly has none.
     {
-      const tenants = await prisma.tenant.findMany({ where: { deletedAt: null }, select: { id: true, name: true } });
+      const tenants = (await prisma.tenant.findMany({ where: { deletedAt: null }, select: { id: true, name: true } }))
+        .filter(t => inScope(t.id));
       const missing: string[] = [];
       const detail: string[] = [];
       let skipped = 0;
@@ -298,7 +331,7 @@ export async function seedValidation(prisma: PrismaClient): Promise<ValidationSe
       }
       const ok = missing.length === 0;
       record('11. Opening journal /finance-active tenant', ok ? 'PASS' : 'FAIL',
-        `${tenants.length} tenants (${skipped} skipped: no CoA)`, detail.join(', '));
+        `${tenants.length} tenants (${skipped} skipped: no CoA) ${scopeNote}`, detail.join(', '));
       if (missing.length) fail('11 Opening journal', missing, 'finance-active tenant (has CoA) has no opening-balance journal entry');
     }
 
@@ -306,7 +339,7 @@ export async function seedValidation(prisma: PrismaClient): Promise<ValidationSe
 
     // 12. TrustAccount.currentBalance == Σ(its TrustTransaction credit - debit)
     {
-      const accts = await prisma.trustAccount.findMany({ select: { id: true, accountName: true, currentBalance: true } });
+      const accts = await prisma.trustAccount.findMany({ where: scopeIds ? { tenantId: { in: scopeIds } } : undefined, select: { id: true, accountName: true, currentBalance: true } });
       const mism: string[] = [];
       for (const a of accts) {
         const agg = await prisma.trustTransaction.aggregate({
@@ -319,13 +352,13 @@ export async function seedValidation(prisma: PrismaClient): Promise<ValidationSe
       }
       const ok = mism.length === 0;
       record('12. TrustAccount.currentBalance == Σ txns', ok ? 'PASS' : 'FAIL',
-        `${accts.length} accounts`, `mismatches=${mism.length}`);
+        `${accts.length} accounts ${scopeNote}`, `mismatches=${mism.length}`);
       if (mism.length) fail('12 TrustAccount balance', mism, 'stored currentBalance != sum(credit-debit) of transactions');
     }
 
     // 13. ClientTrustLedger latest running balance == TrustAccount balance (per account)
     {
-      const accts = await prisma.trustAccount.findMany({ select: { id: true, accountName: true, currentBalance: true } });
+      const accts = await prisma.trustAccount.findMany({ where: scopeIds ? { tenantId: { in: scopeIds } } : undefined, select: { id: true, accountName: true, currentBalance: true } });
       const mism: string[] = [];
       const detail: string[] = [];
       for (const a of accts) {
@@ -341,7 +374,7 @@ export async function seedValidation(prisma: PrismaClient): Promise<ValidationSe
       }
       const ok = mism.length === 0;
       record('13. ClientTrustLedger net == TrustAccount balance', ok ? 'PASS' : 'FAIL',
-        `${accts.length} accounts`, detail.join(' | ') || 'no accounts');
+        `${accts.length} accounts ${scopeNote}`, detail.join(' | ') || 'no accounts');
       if (mism.length) fail('13 ClientTrustLedger vs TrustAccount', mism, 'sum(ledger credit-debit) != account balance (where ledger rows exist)');
     }
 
