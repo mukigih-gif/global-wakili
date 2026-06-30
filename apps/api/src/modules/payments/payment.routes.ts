@@ -3,10 +3,8 @@
 import { Router } from 'express';
 
 import paymentController from './payment.controller';
-import {
-  PAYMENT_PERMISSIONS,
-  requirePaymentPermission,
-} from './payment-permission.map';
+import { requirePermissions } from '../../middleware/rbac';
+import { PERMISSIONS } from '../../config/permissions';
 
 const router = Router();
 
@@ -22,73 +20,73 @@ router.get('/health', (_req, res) => {
 
 router.get(
   '/dashboard',
-  requirePaymentPermission(PAYMENT_PERMISSIONS.viewDashboard),
+  requirePermissions(PERMISSIONS.payments.viewDashboard),
   paymentController.dashboardSummary,
 );
 
 router.get(
   '/unallocated',
-  requirePaymentPermission(PAYMENT_PERMISSIONS.viewDashboard),
+  requirePermissions(PERMISSIONS.payments.viewDashboard),
   paymentController.unallocatedReceipts,
 );
 
 router.get(
   '/wht-exposure',
-  requirePaymentPermission(PAYMENT_PERMISSIONS.viewDashboard),
+  requirePermissions(PERMISSIONS.payments.viewDashboard),
   paymentController.whtExposure,
 );
 
 router.get(
   '/',
-  requirePaymentPermission(PAYMENT_PERMISSIONS.viewReceipt),
+  requirePermissions(PERMISSIONS.payments.viewReceipt),
   paymentController.listReceipts,
 );
 
 router.post(
   '/',
-  requirePaymentPermission(PAYMENT_PERMISSIONS.createReceipt),
+  requirePermissions(PERMISSIONS.payments.createReceipt),
   paymentController.createReceipt,
 );
 
 router.post(
   '/refunds/:refundId/approve',
-  requirePaymentPermission(PAYMENT_PERMISSIONS.manageOverpayment),
+  requirePermissions(PERMISSIONS.payments.manageOverpayment),
   paymentController.approveRefund,
 );
 
 router.post(
   '/refunds/:refundId/pay',
-  requirePaymentPermission(PAYMENT_PERMISSIONS.manageOverpayment),
+  requirePermissions(PERMISSIONS.payments.manageOverpayment),
   paymentController.payRefund,
 );
 
 router.post(
   '/refunds/:refundId/reject',
-  requirePaymentPermission(PAYMENT_PERMISSIONS.manageOverpayment),
+  requirePermissions(PERMISSIONS.payments.manageOverpayment),
   paymentController.rejectRefund,
 );
 
 router.get(
   '/:paymentReceiptId',
-  requirePaymentPermission(PAYMENT_PERMISSIONS.viewReceipt),
+  requirePermissions(PERMISSIONS.payments.viewReceipt),
   paymentController.getReceipt,
 );
 
 router.post(
   '/:paymentReceiptId/allocate',
-  requirePaymentPermission(PAYMENT_PERMISSIONS.allocatePayment),
+  requirePermissions(PERMISSIONS.payments.allocatePayment),
   paymentController.allocateReceipt,
 );
 
 router.post(
   '/:paymentReceiptId/reverse',
-  requirePaymentPermission(PAYMENT_PERMISSIONS.reverseReceipt),
+  requirePermissions(PERMISSIONS.payments.reverseReceipt),
   paymentController.reverseReceipt,
 );
 
 router.post(
   '/:paymentReceiptId/refunds',
-  requirePaymentPermission(PAYMENT_PERMISSIONS.manageOverpayment),
+  requirePermissions(PERMISSIONS.payments.manageOverpayment),
   paymentController.createRefund,
 );
 
