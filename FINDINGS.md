@@ -3722,3 +3722,41 @@ now shows the busy spinner and actually saves. Invoice DETAIL page
 (`invoices/[id]`) re-reviewed — already a complete modern layout (summary
 cards, parties, line items, payment history, eTIMS, receipt modal); no
 defect there. Web tsc exit 0.
+
+---
+
+## PHASE 2 PLAYWRIGHT — STARTED (2026-07-01)
+
+Scaffold committed (7baeab7): `apps/web/playwright.config.ts` (chromium,
+baseURL = deployed Vercel frontend, screenshot/video on failure) +
+`@playwright/test`. `apps/web/.gitignore` updated to exclude
+test-results/playwright-report artifacts.
+
+### 01-auth.spec.ts — PASS (5/5, live vs production, 2026-07-01)
+- valid credentials → redirect to /app/dashboard (+ gw_token persisted)
+- invalid credentials → error shown, stays on /login (throwaway email, no
+  lockout risk to the real admin)
+- wrong tenant → error shown, stays on /login
+- unauthenticated access to /app/dashboard → redirect to /login
+- logout → redirect to /login, gw_token cleared
+Two test-only selector issues found & fixed en route: `getByLabel('Password')`
+also matched the show/hide toggle (→ `{ exact: true }`); cookie-consent
+banner intercepted the Sign in click (→ beforeEach pre-seeds
+`gw_cookie_consent`). Run: 5 passed (18.4s), PW EXIT 0.
+
+### FINDING-FRONT-016 — OPEN — LOW (2026-07-01, surfaced by 01-auth E2E)
+**Cookie-consent banner obstructs the Sign in button on /login.**
+The fixed-bottom `CookieConsent` dialog (`z-[200]`) overlays the centered
+login card at the default desktop viewport (1280×720), intercepting pointer
+events on the "Sign in" button until the banner is dismissed. A first-time
+(un-consented) user can be blocked from submitting the login form without
+first interacting with the banner.
+- File(s): `apps/web/src/components/ui/CookieConsent.tsx` (fixed bottom,
+  z-[200]) vs `app/(auth)/login/page.tsx` (centered card).
+- Repro: Playwright click on "Sign in" retried until timeout — "…Cookie
+  consent… subtree intercepts pointer events."
+- Fix direction (frontend-only, small): e.g. add bottom padding/scroll room
+  to the auth container so the button clears the banner, lower the banner's
+  z-index below the auth card, or auto-collapse the banner on auth routes.
+- Severity: LOW (dismiss-then-login still works), but real first-visit UX.
+- Status: OPEN — logged per Principle 5; fix pending user go-ahead.
