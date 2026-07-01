@@ -28,7 +28,7 @@ services:
     runtime: node
     region: oregon
     plan: starter            # $7/mo — upgrade to standard for production
-    buildCommand: npm install && npm run db:gen
+    buildCommand: npm install && npm run db:gen && npx prisma migrate deploy --config prisma.config.ts
     startCommand: npm run start --workspace=apps/api
     healthCheckPath: /ping
     autoDeploy: true         # auto-deploy on push to main
@@ -145,7 +145,7 @@ services:
     runtime: node
     region: oregon
     plan: starter
-    buildCommand: npm install && npm run db:gen
+    buildCommand: npm install && npm run db:gen && npx prisma migrate deploy --config prisma.config.ts
     startCommand: npm run worker:notifications --workspace=apps/api
     autoDeploy: true
     envVars:
