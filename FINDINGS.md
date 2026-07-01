@@ -356,7 +356,7 @@ account-level check (now fixed) — risks inter-client commingling**
 
 ---
 
-## FINDING-007-003 — OPEN — CRITICAL
+## FINDING-007-003 — CLOSED (RETRACTED — superseded by 007-004; reconciled 2026-07-01) — was CRITICAL
 
 **Trust journal-posting writes 500 via nested interactive transaction
 — blocks ALL trust deposit/withdrawal/transfer/interest writes**
@@ -384,8 +384,9 @@ account-level check (now fixed) — risks inter-client commingling**
   correction on the demo tenant + possible createAccount default fix.
 - **Severity:** CRITICAL -- blocks 100% of trust journal-posting
   writes on every request, not just under concurrency
-- **Status:** OPEN -- requires architectural fix in finance posting
-  core (TransactionEngine / GeneralLedgerService) -- not a one-liner
+- **Status:** CLOSED (reconciled 2026-07-01) — nested-transaction theory
+  RETRACTED (see CORRECTION below); real cause diagnosed & fixed under
+  007-004. Not an architectural rewrite.
 - **Logged:** 2026-06-17
 
 ### CORRECTION (2026-06-17, after local repro) — root cause was MISDIAGNOSED
@@ -433,7 +434,7 @@ independent gaps. See FINDING-007-004 for the corrected diagnosis.
 
 ---
 
-## FINDING-007-004 — OPEN — CRITICAL
+## FINDING-007-004 — CLOSED (gaps A/B/C fixed + trust writes live-verified; reconciled 2026-07-01) — was CRITICAL
 
 **Trust journal-posting writes have never worked — three independent
 posting-policy gaps each independently block every trust write**
@@ -459,8 +460,11 @@ posting-policy gaps each independently block every trust write**
   live log access or further investigation.
 - **Severity:** CRITICAL -- any ONE of gaps A/B/C alone blocks every
   trust journal-posting write (deposit, withdrawal, transfer, interest)
-- **Status:** OPEN -- three independent fixes needed, each requiring
-  full code read before proposing a change (per Principle 3)
+- **Status:** CLOSED (reconciled 2026-07-01) — Gap A (ef03a6f), Gap B
+  (ec3e950), Gap C (8b356ea) all fixed; trust deposit/withdrawal/transfer/
+  interest now post end-to-end LIVE (Group 7 writes 8/8, live-verified per
+  CLAUDE.md). Residual benign P2028 audit-on-rolled-back-tx tracked
+  separately as FINDING-007-006 (LOW).
 - **Logged:** 2026-06-17
 
 ### RESOLUTION (2026-06-17) — all three gaps fixed
@@ -1480,13 +1484,13 @@ regenerated on every test run — findings logged here survive reruns.
   never checked at login (no references in auth.controller / middleware).
 - Consequence: expired passwords still authenticate.
 - Fix: enforce passwordExpiresAt at login; set it whenever a password is set.
-- Status: OPEN — implement in auth bounded context
+- Status: CLOSED (2026-06-30, 75bde6c) — passwordExpiresAt enforced at login (403 PASSWORD_EXPIRED); see reconciliation table (top) + detail block. [original-discovery line reconciled 2026-07-01]
 
 ### F-16 MEDIUM — No password complexity policy
 - Only adminPassword min(8) on firm registration; login password min(1).
 - No upper/lower/digit/special requirement; no shared password validator.
 - Fix: shared password-policy validator at all set-password points.
-- Status: OPEN — implement password validator (attachment points limited by F-12)
+- Status: CLOSED (2026-06-30, 75bde6c) — shared validatePasswordPolicy at registration (400 WEAK_PASSWORD); see reconciliation table (top) + detail block. [original-discovery line reconciled 2026-07-01]
 
 ### F-17 HIGH — No MFA (Multi-Factor Authentication) enforced
 - No TOTP, SMS OTP, or email OTP enforced at login.
@@ -1512,7 +1516,7 @@ regenerated on every test run — findings logged here survive reruns.
 - NOT verified end-to-end: that lockout actually fires at a threshold and
   auto-unlocks after a timeout. If not enforced, brute force is possible.
 - Fix: verify lockout fires at 5 attempts, auto-unlocks after 30 min.
-- Status: OPEN — verify and complete implementation
+- Status: CLOSED (2026-06-30, 75bde6c) — lockout fires at 5 attempts, auto-unlock, success clears state; see reconciliation table (top) + detail block. [original-discovery line reconciled 2026-07-01]
 
 ### F-20 HIGH — No domain/SSO login for firm staff
 - No SAML 2.0 or OpenID Connect for corporate domain login.
@@ -1537,7 +1541,7 @@ regenerated on every test run — findings logged here survive reruns.
   routes lack an RBAC gate, but self-scoping prevents cross-client data exposure.
 - Fix: add requirePermissions(client.viewPortal) to the two portal routes
   (defense-in-depth).
-- Status: OPEN — portal routes still ungated (low severity; self-scoped, no data leak)
+- Status: CLOSED (2026-07-01, f7521c9) — both portal routes now gated requirePermissions(client.viewPortal) (defense-in-depth; self-scoping already prevented any leak); see reconciliation table (top). [original-discovery line reconciled 2026-07-01]
 
 ### F-21 INFO — Invite User: Option A (temp password) is interim only
 - Current implementation uses an admin-set temporary password.
@@ -2702,12 +2706,14 @@ Logged: 2026-06-23.
 
 ---
 
-## FINDING-INFRA-002 — OPEN — LOW
+## FINDING-INFRA-002 — CLOSED (2026-06-30, 4660730) — LOW
 packages/database/tsconfig.json:8 has invalid
 ignoreDeprecations:"6.0" for tsc 5.9.3 (TS5103).
 Seed files in that package cannot use it as a typecheck
 gate until fixed. Pre-existing. Fix separately.
 Logged: 2026-06-23
+CLOSED (2026-06-30, 4660730) — ignoreDeprecations corrected "6.0"→"5.0";
+verified current file reads "5.0". [status reconciled 2026-07-01]
 
 ## FINDING-INFRA-003 — OPEN — LOW
 Root npx tsc --noEmit is not a valid monorepo typecheck
