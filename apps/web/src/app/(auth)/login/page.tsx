@@ -82,7 +82,7 @@ function LoginPageContent() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(160deg, #071529 0%, #0D1F3C 50%, #1B3A6B 100%)' }}>
+    <div className="min-h-screen flex items-center justify-center p-4 pb-40 overflow-y-auto" style={{ background: 'linear-gradient(160deg, #071529 0%, #0D1F3C 50%, #1B3A6B 100%)' }}>
       <div className="w-full max-w-md">
         {/* Brand */}
         <div className="mb-8 flex flex-col items-center">

@@ -3759,4 +3759,16 @@ first interacting with the banner.
   to the auth container so the button clears the banner, lower the banner's
   z-index below the auth card, or auto-collapse the banner on auth routes.
 - Severity: LOW (dismiss-then-login still works), but real first-visit UX.
-- Status: OPEN — logged per Principle 5; fix pending user go-ahead.
+- Status: CLOSED (2026-07-01) — login container given `pb-40 overflow-y-auto`
+  (`app/(auth)/login/page.tsx:85`) so the centered card clears the
+  fixed-bottom banner (and scrolls on short viewports) — the Sign in button
+  is no longer obstructed. Web tsc exit 0.
+
+### 02-modules.spec.ts — PASS (2026-07-01, live vs production)
+Runtime "all modules & links" smoke: one authenticated session visits ~57
+module/landing/sub-page routes (every sidebar + command-palette + settings-hub
++ per-domain sub-page; dynamic [id] routes excluded — covered by domain specs)
+and asserts each renders healthy (no /login redirect, authed `<aside>` shell
+present, no 500 "Something went wrong", no 404 "Page not found"). Result: 1
+passed (2.0m), PW EXIT 0 — ZERO broken modules/links. Fulfills the user's
+"ensure all modules and links are checked" request at runtime.
