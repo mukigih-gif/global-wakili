@@ -71,7 +71,7 @@ services:
         value: https://global-wakili-api.onrender.com
 
       - key: CORS_ORIGIN
-        value: https://global-wakili-api.onrender.com
+        value: https://global-wakili-api.vercel.app
 
       # ── Runtime settings ───────────────────────────────────────────────────
       - key: PORT

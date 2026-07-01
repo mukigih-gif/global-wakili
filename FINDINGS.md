@@ -3577,3 +3577,37 @@ API client depended on it. (`RegisterFirmSchema` left as a harmless unused expor
 auth.dto.ts — out of scope to prune.)
 **Status: CLOSED — RETIRED.** This was the last of the parallel role systems; rbac.ts
 DB-grant (CANONICAL_ROLES + catalog) is now the sole authorization model.
+
+## FINDING-007-011 — CLOSED (2026-07-01) — full RBAC unification live-verified on onrender @ 223d3c6
+
+All steps complete: (b) catalog back-fill [39d0a8e] → (a) canonical UPPERCASE seeders
+[cc5c05d] → (c) 4-module migration to requirePermissions [8d33291/246de9d/54c20d6/b69772c]
+→ re-grant migration [e433e45] → (d) LIVE per-module cert (this commit). The parallel
+role/permission systems (Mechanism ② + the 3rd OnboardingService path, retired in
+223d3c6) are gone; rbac.ts DB-grant (CANONICAL_ROLES + dot-key catalog) is the sole
+authorization model across all 25 modules.
+
+Step (d) live cert — https://global-wakili-api.onrender.com @ 223d3c6, tenant
+demo-law-firm, real logins (tenantSlug required — email is not globally unique):
+
+| Module   | Endpoint                 | MANAGING_PARTNER | ACCOUNTANT | CLERK |
+|----------|--------------------------|:----------------:|:----------:|:-----:|
+| finance  | GET /finance/accounts    | 200              | 200        | 403   |
+| payments | GET /payments/           | 200              | 200        | 403   |
+| payroll  | GET /payroll/batches     | 200              | 200        | 403   |
+| hr       | GET /hr/employees        | 200              | 403        | 403   |
+
+Over-grant spot check: ACCOUNTANT → GET /hr/disciplinary → 403 (denied where not granted).
+
+Interpretation: admin (MANAGING_PARTNER)=200 all; unprivileged (CLERK)=403 all;
+ACCOUNTANT reaches only its granted modules (finance/payments/payroll) and is correctly
+DENIED hr (employees + disciplinary 403). ACCOUNTANT→payroll=200 is EXPECTED — the
+canonical ACCOUNTANT role includes the `payroll` module grant (approved in step a,
+Option A); accountants running payroll. rbac.ts enforces exactly per DB grants. RBAC
+unification VERIFIED LIVE.
+
+Follow-ups still tracked (not blockers): existing-tenant re-grant on any future tenants
+provisioned before deploy (script staged, regrant-canonical-permissions.ts); render.yaml
+build lacks `migrate deploy` (schema-drift guard — separate proposed fix, not yet applied);
+FINDING-007-011-ONB CLOSED by retirement (223d3c6).
+Status: CLOSED.
