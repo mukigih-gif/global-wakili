@@ -3611,3 +3611,18 @@ provisioned before deploy (script staged, regrant-canonical-permissions.ts); ren
 build lacks `migrate deploy` (schema-drift guard — separate proposed fix, not yet applied);
 FINDING-007-011-ONB CLOSED by retirement (223d3c6).
 Status: CLOSED.
+
+## SEED ARCHITECTURE — COMPLETE (2026-07-02)
+
+19_security.seed.ts committed c288266 — final layer, unblocked by
+FINDING-007-011 closure. Full suite: layers 00-18, 19, 22-27,
+21_validation. 49 models, 14/14 validation checks, schemaDrift=0.
+Seed architecture COMPLETE 2026-07-02.
+
+19_security seeds the security-domain models not owned elsewhere:
+Session, MfaSecret, SecureToken, ApiKey, ConsentRecord, RateLimitLog
+(Role/Permission owned by 00_bootstrap; AuditLog by 16_reporting,
+hash-chained — not re-seeded). Demo-gated, idempotent, honest
+placeholders. Real seed applied to global-wakili + mwangi + demo on
+ep-withered-haze; 21_validation re-run green (49-model sweep clean +
+14/14 integrity checks). Next milestone: Phase 2 Playwright.

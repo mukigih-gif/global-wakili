@@ -724,10 +724,13 @@ Only then may Global Wakili Legal Enterprise be considered production-ready.
 
 ---
 
-# 12. PLANNED SEED ARCHITECTURE (pre-Phase-2 requirement)
+# 12. SEED ARCHITECTURE (pre-Phase-2 requirement)
 
-Status: PLANNED — not yet built. Required before Phase 2 Playwright
-begins (E2E needs realistic, complete seed data to test against).
+Status: COMPLETE (2026-07-02) — all layers built and validated.
+Full suite: layers 00-18, 19_security (c288266, final layer, unblocked
+by FINDING-007-011 closure), 22-27, + 21_validation. 49 models
+schema-drift-clean, 14/14 cross-model integrity checks pass,
+schemaDrift=0. Structure/plan below preserved for reference.
 
 Structure (prisma/seeds/, one file per bounded context, numbered
 for dependency order):
@@ -836,3 +839,13 @@ Hard rules:
   FINDING-FRONT-XXX immediately — do not defer logging (Principle 5).
 - No thin code: never write placeholder/token cert tests just to
   show green; certify real behavior or DEFER + log a finding.
+
+## UPDATED 2026-07-02 — CURRENT STATE (authoritative)
+
+0. GW-EOS governance migration — COMPLETE
+1. TODO-010 file/path audit — pending
+2. FINDING-007-011 RBAC unification — COMPLETE (all steps a-d;
+   live-verified on onrender @ 223d3c6; 3rd role path retired)
+3. Seed architecture (Section 12) — COMPLETE (19_security c288266;
+   all 25 layers built + validated; 49 models, 14/14 checks, drift=0)
+4. Phase 2 Playwright — NEXT
