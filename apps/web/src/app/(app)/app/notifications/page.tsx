@@ -7,7 +7,7 @@ import { formatDateTime } from '@/lib/utils';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Table, Th, Td, EmptyRow, LoadingRow } from '@/components/ui/Table';
 import { Button } from '@/components/ui/Button';
-import { Bell, Mail, MessageSquare, Phone, CheckCheck } from 'lucide-react';
+import { Bell, Mail, MessageSquare, Phone, CheckCheck, X } from 'lucide-react';
 
 type Notification = {
   id: string;
@@ -37,6 +37,7 @@ export default function NotificationsPage() {
   const [loading, setLoading]    = useState(true);
   const [activeTab, setActiveTab] = useState<FilterTab>('All');
   const [markingAll, setMarkingAll] = useState(false);
+  const [selected, setSelected] = useState<Notification | null>(null);
 
   const load = (tab: FilterTab = activeTab) => {
     setLoading(true);
@@ -56,6 +57,12 @@ export default function NotificationsPage() {
   const markRead = async (id: string) => {
     await api.patch(`/notifications/${id}/read`, {}).catch(() => {});
     setNotifications((prev) => prev.map((n) => n.id === id ? { ...n, readAt: new Date().toISOString() } : n));
+  };
+
+  // Open a notification to read its full content; mark read on open if unread.
+  const openDetail = (n: Notification) => {
+    setSelected(n);
+    if (!n.readAt) void markRead(n.id);
   };
 
   const markAllRead = async () => {
@@ -116,7 +123,8 @@ export default function NotificationsPage() {
           {loading ? <LoadingRow colSpan={6} /> :
            !notifications.length ? <EmptyRow colSpan={6} message="No notifications" /> :
            notifications.map((n) => (
-             <tr key={n.id} className={!n.readAt ? 'bg-primary-50/40' : ''}>
+             <tr key={n.id} onClick={() => openDetail(n)}
+                 className={`cursor-pointer hover:bg-gray-50 ${!n.readAt ? 'bg-primary-50/40' : ''}`}>
                <Td>{channelIcon(n.channel)}</Td>
                <Td className={!n.readAt ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}>
                  {n.systemTitle ?? n.emailSubject ?? '—'}
@@ -128,7 +136,7 @@ export default function NotificationsPage() {
                <Td className="text-xs text-gray-500">{formatDateTime(n.createdAt)}</Td>
                <Td>
                  {!n.readAt
-                   ? <button onClick={() => markRead(n.id)} className="text-xs text-primary-600 hover:underline">Mark Read</button>
+                   ? <button onClick={(e) => { e.stopPropagation(); markRead(n.id); }} className="text-xs text-primary-600 hover:underline">Mark Read</button>
                    : <span className="text-xs text-gray-400">Read</span>
                  }
                </Td>
@@ -137,6 +145,39 @@ export default function NotificationsPage() {
           }
         </tbody>
       </Table>
+
+      {/* Notification detail modal */}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+             onClick={() => setSelected(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between px-6 pt-5 pb-3">
+              <div className="flex items-center gap-2 min-w-0">
+                {channelIcon(selected.channel)}
+                <h3 className="font-bold text-gray-900 text-lg leading-tight truncate">
+                  {selected.systemTitle ?? selected.emailSubject ?? 'Notification'}
+                </h3>
+              </div>
+              <button onClick={() => setSelected(null)} className="text-gray-400 hover:text-gray-600 flex-shrink-0 ml-2">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-6 pb-4">
+              <p className="text-sm text-gray-700 whitespace-pre-wrap">{selected.systemMessage ?? 'No message content.'}</p>
+              <dl className="mt-4 space-y-2 text-sm border-t border-gray-100 pt-3">
+                <div className="flex gap-2"><dt className="text-gray-500 w-24 flex-shrink-0">Channel</dt><dd className="text-gray-900">{selected.channel}</dd></div>
+                <div className="flex gap-2"><dt className="text-gray-500 w-24 flex-shrink-0">Status</dt><dd><StatusBadge status={selected.status} /></dd></div>
+                {selected.priority && <div className="flex gap-2"><dt className="text-gray-500 w-24 flex-shrink-0">Priority</dt><dd className="text-gray-900">{selected.priority}</dd></div>}
+                <div className="flex gap-2"><dt className="text-gray-500 w-24 flex-shrink-0">Received</dt><dd className="text-gray-900">{formatDateTime(selected.createdAt)}</dd></div>
+                <div className="flex gap-2"><dt className="text-gray-500 w-24 flex-shrink-0">Read</dt><dd className="text-gray-900">{selected.readAt ? formatDateTime(selected.readAt) : 'Just now'}</dd></div>
+              </dl>
+            </div>
+            <div className="flex justify-end px-6 pb-5 pt-2 border-t border-gray-100">
+              <button onClick={() => setSelected(null)} className="text-sm text-primary-600 hover:underline">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -245,7 +245,7 @@ export default function TaxPage() {
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium text-gray-700">Year</label>
-              <select value={vatYear} onChange={(e) => setVatYear(parseInt(e.target.value))} className="form-select h-8 text-xs w-24">
+              <select value={vatYear} onChange={(e) => setVatYear(parseInt(e.target.value))} className="form-select text-xs w-24">
                 {[now.getFullYear()-1, now.getFullYear(), now.getFullYear()+1].map((y) => <option key={y} value={y}>{y}</option>)}
               </select>
             </div>

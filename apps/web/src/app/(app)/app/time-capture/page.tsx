@@ -200,7 +200,7 @@ export default function TimeCapturePage() {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-gray-700">WIP Entries</h2>
           <div className="flex gap-2">
-            <select value={source} onChange={(e) => setSource(e.target.value)} className="form-select h-8 text-xs w-36">
+            <select value={source} onChange={(e) => setSource(e.target.value)} className="form-select text-xs w-36">
               <option value="">All Sources</option>
               <option value="EMAIL">Email</option>
               <option value="DOCUMENT">Document</option>
@@ -208,7 +208,7 @@ export default function TimeCapturePage() {
               <option value="TASK">Task</option>
               <option value="MANUAL">Manual</option>
             </select>
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className="form-select h-8 text-xs w-40">
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="form-select text-xs w-40">
               <option value="">All Statuses</option>
               <option value="PENDING_APPROVAL">Pending Approval</option>
               <option value="APPROVED">Approved</option>

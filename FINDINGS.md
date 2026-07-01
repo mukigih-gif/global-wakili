@@ -3626,3 +3626,72 @@ hash-chained — not re-seeded). Demo-gated, idempotent, honest
 placeholders. Real seed applied to global-wakili + mwangi + demo on
 ep-withered-haze; 21_validation re-run green (49-model sweep clean +
 14/14 integrity checks). Next milestone: Phase 2 Playwright.
+
+---
+
+## FRONTEND SPRINT (2026-07-01, session 2) — dropdowns + notifications + link/parity audit
+
+Scope agreed with user: STATIC frontend fixes now (one commit + push to
+main → prod), Playwright NEXT for runtime module/link verification. Each
+item below cross-referenced to related findings to avoid repeat work.
+
+### FINDING-FRONT-013 — CLOSED (2026-07-01) — LOW
+**Notifications not viewable — no click handler to read a notification's
+full content.**
+- `notifications/page.tsx` listed rows (title + `truncate` message) with
+  only Mark Read / Mark All Read actions; a user could not open a
+  notification to read the full body.
+- Fix: rows now clickable → detail modal (full `systemMessage`
+  whitespace-pre-wrap, channel, status, priority, received/read
+  timestamps); opening an unread notification marks it read
+  (`openDetail` → `markRead`); inline Mark Read button given
+  `stopPropagation` so it no longer double-fires with the row click.
+- Cross-ref: parent notification backend = FINDING-CAL-001 (CLOSED —
+  events/reminders); this closes the read-visibility gap on top of it.
+- Web tsc exit 0.
+
+### FINDING-FRONT-014 — CLOSED (2026-07-01) — LOW
+**Dropdown vertical-clip defect (recurrence of FRONT-012) in additional
+`<select>`s.**
+- Same root cause as FRONT-012: `h-8` (32px) forced onto a `.form-select`
+  whose `.form-input` base is `px-3.5 py-2.5 text-sm` (~40px natural) →
+  label clipped vertically.
+- Full-codebase sweep (`form-select h-[789]` across ALL of
+  `apps/web/src`, not just the pages the user named) found exactly 3
+  remaining instances — all fixed by dropping `h-8` (padding governs
+  height), matching the FRONT-012 fix:
+  * `time-capture/page.tsx:203` (source filter)
+  * `time-capture/page.tsx:211` (status filter)
+  * `tax/page.tsx:248` (VAT year)
+- After this sweep NO `form-select` in the app carries a height override,
+  so the defect cannot recur from this pattern.
+- Cross-ref: FINDING-FRONT-012 (calendar `All Event Types`, CLOSED) —
+  this generalizes that one-off fix across the codebase.
+- Web tsc exit 0.
+
+### Dead-link / navigation audit — PASS (static)
+Every internal navigation target resolves to a real route — verified
+across Sidebar (`TENANT_GROUPS` + `SUPER_ADMIN_NAV`), TopBar,
+CommandPalette (`NAV_SHORTCUTS` + `CREATE_SHORTCUTS`), the Settings hub
+grid, and all page-level `href=`/`router.push`. No dead internal links.
+(Orphan pages with no nav entry — `admin/audit`, `admin/health`,
+`admin/incidents` — are reachable-by-URL, not broken links.)
+NOTE: this is STATIC resolution only; runtime "does every module/link
+actually load & function" is the Phase 2 Playwright task (paused pending
+user YES).
+
+### Closed-finding frontend-parity re-check — VISIBLE
+Confirmed dedicated routes exist for every prior closed-finding surface:
+periods (`finance/periods`), disciplinary (`hr/disciplinary`),
+departments (`hr/departments`), proformas/retainers/reminders/
+notifications (`billing/*`), trust deposit/withdraw/transfer/interest
+(`trust/*`), tax/VAT/eTIMS (`tax`). No missing parity page found.
+
+### FINDING-FRONT-008 — STILL OPEN (backend-blocked) — MEDIUM
+**Audit/change-history not visible on invoices/documents/accounts.**
+Cannot be closed in a frontend-only sprint: there is NO generic
+per-entity AuditLog read endpoint (only `matter` timeline + `contract`
+version-history exist server-side). Requires a backend read endpoint
+(`GET /audit?entityType&entityId` sourced from the existing hash-chained
+AuditLog) BEFORE the UI timeline can be built. Deferred to a backend
+session per the agreed scope; logged here so it is not lost.
