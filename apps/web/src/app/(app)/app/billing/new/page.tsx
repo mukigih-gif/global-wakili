@@ -84,12 +84,15 @@ function NewInvoiceForm() {
   const vat      = lines.reduce((s, l) => s + (l.quantity * l.unitPrice * l.vatRate / 100), 0);
   const total    = subtotal + vat;
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Shared create path — invoices are created in DRAFT; both "Create Invoice"
+  // and "Save Draft" persist the same way (draft is later submitted for approval).
+  const createInvoice = async () => {
+    if (!form.clientId) { setError('Select a client before saving.'); return; }
+    if (!lines.some((l) => l.description.trim())) { setError('Add at least one line item.'); return; }
     setError('');
     setLoading(true);
     try {
-      const inv = await api.post<{ id: string }>('/billing/invoices', {
+      await api.post<{ id: string }>('/billing/invoices', {
         ...form,
         matterId: form.matterId || null,
         dueDate:  form.dueDate  || null,
@@ -101,6 +104,11 @@ function NewInvoiceForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await createInvoice();
   };
 
   return (
@@ -213,7 +221,7 @@ function NewInvoiceForm() {
 
         <div className="flex gap-3">
           <Button type="submit" loading={loading}>Create Invoice</Button>
-          <Button type="button" variant="secondary" onClick={() => { /* save as draft */ }}>Save Draft</Button>
+          <Button type="button" variant="secondary" loading={loading} onClick={() => void createInvoice()}>Save Draft</Button>
           <Link href={lockedToMatter ? `/app/matters/${presetMatterId}` : '/app/billing'}><Button type="button" variant="ghost">Cancel</Button></Link>
         </div>
       </form>

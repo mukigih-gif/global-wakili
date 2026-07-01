@@ -28,10 +28,10 @@ const TENANT_GROUPS: NavGroup[] = [
   {
     label: 'Core',
     items: [
-      { href: '/app/dashboard',     label: 'Dashboard',       icon: <LayoutDashboard className="h-4 w-4 icon-ai" /> },
+      { href: '/app/dashboard',     label: 'Dashboard',       icon: <LayoutDashboard className="h-4 w-4 icon-neutral" /> },
       { href: '/app/calendar',      label: 'Calendar',        icon: <CalendarDays className="h-4 w-4 icon-tasks" /> },
-      { href: '/app/messaging',     label: 'Messages',        icon: <MessageSquare className="h-4 w-4 icon-tasks" /> },
-      { href: '/app/notifications', label: 'Notifications',   icon: <Bell className="h-4 w-4 icon-ops" /> },
+      { href: '/app/messaging',     label: 'Messages',        icon: <MessageSquare className="h-4 w-4 icon-neutral" /> },
+      { href: '/app/notifications', label: 'Notifications',   icon: <Bell className="h-4 w-4 icon-neutral" /> },
     ],
   },
   {
@@ -76,8 +76,8 @@ const TENANT_GROUPS: NavGroup[] = [
   {
     label: 'Firm',
     items: [
-      { href: '/app/resources',     label: 'Legal Resources', icon: <ExternalLink className="h-4 w-4 icon-legal" /> },
-      { href: '/app/settings',      label: 'Settings',        icon: <Settings className="h-4 w-4 icon-hr" /> },
+      { href: '/app/resources',     label: 'Legal Resources', icon: <ExternalLink className="h-4 w-4 icon-neutral" /> },
+      { href: '/app/settings',      label: 'Settings',        icon: <Settings className="h-4 w-4 icon-neutral" /> },
     ],
   },
 ];
@@ -86,12 +86,12 @@ const TENANT_GROUPS: NavGroup[] = [
 const TENANT_NAV: NavItem[] = TENANT_GROUPS.flatMap((g) => g.items);
 
 const SUPER_ADMIN_NAV: NavItem[] = [
-  { href: '/admin/dashboard',    label: 'Overview',         icon: <LayoutDashboard className="h-4 w-4 icon-legal" /> },
-  { href: '/admin/tenants',      label: 'Tenants',          icon: <Building className="h-4 w-4 icon-ops" /> },
-  { href: '/admin/subscriptions',label: 'Subscriptions',    icon: <DollarSign className="h-4 w-4 icon-finance" /> },
-  { href: '/admin/monitoring',   label: 'Monitoring',       icon: <BarChart2 className="h-4 w-4 icon-ai" /> },
-  { href: '/admin/security',     label: 'Security',         icon: <Shield className="h-4 w-4 icon-danger" /> },
-  { href: '/admin/settings',     label: 'Platform Settings',icon: <Settings className="h-4 w-4 icon-hr" /> },
+  { href: '/admin/dashboard',    label: 'Overview',         icon: <LayoutDashboard className="h-4 w-4" /> },
+  { href: '/admin/tenants',      label: 'Tenants',          icon: <Building className="h-4 w-4" /> },
+  { href: '/admin/subscriptions',label: 'Subscriptions',    icon: <DollarSign className="h-4 w-4" /> },
+  { href: '/admin/monitoring',   label: 'Monitoring',       icon: <BarChart2 className="h-4 w-4" /> },
+  { href: '/admin/security',     label: 'Security',         icon: <Shield className="h-4 w-4" /> },
+  { href: '/admin/settings',     label: 'Platform Settings',icon: <Settings className="h-4 w-4" /> },
 ];
 
 function NavLink({ item, collapsed }: { item: NavItem; collapsed?: boolean }) {

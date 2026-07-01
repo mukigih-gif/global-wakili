@@ -3695,3 +3695,24 @@ version-history exist server-side). Requires a backend read endpoint
 (`GET /audit?entityType&entityId` sourced from the existing hash-chained
 AuditLog) BEFORE the UI timeline can be built. Deferred to a backend
 session per the agreed scope; logged here so it is not lost.
+
+### FINDING-FRONT-011 — REVERTED to initial coloring (2026-07-01, user request)
+User requested the submenu icons return to their INITIAL coloring (before
+the FRONT-011 "Option A colour-everything" pass). Reverted exactly the
+8c55ca8 icon changes in `Sidebar.tsx`: the 5 tenant utility items
+(Dashboard/Messages/Notifications/Legal Resources/Settings) back to
+`icon-neutral` (gray); all 6 `SUPER_ADMIN_NAV` items back to no colour
+class. Domain items (Clients/Matters/Finance/Trust/etc.) keep their
+per-domain colours as they always had. Web tsc exit 0. Supersedes the
+FRONT-011 Option A decision at the user's direction.
+
+### FINDING-FRONT-015 — CLOSED (2026-07-01) — LOW
+**New Invoice "Save Draft" button was a dead no-op.**
+`billing/new/page.tsx` had `onClick={() => { /* save as draft */ }}` —
+the button did nothing. Fix: extracted a shared, guarded `createInvoice()`
+(requires a client + ≥1 line item) used by BOTH "Create Invoice" (form
+submit) and "Save Draft"; invoices persist in DRAFT either way. Save Draft
+now shows the busy spinner and actually saves. Invoice DETAIL page
+(`invoices/[id]`) re-reviewed — already a complete modern layout (summary
+cards, parties, line items, payment history, eTIMS, receipt modal); no
+defect there. Web tsc exit 0.
