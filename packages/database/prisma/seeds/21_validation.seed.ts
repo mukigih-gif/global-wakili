@@ -50,6 +50,8 @@ const SWEEP_MODELS = [
   'disciplinaryCase', 'disciplinaryAction', 'leaveRequest', 'vatAdjustment',
   'withholdingTaxCertificate', 'supplier', 'quotation', 'purchaseOrder',
   'vendorBill', 'tenderRecord', 'courtFiling', 'approval',
+  // 19_security fixtures
+  'session', 'mfaSecret', 'secureToken', 'apiKey', 'consentRecord', 'rateLimitLog',
 ];
 
 export async function seedValidation(

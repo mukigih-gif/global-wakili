@@ -22,6 +22,7 @@ import { seedAi } from './15_ai.seed';
 import { seedReporting } from './16_reporting.seed';
 import { seedDashboard } from './17_dashboard.seed';
 import { seedIntegrations } from './18_integrations.seed';
+import { seedSecurity } from './19_security.seed';
 import { seedBilling } from './22_billing.seed';
 import { seedTaxCompliance } from './23_tax_compliance.seed';
 import { seedProcurement } from './24_procurement.seed';
@@ -318,7 +319,12 @@ async function main() {
         await seedApprovals(prisma, additional.id);
       }
 
-      // ... subsequent demo/fixture layers (19_security …) wired here as they land ...
+      // 19. Security — session/MFA/token/api-key/consent/rate-limit fixtures
+      //     (unblocked by FINDING-007-011). Runs after RBAC is stable.
+      layers.security = await seedSecurity(prisma, tenantId);
+      for (const additional of tenants.additionalTenants) {
+        await seedSecurity(prisma, additional.id);
+      }
     }
 
     // 21. Validation — runs LAST (read-only): schema-drift sweep across every
