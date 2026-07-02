@@ -4276,3 +4276,17 @@ cap limit at 100 (400) -> FINDING-SEARCH-LIMIT (analytics undercount / 400).
 ## FINDING-SEARCH-BILLING — OPEN — billing invoice list has no text-search field (search box inert)
 ## FINDING-SEARCH-PROCUREMENT — OPEN — procurement list has no text-search field (search box inert)
 ## FINDING-SEARCH-LIMIT — OPEN — analytics pages request limit=500 but search schemas cap at 100 (tasks/search 400s; others may truncate)
+
+## FINDING-QUOTATION-VIEW — OPEN — no quotation detail/view page
+billing/quotations/ has only `new/` (create) — NO detail page. billing page
+quotations tab LISTS quotations + has convertToInvoice (POST /billing/quotations/
+:id/convert), but there is NO way to open/view a quotation's details/line items.
+Unlike invoices (invoices/[id] full detail view). GAP: add a quotation view.
+
+## FINDING-PROFORMA-CONVERT-UI — OPEN — proforma->invoice convert not wired in UI
+Backend endpoint EXISTS: POST /billing/proformas/:proformaId/convert
+(convertProformaToInvoice, permission convertProforma, convertProformaSchema).
+But the proformas FE page only LISTS + CREATES proformas — NO convert button, no
+view, no send/approve actions (despite the header text "can be converted to
+invoices"). Contrast: quotations DO have a convert button. GAP: wire a Convert
+(+ Send/Approve) action on the proformas page to the existing endpoint.
