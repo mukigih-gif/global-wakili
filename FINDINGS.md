@@ -3903,3 +3903,10 @@ deep-link fix so it can't silently regress.
 Trust list loads for an authenticated user; ADR-004 overdraw guard blocks a
 withdrawal exceeding available client trust funds (error shown, stays on form)
 — verified via a rejected write (no balance changed). Uses SPA navigation.
+
+### 06-finance.spec.ts — PASS (2026-07-02)
+One authenticated pass over Finance tabs: Chart of Accounts renders seeded
+accounts, Journal Entries loads (regression guard for FINDING-007-014, which
+used to 500), P&L / Balance Sheet renders (FINDING-FIN-I-001) — no 500 error
+boundary on any tab. Tab selectors use .first() (overview quick-links share the
+same labels as the tab bar). Read-only.
