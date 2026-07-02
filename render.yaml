@@ -28,7 +28,9 @@ services:
     runtime: node
     region: oregon
     plan: starter            # $7/mo — upgrade to standard for production
-    buildCommand: npm install && npm run db:gen && npx prisma migrate deploy --config prisma.config.ts
+    # Migrations are NOT run in the build — a DB/env problem must never block a deploy.
+    # Apply migrations as a controlled step: `npm run db:deploy` (prisma migrate deploy).
+    buildCommand: npm install && npm run db:gen
     startCommand: npm run start --workspace=apps/api
     healthCheckPath: /ping
     autoDeploy: true         # auto-deploy on push to main
@@ -145,7 +147,8 @@ services:
     runtime: node
     region: oregon
     plan: starter
-    buildCommand: npm install && npm run db:gen && npx prisma migrate deploy --config prisma.config.ts
+    # Migrations are NOT run here (the API service owns migrations; run `npm run db:deploy`).
+    buildCommand: npm install && npm run db:gen
     startCommand: npm run worker:notifications --workspace=apps/api
     autoDeploy: true
     envVars:
