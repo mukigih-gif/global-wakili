@@ -320,9 +320,10 @@ describe('TENANT_SCOPED_MODELS integrity', () => {
   it('has the expected model count after Gate 3 additions', () => {
     assert.equal(
       TENANT_SCOPED_MODELS.size,
-      116,
-      `Expected 116 scoped models; got ${TENANT_SCOPED_MODELS.size}. ` +
-      'If this fails, a model was added or removed without updating this test.',
+      117,
+      `Expected 117 scoped models; got ${TENANT_SCOPED_MODELS.size}. ` +
+      'If this fails, a model was added or removed without updating this test. ' +
+      '(117 includes VatAdjustment — FIN-E-002, tenantId-scoped.)',
     );
   });
 
@@ -772,8 +773,8 @@ describe('Billing run isolation (G4-D06)', () => {
     assert.equal(TENANT_SCOPED_MODELS.has('BillingRun'), true);
   });
 
-  it('TENANT_SCOPED_MODELS count updated to 94 after BillingRun', () => {
-    assert.equal(TENANT_SCOPED_MODELS.size, 116);
+  it('TENANT_SCOPED_MODELS count is 117 (incl. BillingRun + VatAdjustment)', () => {
+    assert.equal(TENANT_SCOPED_MODELS.size, 117);
   });
 
   it('buildBillingScope always includes tenantId', () => {
@@ -2214,8 +2215,8 @@ describe('Notification security (G8-D01/D02/D03)', () => {
     assert.equal(TENANT_SCOPED_MODELS.has('NotificationPreference'), true);
   });
 
-  it('TENANT_SCOPED_MODELS count updated to 99 after notification additions', () => {
-    assert.equal(TENANT_SCOPED_MODELS.size, 116);
+  it('TENANT_SCOPED_MODELS count remains 117 (VatAdjustment tenant-scoped)', () => {
+    assert.equal(TENANT_SCOPED_MODELS.size, 117);
   });
 
   // --- G8-D02: Template interpolation security ---

@@ -3910,3 +3910,20 @@ accounts, Journal Entries loads (regression guard for FINDING-007-014, which
 used to 500), P&L / Balance Sheet renders (FINDING-FIN-I-001) — no 500 error
 boundary on any tab. Tab selectors use .first() (overview quick-links share the
 same labels as the tab bar). Read-only.
+
+## FINDING-CI-001 — CLOSED (2026-07-02) — CI test job red (stale model count)
+**`apps/api` CI job `npm run test:tenant` (tenant-isolation.test.ts) failed:
+`TENANT_SCOPED_MODELS.size` = 117 but 3 assertions hard-coded 116.** Red since
+commit d961779 (FIN-E-002) added `VatAdjustment` to the tenant-scoped list
+without bumping the test constant. Blocked the CI build→deploy chain (app itself
+deploys via Render/Vercel, separate — so not an outage).
+- Verified the 117th model is legit: `VatAdjustment` has `tenantId String`, a
+  `tenant` relation, and `@@index([tenantId])` in schema.prisma → correctly
+  tenant-scoped. The 117 count is right; the test was stale.
+- Fix: updated the 3 expected counts 116→117 (lines 323/776/2218) + fixed the
+  two misleading test names (said "94"/"99"). Re-run: 365/365 pass, 0 fail;
+  apps/api tsc exit 0.
+
+### 07-billing.spec.ts — PASS (2026-07-02)
+Billing sub-domains via SPA nav: proformas, retainers, payment reminders,
+billing notifications all load (authed shell + heading, no 500/404). Read-only.
