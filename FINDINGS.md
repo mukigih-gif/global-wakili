@@ -4334,3 +4334,21 @@ needs a backend GET /billing/quotations/:id (none exists; list has no lines).
 Logged FINDING-QUOTATION-DETAIL-API for the full detail endpoint. web tsc 0.
 
 ## FINDING-QUOTATION-DETAIL-API — OPEN — no GET /billing/quotations/:id (only list); needed for full quotation detail (line items). Also billing quotation "Send" button is a dead no-op (no endpoint wired).
+
+## NEXT-UP (recorded 2026-07-02, deferred to return to main task = Phase 2 Playwright)
+### REC-B — Documents Delete/Restore buttons (QUICK; endpoints exist)
+Wire DELETE /documents/:id (archive) + POST /:id/restore into the documents
+list/row (+ an archived filter + confirm dialog). No backend work.
+### HIGH punch items still open (from the GW-EOS v4.0 audit)
+- PUNCH-002 / approvals-queue wiring: source modules (procurement etc.) don't
+  create central ApprovalRequest rows -> hub stays empty. Needs backend wiring
+  (call ApprovalService.createApproval on submit).
+- FINDING-AUDIT-TASK-500: PATCH /tasks/:id returns 500 (task update fails
+  server-side) — needs backend triage.
+- PUNCH-001: no Delete/Archive/Restore UI across Client/Matter/Document (REC-B
+  covers Document; Client/Matter still need it).
+- QUOTATION-DETAIL-API: backend GET /billing/quotations/:id for full quote view.
+
+MAIN TASK RESUMED: Phase 2 Playwright E2E — re-verify this session's fixes
+(path-mismatch, client-matter, documents signed-URL, search) via the auditor +
+spec suite, then continue GW-EOS v4.0 matrix certification.
