@@ -2,28 +2,26 @@ import { test, expect, Page } from '@playwright/test';
 import fs from 'node:fs';
 
 /**
- * audit-deadlinks.spec.ts — GW-EOS v4.0 dead-link / no-op auditor.
+ * audit-deadlinks.spec.ts — GW-EOS v4.0 auditor (robust).
  *
- * For each app route: enumerate every <a> and every NON-MUTATING <button>,
- * interact with each, and flag "dead" elements (no navigation, no modal, no
- * network call, no DOM change) + capture console/page errors. Writes a
- * per-page JSON report to tests/e2e/audit-report.json.
+ * Per route:
+ *  1. NETWORK: capture every response with HTTP status >= 400 (exact URL +
+ *     method + status) — powers the 4xx triage.
+ *  2. LINKS: flag dead hrefs (#, empty, javascript:).
+ *  3. BUTTONS (opt-in AUDIT_CLICK=1): click every NON-MUTATING button and flag
+ *     no-reaction (no nav / modal / request / DOM change). ROBUST: per-button
+ *     try/catch, 2.5s click cap, NO full-page reset, capped at 50 buttons/route,
+ *     mutation denylist for prod-safety.
  *
- * SAFETY: mutation controls (Delete/Save/Submit/Approve/Reject/Pay/Create/
- * Record/Withdraw/Deposit/Post/Confirm/Archive/Send/Fiscalize/Convert/Void)
- * are SKIPPED by a denylist so the auditor never writes/pollutes prod data.
- * Links are followed then we navigate back; buttons are clicked in place.
- *
- * This is an AUDITOR: it fails if dead elements are found (that's the point),
- * and always emits the report artifact for triage.
+ * Output: JSON to AUDIT_REPORT (default tests/e2e/audit-report.json).
+ * Fails if dead links OR 4xx errors found (that's the point); always writes the
+ * report. Scope with AUDIT_ROUTES="a,b,c".
  */
 
 const EMAIL    = process.env.E2E_EMAIL    ?? 'admin@yourlawfirm.co.ke';
 const PASSWORD = process.env.E2E_PASSWORD ?? 'Admin@2026!';
 const TENANT   = process.env.E2E_TENANT   ?? 'demo-law-firm';
 
-// Routes to audit (curated; matches the module surface). Override with
-// AUDIT_ROUTES="a,b,c" to scope to one module for batching.
 const DEFAULT_ROUTES = [
   '/app/dashboard', '/app/dashboard/cfo', '/app/calendar', '/app/messaging', '/app/notifications',
   '/app/clients', '/app/matters', '/app/documents', '/app/tasks', '/app/workflows',
@@ -32,12 +30,13 @@ const DEFAULT_ROUTES = [
   '/app/time-capture', '/app/procurement', '/app/vendors', '/app/reception', '/app/hr',
   '/app/analytics', '/app/reports', '/app/ai', '/app/resources', '/app/settings',
 ];
-const ROUTES = (process.env.AUDIT_ROUTES?.split(',').map((s) => s.trim()).filter(Boolean)) ?? DEFAULT_ROUTES;
+const ROUTES = process.env.AUDIT_ROUTES?.split(',').map((s) => s.trim()).filter(Boolean) ?? DEFAULT_ROUTES;
 
-// Button text that mutates data — never clicked by the auditor.
 const MUTATION = /(delete|remove|save|submit|approve|reject|pay|create|record|withdraw|deposit|post|confirm|archive|restore|send|fiscalize|convert|void|issue|cancel|generate|assign|allocate|transfer|new |add |upload|sign|escalate|delegate|reassign|mark)/i;
+const CLICK = process.env.AUDIT_CLICK === '1';
 
-type DeadItem = { route: string; kind: 'link' | 'button'; label: string; reason: string };
+type Dead = { route: string; kind: 'link' | 'button'; label: string; reason: string };
+type NetErr = { route: string; url: string; method: string; status: number };
 
 async function login(page: Page) {
   await page.addInitScript(() => {
@@ -51,78 +50,85 @@ async function login(page: Page) {
   await expect(page).toHaveURL(/\/app\/dashboard/, { timeout: 25_000 });
 }
 
-test.describe('GW-EOS v4.0 dead-link / no-op auditor', () => {
-  test('audit every route for dead links & no-op controls', async ({ page }) => {
-    test.setTimeout(600_000);
+test.describe('GW-EOS v4.0 auditor (links + network + optional buttons)', () => {
+  test('audit routes', async ({ page }) => {
+    test.setTimeout(900_000);
     await login(page);
 
-    const dead: DeadItem[] = [];
+    const dead: Dead[] = [];
+    const netErrors: NetErr[] = [];
     const consoleErrors: { route: string; text: string }[] = [];
-    page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push({ route: page.url(), text: m.text().slice(0, 200) }); });
-    page.on('pageerror', (e) => consoleErrors.push({ route: page.url(), text: 'PAGEERROR: ' + String(e).slice(0, 200) }));
+    let currentRoute = '';
+
+    // Network capture — exact failing requests (status >= 400), API calls only.
+    page.on('response', (res) => {
+      const status = res.status();
+      const url = res.url();
+      if (status >= 400 && /\/api\/v1\//.test(url)) {
+        netErrors.push({ route: currentRoute, url: url.replace('https://global-wakili-api.vercel.app', ''), method: res.request().method(), status });
+      }
+    });
+    page.on('console', (m) => { if (m.type() === 'error') consoleErrors.push({ route: currentRoute, text: m.text().slice(0, 200) }); });
+    page.on('pageerror', (e) => consoleErrors.push({ route: currentRoute, text: 'PAGEERROR: ' + String(e).slice(0, 200) }));
 
     for (const route of ROUTES) {
+      currentRoute = route;
       await page.goto(route, { waitUntil: 'domcontentloaded' }).catch(() => {});
-      // re-login if a cold-start bounced us
       if (/\/login/.test(page.url())) { await login(page); await page.goto(route, { waitUntil: 'domcontentloaded' }).catch(() => {}); }
       await page.locator('aside').first().waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
-      await page.mouse.move(970, 350); // collapse hover sidebar
-      await page.waitForTimeout(1500);
+      await page.mouse.move(970, 350);
+      await page.waitForTimeout(2500); // let load-time API calls settle (captured above)
 
-      // ---- LINK audit: dead href detection (safe; no mutation) ----
-      const links = await page.locator('main a[href]').all().catch(() => []);
-      for (const link of links) {
+      // LINKS
+      for (const link of await page.locator('main a[href]').all().catch(() => [])) {
         const href = (await link.getAttribute('href').catch(() => '')) || '';
-        const label = ((await link.innerText().catch(() => '')) || href).replace(/\s+/g, ' ').trim().slice(0, 60);
         if (href === '#' || href === '' || href.startsWith('javascript:')) {
+          const label = ((await link.innerText().catch(() => '')) || href).replace(/\s+/g, ' ').trim().slice(0, 60);
           dead.push({ route, kind: 'link', label, reason: `dead href="${href}"` });
         }
       }
 
-      // ---- BUTTON audit: no-op detection (SLOW; opt-in via AUDIT_CLICK=1) ----
-      const buttons = process.env.AUDIT_CLICK === '1' ? await page.locator('main button').all().catch(() => []) : [];
-      for (let i = 0; i < buttons.length; i++) {
-        const btn = buttons[i];
-        const label = ((await btn.innerText().catch(() => '')) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
-        if (!label || MUTATION.test(label)) continue;                 // skip mutation / unlabeled
-        if (!(await btn.isVisible().catch(() => false))) continue;
-        if (!(await btn.isEnabled().catch(() => false))) continue;
+      // BUTTONS (robust, opt-in)
+      if (CLICK) {
+        const buttons = await page.locator('main button').all().catch(() => []);
+        const cap = Math.min(buttons.length, 50);
+        for (let i = 0; i < cap; i++) {
+          const btn = buttons[i];
+          let label = '';
+          try {
+            label = ((await btn.innerText({ timeout: 1000 }).catch(() => '')) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+            if (!label || MUTATION.test(label)) continue;
+            if (!(await btn.isVisible().catch(() => false)) || !(await btn.isEnabled().catch(() => false))) continue;
 
-        const urlBefore = page.url();
-        const htmlBefore = (await page.locator('main').innerHTML().catch(() => '')).length;
-        let sawRequest = false;
-        const onReq = () => { sawRequest = true; };
-        page.on('request', onReq);
-        await btn.click({ timeout: 4000 }).catch(() => {});
-        await page.waitForTimeout(700);
-        page.off('request', onReq);
+            const urlBefore = page.url();
+            const htmlBefore = (await page.locator('main').innerHTML().catch(() => '')).length;
+            let sawReq = false;
+            const onReq = () => { sawReq = true; };
+            page.on('request', onReq);
+            await btn.click({ timeout: 2500 }).catch(() => {});
+            await page.waitForTimeout(500);
+            page.off('request', onReq);
 
-        const urlAfter = page.url();
-        const modalOpen = await page.locator('[role="dialog"], .fixed.inset-0').first().isVisible().catch(() => false);
-        const htmlAfter = (await page.locator('main').innerHTML().catch(() => '')).length;
-        const reacted = sawRequest || urlAfter !== urlBefore || modalOpen || Math.abs(htmlAfter - htmlBefore) > 40;
+            const modalOpen = await page.locator('[role="dialog"], .fixed.inset-0').first().isVisible().catch(() => false);
+            const urlAfter = page.url();
+            const htmlAfter = (await page.locator('main').innerHTML().catch(() => '')).length;
+            const reacted = sawReq || urlAfter !== urlBefore || modalOpen || Math.abs(htmlAfter - htmlBefore) > 40;
+            if (!reacted) dead.push({ route, kind: 'button', label, reason: 'no nav/modal/request/DOM change' });
 
-        if (!reacted) dead.push({ route, kind: 'button', label, reason: 'no navigation/modal/request/DOM change' });
-
-        // reset: close any modal, return to route if navigated
-        if (modalOpen) { await page.keyboard.press('Escape').catch(() => {}); await page.waitForTimeout(200); }
-        if (urlAfter !== urlBefore) { await page.goto(route, { waitUntil: 'domcontentloaded' }).catch(() => {}); await page.mouse.move(970, 350); await page.waitForTimeout(800); break; }
+            if (modalOpen) { await page.keyboard.press('Escape').catch(() => {}); await page.waitForTimeout(150); }
+            if (urlAfter !== urlBefore) break; // navigated away — stop buttons for this route (no reset)
+          } catch { /* per-button isolation: never let one button kill the route */ }
+        }
       }
     }
 
-    const report = {
-      generatedAt: new Date().toISOString(),
-      routesAudited: ROUTES.length,
-      deadCount: dead.length,
-      consoleErrorCount: consoleErrors.length,
-      dead,
-      consoleErrors,
-    };
+    const report = { generatedAt: new Date().toISOString(), routesAudited: ROUTES.length, clickMode: CLICK, deadCount: dead.length, netErrorCount: netErrors.length, consoleErrorCount: consoleErrors.length, dead, netErrors, consoleErrors };
     fs.writeFileSync(process.env.AUDIT_REPORT ?? 'tests/e2e/audit-report.json', JSON.stringify(report, null, 2));
     // eslint-disable-next-line no-console
-    console.log(`\n[AUDIT] routes=${ROUTES.length} dead=${dead.length} consoleErrors=${consoleErrors.length}`);
+    console.log(`\n[AUDIT] routes=${ROUTES.length} clickMode=${CLICK} deadLinks/buttons=${dead.length} netErrors=${netErrors.length} consoleErrors=${consoleErrors.length}`);
+    for (const n of netErrors) console.log(`  NET ${n.status} ${n.method} [${n.route}] ${n.url}`);
     for (const d of dead) console.log(`  DEAD [${d.kind}] ${d.route} → "${d.label}" (${d.reason})`);
 
-    expect(dead, `Dead elements found (see tests/e2e/audit-report.json):\n${dead.map((d) => `${d.route} [${d.kind}] "${d.label}" — ${d.reason}`).join('\n')}`).toEqual([]);
+    expect({ dead: dead.length, net: netErrors.length }, `dead=${dead.length} net4xx=${netErrors.length} (see report)`).toEqual({ dead: 0, net: 0 });
   });
 });

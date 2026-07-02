@@ -4090,3 +4090,72 @@ identify the failing endpoint. Ties to TAX-002 (tax) and PUNCH-002 (approvals).
 Next.js App Router RSC prefetch fails on dashboard/matters/clients (13x).
 Non-fatal but indicates prefetch/network instability against the deployed
 frontend; confirm whether config or load-induced before closing.
+
+## 4XX PER-ROUTE TRIAGE (2026-07-02, verified via robust auditor + backend trace)
+Source: /tmp/audit-robust.json (exact URLs) + apps/api/src/routes/index.ts mounts
++ per-module *.routes.ts path literals. One line per failing request:
+
+### A) LOAD-TIME 4xx — traced to backend
+- dashboard + dashboard/cfo: GET /matters/dashboard/summary → 404. matters mounted
+  but only `/:matterId/dashboard` exists; no firm-wide dashboard summary. ENDPOINT
+  DOES NOT EXIST (partial feature). [regression/gap]
+- dashboard + cfo: GET /matters/dashboard/activity → 404. Same — endpoint absent.
+- messaging: GET /messaging/threads → 404. NO messaging routes file, NO mount in
+  routes/index.ts. **BACKEND NOT BUILT — scope discovery** (only PlatformMessagingService).
+- documents + tasks: GET /documents?limit=100 → 404. documents mounted but no GET `/`;
+  list endpoint is `/documents/search`. FRONTEND PATH MISMATCH (calls GET / not /search).
+  Feature EXISTS.
+- approvals + court/filings: GET /approvals/requests → 404. approvals mounted but no
+  `/requests`; list is `/approvals/search` ( `/requests` falls through to `/:approvalId`
+  = "requests" → not found). FRONTEND PATH MISMATCH. Feature EXISTS.
+  ** SPECIAL FOCUS: this is a SEPARATE bug from PUNCH-002. PUNCH-002 = central
+  ApprovalRequest table never populated (orphaned queue). This 404 = wrong PATH
+  (/requests vs /search). Fixing PUNCH-002 would NOT fix this 404, and vice-versa.
+  11-approvals E2E "passed" only because it asserted the table RENDERS, not that it
+  had rows — the 404→empty-table was masked. Two independent bugs. **
+- tenders: GET /tenders + /tenders/dashboard → 404. TenderService.ts exists but NO
+  tender.routes file and NO mount. **HTTP SURFACE NOT BUILT — scope discovery**
+  (service layer only). Never in Phase 1 cert.
+- reception: GET /reception/logs + /reception/documents → 404. reception mounted with
+  /visitors,/calls,/search,/file-receipts,/dashboard — but NO /logs or /documents.
+  FRONTEND PATH MISMATCH. Feature EXISTS (wrong paths).
+- analytics + reports: GET /time-entries?limit=500 → 404. NO top-level /time-entries
+  mount (time entries live under /matters/:id/time-entries). No firm-wide endpoint.
+  FRONTEND PATH MISMATCH / missing aggregate endpoint.
+- reports: GET /reporting/runs?limit=20 → 404. reporting mounted; GET is `/runs/search`,
+  `/runs` is POST-only. FRONTEND PATH MISMATCH (GET /runs vs /runs/search). Feature EXISTS.
+- ai: GET /ai/artifacts?limit=15 → 404. ai mounted; no GET `/artifacts`, list is
+  `/ai/artifacts/search`. FRONTEND PATH MISMATCH. Feature EXISTS.
+- tax: GET /finance/tax/vat/monthly?year=2026 → 400 (needs month); GET /finance/tax/
+  wht/report → 400 (needs from/to). ROUTE EXISTS, missing params = TAX-002 class.
+- analytics: GET /tasks/search?limit=500 → 400. Route exists; validation/param.
+
+### B) CLICK-TRIGGERED (auditor interaction found these — real, not load)
+- tasks: PATCH /tasks/:id → 500 (multiple). Task update returns SERVER ERROR 500.
+  Genuine backend bug. Logged FINDING-AUDIT-TASK-500 (HIGH).
+- workflows: POST /matters?workflow=true → 400. Validation on workflow-matter create.
+
+### C) DEAD/NO-OP BUTTONS (20 flagged — WITH false-positive caveat)
+The no-op detector flags a clicked button that caused no nav/modal/request/DOM change.
+FALSE-POSITIVE CLASS: clicking the ALREADY-ACTIVE tab/filter legitimately does nothing.
+- Likely false positives (active tab/filter): calendar Month/Today, notifications All,
+  procurement Dashboard, vendors Dashboard, tax VAT, approvals Pending(0), documents
+  All Documents(0).
+- SUSPICIOUS — manual check needed: reports Configure (x3), reports Report Library,
+  workflows Open (x8).
+
+### PATTERN (the systemic finding)
+Dominant root cause is a FRONTEND↔BACKEND PATH CONTRACT MISMATCH: the frontend
+calls list endpoints as `GET /resource` (or a made-up sub-path), but the backend
+exposes `GET /resource/search`. Affects documents, approvals, reception, ai,
+reporting. These features ARE built and were API-certified via /search in Phase 1;
+the web app just calls the wrong path → 404 → silent empty UI. Distinct from:
+(a) SCOPE-DISCOVERY not-built: messaging (no routes), tenders (service only);
+(b) MISSING endpoints: matters/dashboard summary+activity, firm-wide time-entries;
+(c) PARAM bugs: tax VAT/WHT (TAX-002), tasks/search 400;
+(d) SERVER error: PATCH /tasks/:id 500.
+
+## FINDING-AUDIT-PATHMISMATCH — OPEN — HIGH — frontend calls wrong API paths (/resource vs /resource/search) on documents/approvals/reception/ai/reporting → 404 → empty UI. Backend built & certified; web contract wrong.
+## FINDING-AUDIT-TASK-500 — OPEN — HIGH — PATCH /tasks/:id returns 500 (task update fails server-side).
+## FINDING-SCOPE-MESSAGING — OPEN — messaging backend not built (no routes/mount); UI calls /messaging/threads → 404. Not a regression — never built.
+## FINDING-SCOPE-TENDERS — OPEN — tenders HTTP surface not built (TenderService only, no routes/mount); UI 404. Not a regression — never built.
