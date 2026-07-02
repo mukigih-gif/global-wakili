@@ -4228,3 +4228,15 @@ SEVERITY: MEDIUM (feature gap, not a regression). NOT a quick fix — requires:
     creds), and/or (b) a rich-text/doc editor component + wire to /ai/drafting-
     assistant for "type/generate a document". Recommend scoping as dedicated
     work, not folded into a bug-fix pass.
+
+## RECOMMENDED NEXT-WORK (recorded 2026-07-02, not yet built)
+### REC-A — In-app document compose / AI-draft editor (DOC-CREATE-DRIVES part 1)
+Add a "Create / Type Document" path in the documents module: rich-text editor +
+wire to existing backend /ai/drafting-assistant for generate-by-prompt. Frontend
++ light backend; NO external creds needed. MEDIUM effort. Deliverable now.
+### REC-B — Documents Delete/Restore buttons (DOC-MODULE part)
+Backend already exposes DELETE /documents/:id (archive) + POST /:id/restore.
+Add the UI buttons (with confirm) to the documents list/row + archived filter.
+QUICK. No backend work.
+(Cloud-drive save/import = OneDrive/Google Drive = WIP-006, own session, needs
+Azure/Google OAuth creds — separate, larger.)
