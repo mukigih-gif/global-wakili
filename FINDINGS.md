@@ -4290,3 +4290,11 @@ But the proformas FE page only LISTS + CREATES proformas — NO convert button, 
 view, no send/approve actions (despite the header text "can be converted to
 invoices"). Contrast: quotations DO have a convert button. GAP: wire a Convert
 (+ Send/Approve) action on the proformas page to the existing endpoint.
+
+## FINDING-SEARCH-BILLING / FINDING-SEARCH-PROCUREMENT — FIXED (2026-07-02)
+Billing: added `search` to listQuerySchema + wired the inline GET /invoices
+handler to filter OR(invoiceNumber, kraControlNumber, client.name) — was reading
+only matterId/clientId/status (invoice.service already supported search; the
+inline route didn't). Procurement: GET /orders + /bills now filter OR(poNumber/
+billNumber, vendor/supplier.name); /requests already searched title. api tsc 0,
+test:tenant 365/365.

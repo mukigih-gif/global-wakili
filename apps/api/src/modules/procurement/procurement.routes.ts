@@ -178,9 +178,16 @@ router.post('/requests/reject', requirePermissions(PERMISSIONS.procurement.rejec
 
 router.get('/orders', requirePermissions(PERMISSIONS.procurement.viewBill), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { status, limit = '50' } = req.query as Record<string, string>;
+    const { status, search, limit = '50' } = req.query as Record<string, string>;
     const orders = await req.db.purchaseOrder.findMany({
-      where: { tenantId: req.tenantId, ...(status ? { status: status as any } : {}) },
+      where: {
+        tenantId: req.tenantId,
+        ...(status ? { status: status as any } : {}),
+        ...(search ? { OR: [
+          { poNumber: { contains: search, mode: 'insensitive' as any } },
+          { vendor: { name: { contains: search, mode: 'insensitive' as any } } },
+        ] } : {}),
+      },
       include: { vendor: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
       take: Math.min(parseInt(limit) || 50, 200),
@@ -197,9 +204,16 @@ router.get('/orders', requirePermissions(PERMISSIONS.procurement.viewBill), asyn
 
 router.get('/bills', requirePermissions(PERMISSIONS.procurement.viewBill), async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { status, limit = '50' } = req.query as Record<string, string>;
+    const { status, search, limit = '50' } = req.query as Record<string, string>;
     const bills = await req.db.vendorBill.findMany({
-      where: { tenantId: req.tenantId, ...(status ? { status: status as any } : {}) },
+      where: {
+        tenantId: req.tenantId,
+        ...(status ? { status: status as any } : {}),
+        ...(search ? { OR: [
+          { billNumber: { contains: search, mode: 'insensitive' as any } },
+          { supplier: { name: { contains: search, mode: 'insensitive' as any } } },
+        ] } : {}),
+      },
       include: { supplier: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'desc' },
       take: Math.min(parseInt(limit) || 50, 200),

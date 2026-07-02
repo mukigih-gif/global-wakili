@@ -50,6 +50,7 @@ const listQuerySchema = z.object({
   clientId: z.string().trim().min(1).optional(),
   matterId: z.string().trim().min(1).optional(),
   invoiceId: z.string().trim().min(1).optional(),
+  search: z.string().trim().max(200).optional(),
   status: z.string().trim().max(100).optional(),
   type: z.string().trim().max(100).optional(),
   year: z.coerce.number().int().min(2000).max(2100).optional(),
@@ -408,7 +409,7 @@ router.get(
   async (req: Request, res: Response) => {
     try {
       const branchFilter = getBranchFilter(req.user ?? {});
-      const { matterId, clientId, status, take = '50', skip = '0' } = req.query as Record<string, string>;
+      const { matterId, clientId, status, search, take = '50', skip = '0' } = req.query as Record<string, string>;
 
       const invoices = await req.db.invoice.findMany({
         where: {
@@ -417,6 +418,11 @@ router.get(
           ...(matterId  ? { matterId }  : {}),
           ...(clientId  ? { clientId }  : {}),
           ...(status    ? { status: status as any } : {}),
+          ...(search ? { OR: [
+            { invoiceNumber: { contains: search, mode: 'insensitive' as const } },
+            { kraControlNumber: { contains: search, mode: 'insensitive' as const } },
+            { client: { name: { contains: search, mode: 'insensitive' as const } } },
+          ] } : {}),
         },
         include: {
           matter: { select: { id: true, title: true, matterCode: true, branchId: true } },
