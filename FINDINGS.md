@@ -4055,3 +4055,38 @@ settings section.
 ## NEXT (agreed): build GW-EOS v4.0 matrix auditor — per-module lifecycle +
 ## automated dead-link/no-op detection — then re-certify section-by-section.
 ## Do NOT start Phase 3 until PUNCH-001..004 (HIGH) close.
+
+## DEAD-LINK AUDITOR — FULL RUN RESULT (2026-07-02, verified)
+Ran audit-deadlinks.spec.ts (link-only mode) across all 27 module routes vs
+GW-EOS v4.0 matrix. Source of truth: /tmp/audit-full.json.
+- Routes audited: 27
+- Dead links (href="#"/empty/javascript:): 0  ← no dead hrefs found
+- Console errors: 25, breakdown:
+  * 12 x 4xx resource errors (11x404 + 1x400) on 10 routes: /app/ai,
+    /app/analytics, /app/approvals, /app/dashboard (x2), /app/documents,
+    /app/messaging, /app/reception, /app/reports, /app/tax, /app/tenders (x2)
+    → genuine failed data/API fetches per page; each needs per-route triage
+    (which widget/endpoint 404s). Logged as FINDING-AUDIT-4XX (OPEN).
+  * 13 x Next.js RSC prefetch fails ("Failed to fetch RSC payload") on
+    /app/dashboard (x5), /app/matters (x5), /app/clients (x3). Non-fatal
+    (falls back to full nav); likely prefetch-under-load or RSC config.
+    Logged as FINDING-AUDIT-RSC (OPEN, LOW-MED).
+
+### HONEST SCOPE LIMIT
+The button no-op audit (click every non-mutating button, flag no-reaction) was
+NOT executed — the clicking mode hangs and times out before writing a report
+(B1 failed, no JSON). It is disabled behind AUDIT_CLICK=1 pending a more robust
+rebuild (per-route isolation, shorter per-button timeout, no full-page reset).
+Therefore "0 dead" covers LINKS only; dead/no-op BUTTON detection is still
+OUTSTANDING. Do not read this run as "all clickables verified".
+
+## FINDING-AUDIT-4XX — OPEN — MEDIUM
+10 routes emit 4xx resource errors on load (see list above). Each is a
+page-level data/API call returning 404/400 — real (data not loading) but
+masked in the UI (no 500 boundary). Needs per-route network-tab triage to
+identify the failing endpoint. Ties to TAX-002 (tax) and PUNCH-002 (approvals).
+
+## FINDING-AUDIT-RSC — OPEN — LOW/MEDIUM
+Next.js App Router RSC prefetch fails on dashboard/matters/clients (13x).
+Non-fatal but indicates prefetch/network instability against the deployed
+frontend; confirm whether config or load-induced before closing.

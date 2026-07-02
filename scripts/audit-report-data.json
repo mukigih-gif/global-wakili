@@ -1,0 +1,75 @@
+{
+  "title": "Global Wakili — Dead-Link Auditor: Full Run Result",
+  "subtitle": "27 module routes vs GW-EOS v4.0 matrix · 2 July 2026 · Verified from /tmp/audit-full.json",
+  "sections": [
+    {
+      "heading": "1. Result Summary (verified)",
+      "blocks": [
+        { "type": "table",
+          "headers": ["Metric", "Value"],
+          "rows": [
+            ["Routes audited", "27"],
+            ["Dead links (href=#/empty/javascript:)", "0"],
+            ["Console errors", "25"],
+            ["  — 4xx resource errors (11x404 + 1x400)", "12"],
+            ["  — Next.js RSC prefetch fails", "13"],
+            ["Button no-op audit", "NOT RUN (see §4 scope limit)"]
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "2. 4xx resource errors by route (FINDING-AUDIT-4XX, MEDIUM)",
+      "blocks": [
+        { "type": "p", "text": "Each is a page-level data/API call returning 404/400 on load — real (data not loading) but masked in the UI (no 500 boundary). Needs per-route network triage to name the failing endpoint." },
+        { "type": "table",
+          "headers": ["Route", "4xx count"],
+          "rows": [
+            ["/app/ai", "1"],
+            ["/app/analytics", "1"],
+            ["/app/approvals", "1"],
+            ["/app/dashboard", "2"],
+            ["/app/documents", "1"],
+            ["/app/messaging", "1"],
+            ["/app/reception", "1"],
+            ["/app/reports", "1"],
+            ["/app/tax", "1"],
+            ["/app/tenders", "2"]
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "3. RSC prefetch fails by route (FINDING-AUDIT-RSC, LOW/MED)",
+      "blocks": [
+        { "type": "p", "text": "Next.js App Router 'Failed to fetch RSC payload' — sidebar prefetch failures; non-fatal (falls back to full navigation). Confirm whether config or load-induced before closing." },
+        { "type": "table",
+          "headers": ["Route", "RSC-fail count"],
+          "rows": [
+            ["/app/dashboard", "5"],
+            ["/app/matters", "5"],
+            ["/app/clients", "3"]
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "4. Honest scope limit",
+      "blocks": [
+        { "type": "p", "text": "The button no-op audit (click every non-mutating button, flag no-reaction) was NOT executed — the clicking mode hangs and times out before writing a report (batch B1 failed, no JSON). It is disabled behind AUDIT_CLICK=1 pending a more robust rebuild (per-route isolation, shorter per-button timeout, no full-page reset).", "opts": { "bold": true } },
+        { "type": "p", "text": "Therefore '0 dead' covers LINKS only. Dead/no-op BUTTON detection remains OUTSTANDING. This run must NOT be read as 'all clickables verified'." }
+      ]
+    },
+    {
+      "heading": "5. Next actions",
+      "blocks": [
+        { "type": "bullets", "items": [
+          "Per-route network triage of the 10 routes with 4xx errors (name the failing endpoint each) — FINDING-AUDIT-4XX.",
+          "Rebuild the button no-op auditor robustly (per-route isolation, 2-3s per-button cap, no page reset) then run it — the outstanding half of the click-through audit.",
+          "Confirm RSC prefetch fails are load vs config (re-run off-peak).",
+          "Do NOT start Phase 3 until the HIGH punch items (PUNCH-001..004) + the 4xx data-fetch failures are resolved."
+        ]}
+      ]
+    }
+  ]
+}

@@ -79,8 +79,8 @@ test.describe('GW-EOS v4.0 dead-link / no-op auditor', () => {
         }
       }
 
-      // ---- BUTTON audit: no-op detection on NON-mutating buttons ----
-      const buttons = await page.locator('main button').all().catch(() => []);
+      // ---- BUTTON audit: no-op detection (SLOW; opt-in via AUDIT_CLICK=1) ----
+      const buttons = process.env.AUDIT_CLICK === '1' ? await page.locator('main button').all().catch(() => []) : [];
       for (let i = 0; i < buttons.length; i++) {
         const btn = buttons[i];
         const label = ((await btn.innerText().catch(() => '')) || '').replace(/\s+/g, ' ').trim().slice(0, 60);
@@ -118,7 +118,7 @@ test.describe('GW-EOS v4.0 dead-link / no-op auditor', () => {
       dead,
       consoleErrors,
     };
-    fs.writeFileSync('tests/e2e/audit-report.json', JSON.stringify(report, null, 2));
+    fs.writeFileSync(process.env.AUDIT_REPORT ?? 'tests/e2e/audit-report.json', JSON.stringify(report, null, 2));
     // eslint-disable-next-line no-console
     console.log(`\n[AUDIT] routes=${ROUTES.length} dead=${dead.length} consoleErrors=${consoleErrors.length}`);
     for (const d of dead) console.log(`  DEAD [${d.kind}] ${d.route} → "${d.label}" (${d.reason})`);
