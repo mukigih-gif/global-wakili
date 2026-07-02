@@ -4305,3 +4305,18 @@ progressStage (WIP-017). Now: each PROGRESS_STAGE maps to a fixed % (Instruction
 5% → Closing 100%); selecting a stage auto-sets progressPercent; the manual
 slider is replaced by a read-only "(from stage)" display; view-mode % derives
 from the stage (falls back to stored % only if no stage set). web tsc 0.
+
+## FINDING-MATTER-PROGRESS — EXTENDED (2026-07-02) — per-flow stage sets
+User flagged the litigation-only stages were wrong for commercial/conveyancing.
+Now stage SET is resolved from matter.category (the effective type field —
+matterType is normalized to category per MatterKYCService):
+- conveyancing (LAND/PROPERTY): Instruction→Due Diligence→Title Search→Draft
+  Agreement→Exchange→Completion→Registration→Closing
+- commercial (CORPORATE/CONTRACT): Instruction→Review→Drafting→Negotiation→
+  Execution→Closing
+- litigation (CIVIL/CRIMINAL/COURT): Instruction→Review→Research→Pleadings→Court→
+  Awaiting Judgment→Judgment→Enforcement→Closing
+- probate (SUCCESSION/ESTATE): Instruction→Application→Grant→Administration→
+  Distribution→Closing
+- generic (fallback). Each stage still maps to a fixed %; ALL_STAGES flat lookup
+  resolves any stored value's label/% regardless of set. web tsc 0.

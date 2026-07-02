@@ -39,23 +39,67 @@ type Matter = {
   recentInvoices?: { id: string; invoiceNumber: string; total?: number; paidAmount?: number; status: string }[];
 };
 
-// Progress % is DERIVED from the stage (not manually entered) — each stage maps
-// to a fixed completion %. Selecting a stage sets the % automatically.
-const PROGRESS_STAGES = [
-  { value: 'INSTRUCTION_RECEIVED', label: 'Instruction Received', pct: 5 },
-  { value: 'INITIAL_REVIEW', label: 'Initial Review', pct: 15 },
-  { value: 'RESEARCH', label: 'Research & Analysis', pct: 25 },
-  { value: 'DRAFTING', label: 'Drafting', pct: 40 },
-  { value: 'NEGOTIATION', label: 'Negotiation', pct: 55 },
-  { value: 'COURT_PROCEEDINGS', label: 'Court Proceedings', pct: 65 },
-  { value: 'AWAITING_JUDGMENT', label: 'Awaiting Judgment', pct: 75 },
-  { value: 'JUDGMENT_RECEIVED', label: 'Judgment Received', pct: 85 },
-  { value: 'POST_JUDGMENT', label: 'Post-Judgment', pct: 90 },
-  { value: 'ENFORCEMENT', label: 'Enforcement', pct: 93 },
-  { value: 'SETTLEMENT', label: 'Settlement', pct: 97 },
-  { value: 'CLOSING', label: 'Closing', pct: 100 },
-];
-const stagePct = (stage?: string | null) => PROGRESS_STAGES.find((s) => s.value === stage)?.pct ?? 0;
+// Progress % is DERIVED from the stage (not manual), and the stage SET depends on
+// the matter's flow (litigation vs conveyancing vs commercial vs probate). Each
+// stage maps to a fixed completion %.
+type Stage = { value: string; label: string; pct: number };
+const STAGE_SETS: Record<string, Stage[]> = {
+  litigation: [
+    { value: 'INSTRUCTION_RECEIVED', label: 'Instruction Received', pct: 5 },
+    { value: 'INITIAL_REVIEW', label: 'Initial Review', pct: 15 },
+    { value: 'RESEARCH', label: 'Research & Analysis', pct: 25 },
+    { value: 'DRAFTING', label: 'Pleadings & Drafting', pct: 40 },
+    { value: 'COURT_PROCEEDINGS', label: 'Court Proceedings', pct: 60 },
+    { value: 'AWAITING_JUDGMENT', label: 'Awaiting Judgment', pct: 75 },
+    { value: 'JUDGMENT_RECEIVED', label: 'Judgment Received', pct: 85 },
+    { value: 'ENFORCEMENT', label: 'Enforcement', pct: 95 },
+    { value: 'CLOSING', label: 'Closing', pct: 100 },
+  ],
+  conveyancing: [
+    { value: 'INSTRUCTION_RECEIVED', label: 'Instruction Received', pct: 5 },
+    { value: 'DUE_DILIGENCE', label: 'Due Diligence', pct: 20 },
+    { value: 'TITLE_SEARCH', label: 'Title Search', pct: 35 },
+    { value: 'DRAFT_AGREEMENT', label: 'Draft Agreement / Sale', pct: 50 },
+    { value: 'EXCHANGE', label: 'Exchange & Deposit', pct: 65 },
+    { value: 'COMPLETION', label: 'Completion', pct: 85 },
+    { value: 'REGISTRATION', label: 'Registration & Transfer', pct: 95 },
+    { value: 'CLOSING', label: 'Closing', pct: 100 },
+  ],
+  commercial: [
+    { value: 'INSTRUCTION_RECEIVED', label: 'Instruction Received', pct: 5 },
+    { value: 'INITIAL_REVIEW', label: 'Review & Structuring', pct: 20 },
+    { value: 'DRAFTING', label: 'Drafting', pct: 40 },
+    { value: 'NEGOTIATION', label: 'Negotiation', pct: 60 },
+    { value: 'EXECUTION', label: 'Execution / Signing', pct: 85 },
+    { value: 'CLOSING', label: 'Completion & Closing', pct: 100 },
+  ],
+  probate: [
+    { value: 'INSTRUCTION_RECEIVED', label: 'Instruction Received', pct: 5 },
+    { value: 'APPLICATION', label: 'Application Filed', pct: 25 },
+    { value: 'GRANT_ISSUED', label: 'Grant Issued', pct: 50 },
+    { value: 'ADMINISTRATION', label: 'Estate Administration', pct: 75 },
+    { value: 'DISTRIBUTION', label: 'Distribution', pct: 95 },
+    { value: 'CLOSING', label: 'Closing', pct: 100 },
+  ],
+  generic: [
+    { value: 'INSTRUCTION_RECEIVED', label: 'Instruction Received', pct: 5 },
+    { value: 'IN_PROGRESS', label: 'In Progress', pct: 40 },
+    { value: 'REVIEW', label: 'Review', pct: 70 },
+    { value: 'CLOSING', label: 'Closing', pct: 100 },
+  ],
+};
+// Resolve the flow from the matter category/type string (keyword match).
+function resolveFlow(catOrType?: string | null): keyof typeof STAGE_SETS {
+  const s = (catOrType ?? '').toUpperCase();
+  if (/CONVEY|LAND|PROPERT/.test(s)) return 'conveyancing';
+  if (/COMMERC|CORPORATE|CONTRACT/.test(s)) return 'commercial';
+  if (/PROBATE|SUCCESSION|ESTATE/.test(s)) return 'probate';
+  if (/LITIG|CIVIL|CRIMIN|COURT|DISPUTE/.test(s)) return 'litigation';
+  return 'generic';
+}
+// Flat lookup across ALL sets so any stored stage value still resolves label/%.
+const ALL_STAGES: Stage[] = Object.values(STAGE_SETS).flat();
+const stagePct = (stage?: string | null) => ALL_STAGES.find((s) => s.value === stage)?.pct ?? 0;
 
 type Tab = 'overview' | 'updates' | 'invoices' | 'disbursements' | 'expenses' | 'time' | 'tasks' | 'hearings' | 'calendar' | 'documents';
 
@@ -138,7 +182,8 @@ export function MatterDetailClient({ id }: { id: string }) {
     progressPct < 25 ? 'bg-red-400' :
     progressPct < 50 ? 'bg-amber-400' :
     progressPct < 75 ? 'bg-blue-400' : 'bg-green-500';
-  const stageLabel = PROGRESS_STAGES.find((s) => s.value === matter.progressStage)?.label;
+  const stageLabel = ALL_STAGES.find((s) => s.value === matter.progressStage)?.label;
+  const matterStages = STAGE_SETS[resolveFlow(matter.category)];
 
   return (
     <div className="space-y-5">
@@ -219,7 +264,7 @@ export function MatterDetailClient({ id }: { id: string }) {
                 className="form-select text-xs w-52"
               >
                 <option value="">— Select Stage —</option>
-                {PROGRESS_STAGES.map((s) => (
+                {matterStages.map((s) => (
                   <option key={s.value} value={s.value}>{s.label}</option>
                 ))}
               </select>
