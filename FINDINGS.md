@@ -3892,3 +3892,14 @@ Observations + quick fixes (calendar/page.tsx):
   rail width 64, 25 nav icons, first icon visible; screenshot confirms full
   colored icon rail. Cause was a stale cached build on the user's browser —
   resolved by a hard refresh. No code defect.
+
+### 04-session-persistence.spec.ts — PASS (4/4, 2026-07-02)
+Regression coverage for AUTH-SESSION-002: token stored in localStorage on
+login; session + data survive a full refresh; session persists in a new tab /
+deep link (no bounce to /login); logout clears the token. Locks in the
+deep-link fix so it can't silently regress.
+
+### 05-trust.spec.ts — PASS (2/2, 2026-07-02)
+Trust list loads for an authenticated user; ADR-004 overdraw guard blocks a
+withdrawal exceeding available client trust funds (error shown, stays on form)
+— verified via a rejected write (no balance changed). Uses SPA navigation.
