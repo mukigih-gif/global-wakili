@@ -132,11 +132,11 @@ export function Sidebar() {
   const expanded = !collapsed || hovered;
 
   return (
-    <div className={cn('relative h-full shrink-0 transition-[width] duration-200', collapsed ? 'w-16' : 'w-60')}>
+    <div className={cn('relative h-full shrink-0 transition-[width] duration-300 ease-in-out', collapsed ? 'w-16' : 'w-60')}>
     <aside
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      className={cn('absolute inset-y-0 left-0 z-40 flex h-full flex-col border-r border-gray-200 bg-white transition-[width] duration-200', expanded ? 'w-60' : 'w-16', collapsed && hovered && 'shadow-2xl')}
+      className={cn('absolute inset-y-0 left-0 z-40 flex h-full flex-col border-r border-gray-200 bg-white transition-[width] duration-300 ease-in-out', expanded ? 'w-60' : 'w-16', collapsed && hovered && 'shadow-2xl')}
     >
       {/* Logo + collapse toggle */}
       <div className="flex h-16 items-center justify-between border-b border-gray-100 px-3" style={{ background: 'linear-gradient(135deg, #071529 0%, #1B3A6B 100%)' }}>

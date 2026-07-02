@@ -3847,3 +3847,48 @@ to the collapsed icon rail (unless the user pinned it open), and hovering
 temporarily expands to show labels as an OVERLAY (absolute, z-40, shadow) so
 the page content does not reflow. The pin toggle still persists the choice
 (`gw_sidebar_collapsed`). Web tsc exit 0.
+
+## FINDING-SEED-DEMO-001 — CLOSED (2026-07-02) — single canonical tenant
+**demo-law-firm brought to full comprehensive seed (was cert-data only).**
+User decision: stick to ONE slug (`demo-law-firm`) to avoid tenant drift. Data
+was split — the comprehensive seed had populated `global-wakili` + `mwangi`,
+while `demo-law-firm` (the login tenant) had only certification-test data (no
+calendar/hearings → "calendar empty"). Ran `master.seed` targeted at
+demo-law-firm with identity-preserving env overrides
+(`SEED_TENANT_SLUG=demo-law-firm`, NAME/KRA_PIN/FIRM_ADMIN_EMAIL = existing
+values → bootstrap upsert is a no-op, no rename, no dup admin, existing admin
+not password-reset). Result: demo-law-firm now `calendarEvent=8, courtHearing=5`
+(+ full layers), matching the other tenants. Calendar verified showing.
+- GOTCHA (important): `npx dotenv -e .env -- tsx …` MANGLES the bcrypt
+  `SEED_DEFAULT_PASSWORD_HASH` via `$`-expansion (60→44 chars) → bootstrap
+  rejects it ("appears unsafe"). Use `npm run db:seed` (prisma.config
+  `loadRootEnv`, which does NOT expand `$`) with inline `SEED_*` overrides
+  (loadRootEnv skips already-set keys). This is the standing way to re-seed.
+- Residual (pre-existing, NOT from this seed): validation check 13
+  (ClientTrustLedger net == TrustAccount balance) FAILs only for
+  demo-law-firm's CERT account "Client Trust Account — Main"
+  (ledgerNet=29,000 vs acct=4,129,000, 23 rows). All seed-created trust
+  accounts balance exactly. This is cert residue (XREL-001/002 class) on the
+  now-seeded tenant — track for cleanup; not caused by the seed.
+
+## FINDING-FRONT-CAL-001 — PARTIAL (2026-07-02) — calendar UX
+Observations + quick fixes (calendar/page.tsx):
+- Colors per event type: ALREADY implemented (EVENT_COLORS: hearing=red,
+  client=blue, internal=purple, deadline=orange, compliance=amber,
+  bring-up=yellow, reminder=green, other=gray). Seeded events are mostly
+  hearings, so they look uniformly red — colors work; variety is a data matter.
+- QUICK FIX (done): event chips now show a native tooltip (title · location —
+  date/time) on hover + a subtle scale/shadow ("brings it out"). Web tsc 0.
+- QUICK FIX (done): the "+N more" indicator (days with >3 events) was
+  non-clickable → extra events unreachable from month view. Now a button that
+  opens List view (all events reachable). Web tsc 0.
+- DEFERRED (enhancements, not quick): a rich hover POPOVER (vs native title),
+  and a per-day events popover/expansion so >3 events can be seen without
+  leaving month view. Logged for a later frontend pass.
+
+## FINDING-FRONT-010c — CLOSED (2026-07-02) — sidebar polish
+- Hover expand felt "super fast" → transition slowed 200ms→300ms ease-in-out.
+- "Icons not visible when collapsed" did NOT reproduce: probe shows collapsed
+  rail width 64, 25 nav icons, first icon visible; screenshot confirms full
+  colored icon rail. Cause was a stale cached build on the user's browser —
+  resolved by a hard refresh. No code defect.

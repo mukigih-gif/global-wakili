@@ -254,14 +254,17 @@ export default function CalendarPage() {
                             <button
                               key={e.id}
                               onClick={() => { setSelected(e); setEditing(false); setDeleting(false); }}
-                              className={`w-full text-left text-[11px] font-medium px-1.5 py-0.5 rounded border truncate ${EVENT_COLORS[evType] ?? EVENT_COLORS.OTHER}`}
+                              title={`${e.title}${e.location ? ' · ' + e.location : ''} — ${new Date(e.startTime).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })}`}
+                              className={`w-full text-left text-[11px] font-medium px-1.5 py-0.5 rounded border truncate transition-transform hover:scale-[1.03] hover:shadow-sm ${EVENT_COLORS[evType] ?? EVENT_COLORS.OTHER}`}
                             >
                               {e.title}
                             </button>
                           );
                         })}
                         {dayEvents.length > 3 && (
-                          <p className="text-[11px] text-gray-400 pl-1">+{dayEvents.length - 3} more</p>
+                          <button onClick={() => setView('list')} className="text-[11px] text-primary-600 hover:underline pl-1" title="Show all events (list view)">
+                            +{dayEvents.length - 3} more
+                          </button>
                         )}
                       </div>
                     </>
