@@ -1,0 +1,55 @@
+{
+  "title": "Global Wakili — Module Findings: Documents + Client/Matter + Search",
+  "subtitle": "Read-only investigation · 2 July 2026 · Verified against source (no assumptions)",
+  "sections": [
+    {
+      "heading": "1. Documents Module — Incomplete (matrix §7)",
+      "blocks": [
+        { "type": "p", "text": "Backend routes exposed: POST / (upload, SINGLE file), GET /search, GET /dashboard, GET /:id, GET /:id/download (presigns on-demand), DELETE /:id (archive), POST /:id/restore. The gaps are frontend + a signed-URL flow issue:" },
+        { "type": "table",
+          "headers": ["Capability", "Backend", "Frontend", "Status"],
+          "rows": [
+            ["Upload", "POST / (single file)", "documents/new", "OK (single-file only)"],
+            ["Preview / Download from list", "GET /:id/download presigns on-demand", "renders only if d.signedUrl exists", "BROKEN — /search does NOT presign per row; d.signedUrl null → buttons hidden / 'No file URL'"],
+            ["Delete / Archive", "DELETE /:id exists", "NO button", "MISSING in UI"],
+            ["Restore", "POST /:id/restore exists", "NO button", "MISSING in UI"],
+            ["Version add / history", "version fields", "read-only version number", "MISSING (no add/history UI)"],
+            ["Multiple files", "upload.single", "single input", "NOT supported"],
+            ["Type filter (Contracts)", "no documentType in /search schema", "sends documentType", "IGNORED server-side (DOC-TYPE-FILTER)"],
+            ["OCR / Virus scan", "not wired (WIP-003)", "—", "NOT built"]
+          ]
+        },
+        { "type": "p", "text": "Highest-impact fix: on Preview/Download click, call GET /:id/download to obtain the signed URL (do not rely on d.signedUrl from the list). Then add Delete/Restore buttons wired to the existing endpoints.", "opts": { "bold": true } }
+      ]
+    },
+    {
+      "heading": "2. Client ↔ Matter Linkage (user-reported)",
+      "blocks": [
+        { "type": "p", "text": "Report: 'pick a client, their matters don't display, and vice versa.' Traced against source:" },
+        { "type": "bullets", "items": [
+          "Client-detail Matters tab: GET /matters?clientId=X — server-side filter IS supported (listOpenMatters + query schema allow clientId).",
+          "Forms (billing/new etc.): filter client-side on (m.client?.id ?? m.clientId); shapeMatterResponse spreads ...matter so m.clientId IS present in list rows.",
+          "Conclusion: the linkage MECHANISM exists. A global break is not evident in code.",
+          "Most likely: a SPECIFIC screen, or a limit=100/30 cap hiding a client's matters, or matter creation not persisting clientId in one path.",
+          "ACTION: needs a live repro to name the exact screen before fixing — do NOT guess-fix. Ref v3 spec 03-matters."
+        ]}
+      ]
+    },
+    {
+      "heading": "3. Search Inconsistency (user-reported) — largely explained",
+      "blocks": [
+        { "type": "bullets", "items": [
+          "(a) AUDIT-PATHMISMATCH — FIXED (7e4d409): documents/approvals/ai/reporting search called GET /resource (404) instead of GET /resource/search. Now corrected.",
+          "(b) STILL OPEN — 400 param bugs: tax VAT (needs month), WHT (needs from/to), tasks/search validation (TAX-002 class). These fail until FE params align with backend schema.",
+          "Net: 'works for some, not others' = the mix of path-mismatch (now fixed) + param bugs (open). Re-verify per module after Vercel deploy."
+        ]}
+      ]
+    },
+    {
+      "heading": "4. Status of the path-mismatch fix (context)",
+      "blocks": [
+        { "type": "p", "text": "AUDIT-PATHMISMATCH fixed across 5 modules (commit 7e4d409): ai/artifacts→/search, approvals/requests→/search (+ approve/reject /:id), documents→/search, reporting/runs→/runs/search, reception/logs→/search (+ CALL→CALL_LOG). Residual: reception docs tabs have no backend GET (SCOPE-RECEPTION-DOCS); documentType filter unsupported (DOC-TYPE-FILTER). web tsc exit 0; live re-verify pending deploy." }
+      ]
+    }
+  ]
+}

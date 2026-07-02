@@ -4176,3 +4176,39 @@ RESIDUAL (logged, not path-fixes):
 - FINDING-SCOPE-RECEPTION-DOCS (MEDIUM): reception docs_in/docs_out tabs call
   /reception/documents?direction= — NO backend GET exists (only POST /file-receipts).
   File-receipt LIST endpoint not built. Tab will stay empty until backend adds it.
+
+## FINDING-DOC-MODULE — OPEN — documents module incomplete (verified 2026-07-02)
+Backend routes exposed: POST / (upload, single file), GET /search, GET /dashboard,
+GET /:id, GET /:id/download (presigns on-demand), DELETE /:id (archive), POST
+/:id/restore. Frontend gaps vs matrix §7:
+- PREVIEW/DOWNLOAD BROKEN FROM LIST: FE renders Preview/Download only if
+  `d.signedUrl` exists, but /search does NOT presign per row (signed URLs are
+  generated only by GET /:id/download). So d.signedUrl is null in the list →
+  buttons don't render / preview shows "No file URL". FIX DIRECTION: FE should
+  call GET /:id/download on click to get the signed URL. (HIGH — core doc access)
+- NO DELETE button (backend DELETE /:id exists; UI has none). [PUNCH-001]
+- NO RESTORE button (backend POST /:id/restore exists; UI has none).
+- NO version-add / version-history view (currentVersion shown read-only only).
+- SINGLE-FILE upload only (multer upload.single); matrix wants multiple files.
+- documentType filter unsupported by /search (DOC-TYPE-FILTER) → All-Types/
+  Contracts filter + Contracts tab don't filter server-side.
+- OCR / virus-scan not wired (WIP-003 partial).
+
+## FINDING-CLIENT-MATTER-LINK — OPEN — needs live repro to localize
+User report: "pick a client, their matters don't display, and vice versa."
+Traced: client-detail Matters tab uses GET /matters?clientId=X (server filter IS
+supported — listOpenMatters line 200 + query schema). Forms (billing/new etc.)
+filter client-side on (m.client?.id ?? m.clientId); shapeMatterResponse spreads
+`...matter` so m.clientId IS present in list rows. So the linkage MECHANISM
+exists. The reported break is likely a SPECIFIC screen or a limit=100 cap (a
+client's matters not in the first 100), NOT a global break. NEEDS live repro to
+name the exact screen before fixing — do not guess. Ref v3 spec 03-matters
+("client dropdown populates; C-01 Matters tab shows exactly 3").
+
+## FINDING-SEARCH-INCONSISTENCY — OPEN — explained, largely resolved
+User report: "search works for some modules, not others." Root causes:
+(a) AUDIT-PATHMISMATCH (FIXED 7e4d409) — documents/approvals/ai/reporting search
+    was calling GET /resource (404) instead of /resource/search. Now fixed.
+(b) 400 param bugs still open: tax VAT (needs month), WHT (needs from/to),
+    tasks/search validation (TAX-002 class). These search/report calls still fail
+    until params aligned. Verify post-deploy which modules' search now work.
