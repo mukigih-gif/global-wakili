@@ -3970,3 +3970,88 @@ Downloads/GlobalWakili_Phase2_E2E_Report_20260702.docx.
 ## FINDING-TODO-008-E2E — OPEN — HIGH (2026-07-02, flagged)
 Document/email integration (TODO-008) remains untested end-to-end (separate from
 AUTH-001 email simulation). Not addressed this session; carried forward.
+
+# =====================================================================
+# PHASE 2 RECONCILIATION PUNCH LIST — vs GW-EOS v4.0 Playwright
+# Certification Matrix (22 sections / 1,000+ points) — 2026-07-02
+# =====================================================================
+# Method: read-only recon. [code]=source read, [PDF]=user invoice.pdf,
+# [live]=API probe. Governing docs: GLOBAL_WAKILI_TESTING_CERTIFICATION
+# v3.0 + v3.1 Phase-3 Addendum + GW-EOS v4.0 Playwright Cert Matrix
+# (Downloads/Global Wakili -playwright inspection list.pdf).
+#
+# HONEST POSTURE CORRECTION: the prior "Phase 2 green (12 specs)" was
+# route-render + a few interactions — NOT the matrix's full-lifecycle
+# CRUD-per-module standard. The matrix is the real bar. Below is what is
+# genuinely broken/missing against it.
+
+## FINDING-PUNCH-001 — HIGH — No Delete/Archive/Restore lifecycle
+`api.delete` exists in only 2 frontend files (calendar events, settings
+labels) [code]. Matrix §5/§6/§7 require Delete + Archive + Restore for
+Client, Matter, Document — ALL MISSING (HR archive = departments only).
+Core record-lifecycle actions absent app-wide.
+
+## FINDING-PUNCH-002 — HIGH — Approvals hub orphaned from source modules
+Procurement writes to its own `procurementApprovalLog`; nothing calls the
+central `ApprovalService.createApproval` [code]. Real PO/bill submissions
+never surface in /app/approvals. Breaks matrix §21 Scenario 4. (Ties to
+TODO-002 + PART D of this session's recon.)
+
+## FINDING-PUNCH-003 — HIGH — Invoice not client-sendable
+invoices/[id]: FROM shows placeholder "Firm address — configure in firm
+settings" + firm name "Your Firm" [PDF]; firm Bank Details EXIST in
+Settings→Bank Details but are NEVER pulled onto the invoice [code]; no
+Notes display; no Edit action [code]. Matrix §9 Finance/Invoices.
+
+## FINDING-PUNCH-004 — HIGH (blocker) — Client Portal untestable
+02_users seeds no CLIENT-role user [code]; matrix §2/§5/§21 need a CLIENT
+credential + linked portalUserId. Portal E2E cannot run.
+
+## FINDING-PUNCH-005 — MEDIUM — Reports export incomplete
+reports/page.tsx maps only a few keys to CSV; no PDF, no Excel [code].
+Matrix §13 requires PDF/Excel/CSV/Print for EVERY report.
+
+## FINDING-PUNCH-006 — MEDIUM — No pagination app-wide
+Lists use limit=100/500 with no pager [code]. Matrix §5/§19.
+
+## FINDING-PUNCH-007 — MEDIUM — No Dark Mode
+Zero dark:/theme-toggle [code]. Matrix §4 Dashboard.
+
+## FINDING-PUNCH-008 — MEDIUM — Dashboards never link-audited
+Only 3 dashboards load-tested; widgets/quick-actions/drill-downs never
+click-verified [code]. Matrix §4. Dead-link risk unquantified.
+
+## FINDING-PUNCH-009 — MEDIUM — Payments/receipts untested + no formal receipt doc
+Payment recording + receipt modal function [PDF: RCT-...003 ALLOCATED] but
+no printable receipt document and no E2E. WIP-016 "OPEN" partly stale.
+
+## FINDING-PUNCH-010 — MEDIUM — TAX-002 VAT/WHT param mismatch (dup ref)
+/finance/tax/vat/monthly (needs month) + /wht/report (needs from/to) → 400
+→ VAT summary + WHT report render empty [live]. See FINDING-TAX-002.
+
+## FINDING-PUNCH-011 — MEDIUM/HIGH — TODO-008 document/email integration untested
+Flagged HIGH in handover; no E2E; separate from AUTH-001 email simulation.
+
+## FINDING-PUNCH-012 — LOW — Landing page stat stale ("116")
+app/page.tsx shows "116" in 5 places [code]; real count now 117.
+
+## FINDING-PUNCH-013 — LOW/MEDIUM — Matter progress % is manual, not computed
+MatterDetailClient progressPercent is a stored/editable field, not derived
+from tasks/time [code] (WIP-017). Can be stale/inaccurate.
+
+## PUNCH — UNVERIFIED matrix points (NOT confirmed working; need per-module audit)
+Conflict Check, Duplicate Prevention, KYC, field validation (phone/email/
+PIN/passport/ID), per-entity audit timelines, matter Court/Opposing-Counsel/
+Team, Payroll full lifecycle (§11), HR appraisal/attendance/promotion (§12),
+AI (§15), Security injection/XSS/CSRF (§17), Accessibility (§18),
+Performance (§19), cross-browser (§20), the 5 §21 business scenarios.
+
+## PUNCH — CONFIRMED WORKING (not broken)
+Notification click→modal (FRONT-013); trust overdraw guard (ADR-004);
+auth/session (localStorage); Chart of Accounts; clients search+edit;
+document upload+preview+download (when signedUrl present); firm Bank Details
+settings section.
+
+## NEXT (agreed): build GW-EOS v4.0 matrix auditor — per-module lifecycle +
+## automated dead-link/no-op detection — then re-certify section-by-section.
+## Do NOT start Phase 3 until PUNCH-001..004 (HIGH) close.

@@ -5,3 +5,6 @@
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Playwright audit artifact (regenerated each run)
+apps/web/tests/e2e/audit-report.json

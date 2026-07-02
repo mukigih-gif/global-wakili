@@ -1,0 +1,99 @@
+{
+  "title": "Global Wakili — Phase 2 Reconciliation Punch List",
+  "subtitle": "Frontend audit vs GW-EOS v4.0 Playwright Certification Matrix · 2 July 2026 · Read-only recon",
+  "sections": [
+    {
+      "heading": "0. Honest posture correction",
+      "blocks": [
+        { "type": "p", "text": "The prior \"Phase 2 green (12 specs)\" reflected route-render + a few interactions — NOT the matrix's full-lifecycle CRUD-per-module standard (Create/Edit/Delete/Archive/Restore/Search/Filter/Pagination/Validation/Audit/Export + business-scenario E2E). The GW-EOS v4.0 Certification Matrix (22 sections, 1,000+ points) is the real bar. This document lists what is genuinely broken/missing against it.", "opts": { "bold": true } },
+        { "type": "p", "text": "Verification method per item: [code] = source read, [PDF] = user-supplied invoice.pdf, [live] = live API probe. Governing docs: v3.0 Master, v3.1 Phase-3 Addendum, GW-EOS v4.0 Playwright Certification Matrix." }
+      ]
+    },
+    {
+      "heading": "1. CRITICAL / HIGH — genuinely broken",
+      "blocks": [
+        { "type": "table",
+          "headers": ["#", "Finding", "Evidence", "Matrix"],
+          "rows": [
+            ["PUNCH-001", "No Delete/Archive/Restore anywhere except calendar events + settings labels; Client/Matter/Document lifecycle actions all missing", "[code] api.delete in 2 files only", "§5 §6 §7"],
+            ["PUNCH-002", "Approvals hub orphaned — procurement writes procurementApprovalLog; nothing calls central ApprovalService.createApproval; real submissions never appear in /app/approvals", "[code]", "§21 Scn 4, TODO-002"],
+            ["PUNCH-003", "Invoice not client-sendable — FROM = placeholder 'configure in firm settings' + 'Your Firm'; firm Bank Details exist in Settings but never pulled onto invoice; no Notes display; no Edit action", "[PDF]+[code]", "§9"],
+            ["PUNCH-004", "Client Portal untestable — no CLIENT-role user seeded; needs credential + portalUserId", "[code]", "§2 §5 §21 (blocker)"]
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "2. MEDIUM — missing lifecycle/features the matrix requires",
+      "blocks": [
+        { "type": "table",
+          "headers": ["#", "Finding", "Evidence", "Matrix"],
+          "rows": [
+            ["PUNCH-005", "Reports export incomplete — a few keys to CSV only; no PDF, no Excel for most reports", "[code]", "§13"],
+            ["PUNCH-006", "No pagination app-wide — lists use limit=100/500, no pager", "[code]", "§5 §19"],
+            ["PUNCH-007", "No Dark Mode — zero dark:/theme-toggle", "[code]", "§4"],
+            ["PUNCH-008", "Dashboards never link-audited — only 3 loaded; widgets/quick-actions/drill-downs not click-verified", "[code]", "§4"],
+            ["PUNCH-009", "Payments/receipts function but untested + no printable receipt document", "[PDF]", "§9 §21"],
+            ["PUNCH-010", "TAX-002 — VAT-monthly (needs month) + WHT report (needs from/to) return 400 → sections render empty", "[live]", "§9"],
+            ["PUNCH-011", "TODO-008 document/email integration (HIGH in handover) untested E2E", "[code]", "§14"]
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "3. LOW",
+      "blocks": [
+        { "type": "table",
+          "headers": ["#", "Finding", "Evidence", "Matrix"],
+          "rows": [
+            ["PUNCH-012", "Landing page stat stale — shows '116' in 5 places; real count now 117", "[code]", "marketing"],
+            ["PUNCH-013", "Matter progress % is a manual stored field, not computed from tasks/time — can be stale/inaccurate", "[code]", "WIP-017"]
+          ]
+        }
+      ]
+    },
+    {
+      "heading": "4. UNVERIFIED matrix points (NOT confirmed working — need per-module audit)",
+      "blocks": [
+        { "type": "bullets", "items": [
+          "Conflict Check, Duplicate Prevention, KYC (§5/§6)",
+          "Field validation: phone/email/PIN/KRA-PIN/passport/national-ID (§5)",
+          "Per-entity audit timelines (§5/§6/§9/§10)",
+          "Matter Court / Opposing Counsel / Team Assignment (§6)",
+          "Payroll full lifecycle: PAYE/NHIF/NSSF/Housing-Levy/overtime/leave/termination/payslip/posting (§11)",
+          "HR appraisal/attendance/promotion/transfer/training (§12)",
+          "AI: prompt logging/audit/review/injection/context-isolation (§15)",
+          "Security: SQL injection / XSS / CSRF / permission-escalation (§17)",
+          "Accessibility: WCAG/keyboard/ARIA/contrast/focus (§18)",
+          "Performance: load-time/large-tables/uploads (§19)",
+          "Cross-browser: Chrome/Edge/Firefox/Safari/mobile (§20)",
+          "The 5 §21 end-to-end business scenarios"
+        ]}
+      ]
+    },
+    {
+      "heading": "5. CONFIRMED WORKING (not broken)",
+      "blocks": [
+        { "type": "bullets", "items": [
+          "Notification click → detail modal (FRONT-013) — fixed",
+          "Trust overdraw guard (ADR-004)",
+          "Auth + session persistence (localStorage; deep-link/new-tab)",
+          "Chart of Accounts, Journals, P&L tabs render",
+          "Clients search + edit; document upload + preview + download (when signedUrl present)",
+          "Firm Bank Details settings section exists (just not wired to invoice)"
+        ]}
+      ]
+    },
+    {
+      "heading": "6. Recommendation",
+      "blocks": [
+        { "type": "bullets", "items": [
+          "The MATRIX is the certification standard — the 12 smoke specs are not sufficient.",
+          "Sequence: close HIGH (PUNCH-001..004) → build GW-EOS v4.0 matrix auditor (per-module lifecycle + automated dead-link/no-op detection) → re-certify section-by-section.",
+          "Do NOT start Phase 3 until PUNCH-001..004 close.",
+          "Portal + TODO-008 need a CLIENT credential / integration scope before their sections can certify."
+        ]}
+      ]
+    }
+  ]
+}
