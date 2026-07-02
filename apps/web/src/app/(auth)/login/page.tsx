@@ -57,7 +57,7 @@ function LoginPageContent() {
     setLoading(true);
     try {
       await login(email, password, tenantId || undefined);
-      const role = sessionStorage.getItem('gw_role') || '';
+      const role = localStorage.getItem('gw_role') || '';
       const isSuperAdmin = user?.isSuperAdmin ?? (role === 'SUPER_ADMIN' || role === 'SYSTEM_ADMIN');
       router.replace(resolvePortal(isSuperAdmin, role));
     } catch (err: unknown) {

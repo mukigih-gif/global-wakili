@@ -109,27 +109,38 @@ function NavLink({ item, collapsed }: { item: NavItem; collapsed?: boolean }) {
   );
 }
 
-const role = typeof window !== 'undefined' ? sessionStorage.getItem('gw_role') ?? '' : '';
+const role = typeof window !== 'undefined' ? localStorage.getItem('gw_role') ?? '' : '';
 
 export function Sidebar() {
   const { user, logout } = useAuth();
   const isSuperAdmin = user?.isSuperAdmin || user?.role === 'SUPER_ADMIN' || user?.role === 'SYSTEM_ADMIN';
   const nav = isSuperAdmin ? SUPER_ADMIN_NAV : TENANT_NAV; // kept for compat
+  // Auto-collapse to an icon rail by default (icons always visible); hovering
+  // temporarily expands to show labels WITHOUT reflowing the page (overlay).
+  // The toggle pins the choice (persisted). Default = collapsed unless pinned open.
   const [collapsed, setCollapsed] = useState<boolean>(
-    typeof window !== 'undefined' && localStorage.getItem('gw_sidebar_collapsed') === '1',
+    typeof window === 'undefined' ? true : localStorage.getItem('gw_sidebar_collapsed') !== '0',
   );
+  const [hovered, setHovered] = useState(false);
   const toggleCollapsed = () =>
     setCollapsed((c) => {
       const next = !c;
       if (typeof window !== 'undefined') localStorage.setItem('gw_sidebar_collapsed', next ? '1' : '0');
       return next;
     });
+  // Visual expansion: expanded when pinned open OR while hovering the rail.
+  const expanded = !collapsed || hovered;
 
   return (
-    <aside className={cn('flex h-full flex-col border-r border-gray-200 bg-white transition-[width] duration-200', collapsed ? 'w-16' : 'w-60')}>
+    <div className={cn('relative h-full shrink-0 transition-[width] duration-200', collapsed ? 'w-16' : 'w-60')}>
+    <aside
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className={cn('absolute inset-y-0 left-0 z-40 flex h-full flex-col border-r border-gray-200 bg-white transition-[width] duration-200', expanded ? 'w-60' : 'w-16', collapsed && hovered && 'shadow-2xl')}
+    >
       {/* Logo + collapse toggle */}
       <div className="flex h-16 items-center justify-between border-b border-gray-100 px-3" style={{ background: 'linear-gradient(135deg, #071529 0%, #1B3A6B 100%)' }}>
-        {!collapsed && <Logo variant="full" size="sm" href="/app/dashboard" darkBg />}
+        {expanded && <Logo variant="full" size="sm" href="/app/dashboard" darkBg />}
         <button
           onClick={toggleCollapsed}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -141,7 +152,7 @@ export function Sidebar() {
       </div>
 
       {/* Tenant + Branch context */}
-      {!collapsed && !isSuperAdmin && user?.tenantName && (
+      {expanded && !isSuperAdmin && user?.tenantName && (
         <div className="border-b border-gray-100 px-4 py-2 space-y-1">
           <div>
             <p className="text-xs text-gray-500">Firm</p>
@@ -157,7 +168,7 @@ export function Sidebar() {
           )}
         </div>
       )}
-      {isSuperAdmin && !collapsed && (
+      {isSuperAdmin && expanded && (
         <div className="border-b border-gray-100 px-4 py-2">
           <span className="badge-purple text-xs">Super Admin</span>
         </div>
@@ -166,11 +177,11 @@ export function Sidebar() {
       {/* Nav — grouped for tenant users */}
       <nav className="flex-1 overflow-y-auto px-3 py-3 space-y-0">
         {isSuperAdmin
-          ? SUPER_ADMIN_NAV.map((item) => <NavLink key={item.href} item={item} collapsed={collapsed} />)
+          ? SUPER_ADMIN_NAV.map((item) => <NavLink key={item.href} item={item} collapsed={!expanded} />)
           : TENANT_GROUPS.map((group) => (
               <div key={group.label} className="mb-2">
-                {!collapsed && <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">{group.label}</p>}
-                {group.items.map((item) => <NavLink key={item.href} item={item} collapsed={collapsed} />)}
+                {expanded && <p className="px-2 py-1 text-[10px] font-bold uppercase tracking-widest text-gray-400">{group.label}</p>}
+                {group.items.map((item) => <NavLink key={item.href} item={item} collapsed={!expanded} />)}
               </div>
             ))
         }
@@ -178,11 +189,11 @@ export function Sidebar() {
 
       {/* User footer */}
       <div className="border-t border-gray-100 p-3">
-        <div className={cn('flex items-center gap-3 rounded-lg px-2 py-2', collapsed && 'justify-center')}>
+        <div className={cn('flex items-center gap-3 rounded-lg px-2 py-2', !expanded && 'justify-center')}>
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-100 text-primary-700 text-xs font-bold">
             {user?.name?.slice(0, 2).toUpperCase() ?? 'U'}
           </div>
-          {!collapsed && (
+          {expanded && (
             <>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">{user?.name ?? 'User'}</p>
@@ -194,12 +205,13 @@ export function Sidebar() {
             </>
           )}
         </div>
-        {collapsed && (
+        {!expanded && (
           <button onClick={logout} className="mt-1 flex w-full justify-center text-gray-400 hover:text-gray-600" title="Sign out" aria-label="Sign out">
             <LogOut className="h-4 w-4" />
           </button>
         )}
       </div>
     </aside>
+    </div>
   );
 }

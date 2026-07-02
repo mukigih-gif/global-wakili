@@ -1,7 +1,7 @@
 /**
  * lib/api.ts — Typed API client for the Global Wakili Express backend.
  *
- * All requests attach the JWT token from sessionStorage and the tenantId
+ * All requests attach the JWT token from localStorage and the tenantId
  * resolved from the session. tenantId is never hardcoded.
  */
 
@@ -11,12 +11,12 @@ export type ApiError = { message: string; code?: string; statusCode?: number };
 
 function getToken(): string | null {
   if (typeof window === 'undefined') return null;
-  return sessionStorage.getItem('gw_token');
+  return localStorage.getItem('gw_token');
 }
 
 function getTenantId(): string | null {
   if (typeof window === 'undefined') return null;
-  return sessionStorage.getItem('gw_tenant_id');
+  return localStorage.getItem('gw_tenant_id');
 }
 
 async function request<T>(
@@ -70,14 +70,17 @@ export const api = {
 // ── Auth helpers ──────────────────────────────────────────────────────────────
 
 export function setSession(token: string, tenantId: string, role?: string) {
-  sessionStorage.setItem('gw_token', token);
-  sessionStorage.setItem('gw_tenant_id', tenantId);
-  if (role) sessionStorage.setItem('gw_role', role);
+  localStorage.setItem('gw_token', token);
+  localStorage.setItem('gw_tenant_id', tenantId);
+  if (role) localStorage.setItem('gw_role', role);
 }
 
 export function clearSession() {
-  sessionStorage.removeItem('gw_token');
-  sessionStorage.removeItem('gw_tenant_id');
+  // Clear ALL session keys (localStorage persists across tabs/restarts).
+  localStorage.removeItem('gw_token');
+  localStorage.removeItem('gw_tenant_id');
+  localStorage.removeItem('gw_role');
+  localStorage.removeItem('gw_system_role');
 }
 
 export function isAuthenticated(): boolean {

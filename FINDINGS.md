@@ -3822,3 +3822,28 @@ invoices / 9 notifications), the API returns data (200), and every detail link
 opens. Playwright specs must navigate via clicks, not hard URL loads.
 (Billing default tab is Quotations → the invoice step clicks the Invoices tab
 first, then the row "View" button.)
+
+## FINDING-AUTH-SESSION-002 — CLOSED (2026-07-02) — HIGH (UX / "data not visible")
+**Auth token stored in `sessionStorage` → session lost on new tab / deep link /
+browser restart → app bounces to /login; user perceives "seeds & fixes not
+visible."** Proven by an E2E reload/deep-link probe:
+  - refresh (same tab): token present, data reloads (14 clients) ✓
+  - NEW TAB / deep link: `gw_token` MISSING → redirected to /login, 0 rows ✗
+`sessionStorage` is per-tab and cleared on close, so any fresh tab/bookmark/
+shared link had no session.
+- Fix: moved `gw_token`/`gw_tenant_id`/`gw_role`/`gw_system_role` from
+  `sessionStorage` → `localStorage` (persists across tabs & restarts until the
+  JWT actually expires) across lib/api.ts (get/set/clearSession — clearSession
+  now clears ALL keys), AuthContext, login page, Sidebar, admin layout,
+  documents/new; privacy copy updated; 01-auth spec asserts localStorage.
+  Web tsc exit 0. NOTE: the earlier "empty on refresh" was mostly Render
+  cold-start latency (data does load after a beat) — the real deep-link break
+  was this storage scope.
+
+## FINDING-FRONT-010b — CLOSED (2026-07-02) — LOW (sidebar auto-collapse)
+**Enhancement to FRONT-010 per user: sidebar should auto-collapse to an icon
+rail (icons always visible) and expand on hover.** `Sidebar.tsx` now defaults
+to the collapsed icon rail (unless the user pinned it open), and hovering
+temporarily expands to show labels as an OVERLAY (absolute, z-40, shadow) so
+the page content does not reflow. The pin toggle still persists the choice
+(`gw_sidebar_collapsed`). Web tsc exit 0.

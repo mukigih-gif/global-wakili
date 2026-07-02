@@ -144,7 +144,7 @@ export default function PrivacyPage() {
 
         <h2>9. Cookies</h2>
         <p>
-          The Platform uses only essential session cookies (JWT storage in sessionStorage, not persistent cookies).
+          The Platform uses only essential session storage (JWT stored in the browser&apos;s localStorage, not third-party cookies).
           No third-party tracking or advertising cookies are used.
         </p>
 

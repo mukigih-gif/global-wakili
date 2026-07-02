@@ -56,7 +56,7 @@ function NewDocumentForm() {
 
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1'}/documents`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${sessionStorage.getItem('gw_token')}`, 'x-tenant-id': sessionStorage.getItem('gw_tenant_id') ?? '' },
+        headers: { Authorization: `Bearer ${localStorage.getItem('gw_token')}`, 'x-tenant-id': localStorage.getItem('gw_tenant_id') ?? '' },
         body: fd,
       });
       if (!res.ok) {

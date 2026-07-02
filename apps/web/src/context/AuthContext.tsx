@@ -81,7 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const role: string = responseData.user?.role || responseData.role || '';
     const systemRole: string = responseData.user?.systemRole || responseData.systemRole || '';
     // Persist systemRole for super admin detection
-    if (systemRole) sessionStorage.setItem('gw_system_role', systemRole);
+    if (systemRole) localStorage.setItem('gw_system_role', systemRole);
 
     if (!token) throw new Error('No token received');
     setSession(token, resolvedTenantId, role);

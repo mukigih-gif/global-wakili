@@ -46,7 +46,7 @@ test.describe('Authentication', () => {
     await fillLogin(page, EMAIL, PASSWORD, TENANT);
     await expect(page).toHaveURL(/\/app\/dashboard/, { timeout: 25_000 });
     // Session token is persisted on success.
-    const token = await page.evaluate(() => sessionStorage.getItem('gw_token'));
+    const token = await page.evaluate(() => localStorage.getItem('gw_token'));
     expect(token).toBeTruthy();
   });
 
@@ -54,7 +54,7 @@ test.describe('Authentication', () => {
     await fillLogin(page, 'e2e-nonexistent@example.com', 'WrongPassword!1', TENANT);
     await expect(page.locator('.bg-red-50')).toBeVisible({ timeout: 25_000 });
     await expect(page).toHaveURL(/\/login/);
-    const token = await page.evaluate(() => sessionStorage.getItem('gw_token'));
+    const token = await page.evaluate(() => localStorage.getItem('gw_token'));
     expect(token).toBeFalsy();
   });
 
@@ -75,7 +75,7 @@ test.describe('Authentication', () => {
 
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page).toHaveURL(/\/login/, { timeout: 15_000 });
-    const token = await page.evaluate(() => sessionStorage.getItem('gw_token'));
+    const token = await page.evaluate(() => localStorage.getItem('gw_token'));
     expect(token).toBeFalsy();
   });
 });

@@ -9,7 +9,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { user, loading } = useAuth();
   const router = useRouter();
 
-  const role = typeof window !== 'undefined' ? sessionStorage.getItem('gw_role') ?? '' : '';
+  const role = typeof window !== 'undefined' ? localStorage.getItem('gw_role') ?? '' : '';
   const isSuperAdminRole = user?.isSuperAdmin || role === 'SUPER_ADMIN' || role === 'SYSTEM_ADMIN' || user?.role === 'SUPER_ADMIN';
   const isFirmAdmin = user?.role === 'ADMIN' || user?.role === 'FIRM_ADMIN';
 
