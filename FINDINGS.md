@@ -4255,3 +4255,24 @@ FIX: each now filters matters by (m.client?.id ?? m.clientId) === form.clientId
 matter select until a client is chosen ("Select a client first"). Matter type
 extended with clientId/client. web tsc exit 0. (calendar/new client field is for
 invitees, not matter-linked — left unchanged.)
+
+## FINDING-SEARCH-INCONSISTENCY — updated (2026-07-02) — root cause = param mismatch + backend gaps
+Audited FE search param vs backend schema per module (verified):
+- clients: FE 'search' = backend 'search' -> WORKS
+- matters: FE 'search' = backend 'search' -> WORKS
+- tasks: FE 'query' = backend 'query' -> WORKS
+- documents: FE sent 'search' but backend /documents/search wants 'query' ->
+  BROKEN -> FIXED (FE now sends 'query'). web tsc 0.
+- billing: listQuerySchema has NO text-search field (only clientId/matterId/
+  status/type/dates/take/skip) -> billing search box is INERT. BACKEND GAP
+  (add a search field to billing list) -> FINDING-SEARCH-BILLING (OPEN).
+- procurement: no search/query field in schema -> search inert. BACKEND GAP
+  -> FINDING-SEARCH-PROCUREMENT (OPEN).
+That explains "search works for some modules not others": param-name mismatch
+(documents, now fixed) + modules whose backend never supported text search
+(billing, procurement). Also note: analytics uses limit=500 but search schemas
+cap limit at 100 (400) -> FINDING-SEARCH-LIMIT (analytics undercount / 400).
+
+## FINDING-SEARCH-BILLING — OPEN — billing invoice list has no text-search field (search box inert)
+## FINDING-SEARCH-PROCUREMENT — OPEN — procurement list has no text-search field (search box inert)
+## FINDING-SEARCH-LIMIT — OPEN — analytics pages request limit=500 but search schemas cap at 100 (tasks/search 400s; others may truncate)

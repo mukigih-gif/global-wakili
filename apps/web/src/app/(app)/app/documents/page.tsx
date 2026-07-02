@@ -86,7 +86,7 @@ export default function DocumentsPage() {
   useEffect(() => {
     setLoading(true);
     const params = new URLSearchParams();
-    if (query) params.set('search', query);
+    if (query) params.set('query', query);
     if (type)  params.set('documentType', type);
     if (tab === 'contracts') params.set('documentType', 'CONTRACT');
     const endpoint = `/documents/search?${params}&limit=100`;
