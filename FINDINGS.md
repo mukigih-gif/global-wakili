@@ -4298,3 +4298,10 @@ only matterId/clientId/status (invoice.service already supported search; the
 inline route didn't). Procurement: GET /orders + /bills now filter OR(poNumber/
 billNumber, vendor/supplier.name); /requests already searched title. api tsc 0,
 test:tenant 365/365.
+
+## FINDING-MATTER-PROGRESS — FIXED (2026-07-02) — progress % now derived from stage
+Was: matter progress % was a manual free-entry slider, independent of the
+progressStage (WIP-017). Now: each PROGRESS_STAGE maps to a fixed % (Instruction
+5% → Closing 100%); selecting a stage auto-sets progressPercent; the manual
+slider is replaced by a read-only "(from stage)" display; view-mode % derives
+from the stage (falls back to stored % only if no stage set). web tsc 0.

@@ -39,20 +39,23 @@ type Matter = {
   recentInvoices?: { id: string; invoiceNumber: string; total?: number; paidAmount?: number; status: string }[];
 };
 
+// Progress % is DERIVED from the stage (not manually entered) — each stage maps
+// to a fixed completion %. Selecting a stage sets the % automatically.
 const PROGRESS_STAGES = [
-  { value: 'INSTRUCTION_RECEIVED', label: 'Instruction Received' },
-  { value: 'INITIAL_REVIEW', label: 'Initial Review' },
-  { value: 'RESEARCH', label: 'Research & Analysis' },
-  { value: 'DRAFTING', label: 'Drafting' },
-  { value: 'NEGOTIATION', label: 'Negotiation' },
-  { value: 'COURT_PROCEEDINGS', label: 'Court Proceedings' },
-  { value: 'AWAITING_JUDGMENT', label: 'Awaiting Judgment' },
-  { value: 'JUDGMENT_RECEIVED', label: 'Judgment Received' },
-  { value: 'POST_JUDGMENT', label: 'Post-Judgment' },
-  { value: 'ENFORCEMENT', label: 'Enforcement' },
-  { value: 'SETTLEMENT', label: 'Settlement' },
-  { value: 'CLOSING', label: 'Closing' },
+  { value: 'INSTRUCTION_RECEIVED', label: 'Instruction Received', pct: 5 },
+  { value: 'INITIAL_REVIEW', label: 'Initial Review', pct: 15 },
+  { value: 'RESEARCH', label: 'Research & Analysis', pct: 25 },
+  { value: 'DRAFTING', label: 'Drafting', pct: 40 },
+  { value: 'NEGOTIATION', label: 'Negotiation', pct: 55 },
+  { value: 'COURT_PROCEEDINGS', label: 'Court Proceedings', pct: 65 },
+  { value: 'AWAITING_JUDGMENT', label: 'Awaiting Judgment', pct: 75 },
+  { value: 'JUDGMENT_RECEIVED', label: 'Judgment Received', pct: 85 },
+  { value: 'POST_JUDGMENT', label: 'Post-Judgment', pct: 90 },
+  { value: 'ENFORCEMENT', label: 'Enforcement', pct: 93 },
+  { value: 'SETTLEMENT', label: 'Settlement', pct: 97 },
+  { value: 'CLOSING', label: 'Closing', pct: 100 },
 ];
+const stagePct = (stage?: string | null) => PROGRESS_STAGES.find((s) => s.value === stage)?.pct ?? 0;
 
 type Tab = 'overview' | 'updates' | 'invoices' | 'disbursements' | 'expenses' | 'time' | 'tasks' | 'hearings' | 'calendar' | 'documents';
 
@@ -127,7 +130,10 @@ export function MatterDetailClient({ id }: { id: string }) {
     );
   }
 
-  const progressPct = editing ? editForm.progressPercent : (matter.progressPercent ?? 0);
+  // Progress % is derived from the stage; fall back to stored % only if no stage set.
+  const progressPct = editing
+    ? editForm.progressPercent
+    : (matter.progressStage ? stagePct(matter.progressStage) : (matter.progressPercent ?? 0));
   const progressColor =
     progressPct < 25 ? 'bg-red-400' :
     progressPct < 50 ? 'bg-amber-400' :
@@ -209,7 +215,7 @@ export function MatterDetailClient({ id }: { id: string }) {
             {editing ? (
               <select
                 value={editForm.progressStage}
-                onChange={(e) => setEditForm((f) => ({ ...f, progressStage: e.target.value }))}
+                onChange={(e) => setEditForm((f) => ({ ...f, progressStage: e.target.value, progressPercent: stagePct(e.target.value) }))}
                 className="form-select text-xs w-52"
               >
                 <option value="">— Select Stage —</option>
@@ -225,15 +231,10 @@ export function MatterDetailClient({ id }: { id: string }) {
               <span className="text-xs text-gray-400 italic">No stage set — click Edit to update</span>
             )}
             {editing ? (
-              <div className="flex items-center gap-2">
-                <input
-                  type="range" min="0" max="100" step="5"
-                  value={editForm.progressPercent}
-                  onChange={(e) => setEditForm((f) => ({ ...f, progressPercent: parseInt(e.target.value) }))}
-                  className="w-28 accent-primary-600"
-                />
-                <span className="text-sm font-bold text-gray-700 w-10 text-right">{editForm.progressPercent}%</span>
-              </div>
+              <span className="text-sm font-bold text-gray-700" title="Progress is set automatically by the selected stage">
+                {editForm.progressStage ? `${stagePct(editForm.progressStage)}%` : '—'}
+                <span className="ml-1 text-[10px] font-normal text-gray-400">(from stage)</span>
+              </span>
             ) : (
               <span className="text-lg font-bold text-gray-900">{progressPct}%</span>
             )}
