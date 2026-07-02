@@ -64,6 +64,7 @@ export default function BillingPage() {
   const [converting, setConverting] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [refresh, setRefresh]     = useState(0);
+  const [viewQuote, setViewQuote] = useState<Quotation | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -271,7 +272,7 @@ export default function BillingPage() {
                  <Td className="text-gray-500 text-xs">{formatDate(q.createdAt)}</Td>
                  <Td>
                    <div className="flex items-center gap-2">
-                     <button className="text-xs text-primary-600 hover:underline">View</button>
+                     <button onClick={() => setViewQuote(q)} className="text-xs text-primary-600 hover:underline">View</button>
                      {q.status === 'ACCEPTED' && (
                        <button
                          onClick={() => convertToInvoice(q.id)}
@@ -388,6 +389,36 @@ export default function BillingPage() {
              ))}
           </tbody>
         </Table>
+      )}
+
+      {/* Quotation summary view (line-item detail needs a backend GET /quotations/:id) */}
+      {viewQuote && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setViewQuote(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start justify-between px-6 pt-5 pb-3 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-gray-900 text-lg">Quotation {viewQuote.quotationNumber}</h3>
+                <div className="mt-1"><StatusBadge status={viewQuote.status} /></div>
+              </div>
+              <button onClick={() => setViewQuote(null)} className="text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <dl className="px-6 py-4 space-y-2 text-sm">
+              <div className="flex justify-between"><dt className="text-gray-500">Client</dt><dd className="text-gray-900">{viewQuote.client?.name ?? '—'}</dd></div>
+              <div className="flex justify-between"><dt className="text-gray-500">Matter</dt><dd className="text-gray-900">{viewQuote.matter?.matterCode ?? '—'}</dd></div>
+              <div className="flex justify-between"><dt className="text-gray-500">Total</dt><dd className="font-bold text-gray-900">{fmt(viewQuote.totalAmount, viewQuote.currency)}</dd></div>
+              <div className="flex justify-between"><dt className="text-gray-500">Valid Until</dt><dd className="text-gray-900">{viewQuote.validUntil ? formatDate(viewQuote.validUntil) : '—'}</dd></div>
+              <div className="flex justify-between"><dt className="text-gray-500">Created</dt><dd className="text-gray-900">{formatDate(viewQuote.createdAt)}</dd></div>
+            </dl>
+            <div className="flex items-center justify-end gap-2 px-6 pb-5 pt-2 border-t border-gray-100">
+              {viewQuote.status === 'ACCEPTED' && (
+                <Button size="sm" loading={converting === viewQuote.id} onClick={() => { const id = viewQuote.id; setViewQuote(null); convertToInvoice(id); }}>
+                  <ArrowRight className="h-3.5 w-3.5" /> Convert to Invoice
+                </Button>
+              )}
+              <Button size="sm" variant="secondary" onClick={() => setViewQuote(null)}>Close</Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

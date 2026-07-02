@@ -24,6 +24,7 @@ export default function ProformasPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [converting, setConverting] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [head, setHead] = useState({ clientId: '', matterId: '', currency: 'KES', issueDate: '', expiryDate: '', notes: '' });
   const [lines, setLines] = useState<Line[]>([emptyLine()]);
@@ -36,6 +37,17 @@ export default function ProformasPage() {
     api.get<{ data: Client[] }>('/clients?limit=100').then((r) => setClients(r.data ?? [])).catch(() => {});
     api.get<{ data: Matter[] }>('/matters?limit=100').then((r) => setMatters(r.data ?? [])).catch(() => {});
   }, []);
+
+  // Convert a proforma to a real invoice (backend POST /proformas/:id/convert;
+  // body optional). Only offered for proformas not already converted/cancelled.
+  const convert = async (id: string) => {
+    setConverting(id); setError('');
+    try {
+      await api.post(`/billing/proformas/${id}/convert`, {});
+      await load();
+    } catch (err) { setError((err as ApiError)?.message ?? 'Failed to convert proforma to invoice'); }
+    finally { setConverting(null); }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,19 +135,27 @@ export default function ProformasPage() {
       )}
 
       <Table>
-        <thead><tr><Th>Proforma</Th><Th>Client</Th><Th>Total</Th><Th>Status</Th><Th>Issued</Th></tr></thead>
+        <thead><tr><Th>Proforma</Th><Th>Client</Th><Th>Total</Th><Th>Status</Th><Th>Issued</Th><Th></Th></tr></thead>
         <tbody>
-          {loading ? <LoadingRow colSpan={5} /> :
-           !proformas.length ? <EmptyRow colSpan={5} message="No proformas recorded" /> :
-           proformas.map((p) => (
+          {loading ? <LoadingRow colSpan={6} /> :
+           !proformas.length ? <EmptyRow colSpan={6} message="No proformas recorded" /> :
+           proformas.map((p) => {
+             const converted = /CONVERT|INVOICE|CANCEL/i.test(p.status ?? '');
+             return (
              <tr key={p.id}>
                <Td className="font-medium text-gray-900">{p.proformaNumber ?? p.id.slice(-6)}</Td>
                <Td className="text-gray-600 text-sm">{p.client?.name ?? '—'}</Td>
                <Td className="font-medium">{formatCurrency(p.total ?? 0, p.currency)}</Td>
                <Td>{p.status ? <StatusBadge status={p.status} /> : '—'}</Td>
                <Td className="text-xs text-gray-500">{p.issueDate ? formatDate(p.issueDate) : '—'}</Td>
+               <Td>
+                 {converted
+                   ? <span className="text-xs text-gray-400">Converted</span>
+                   : <button onClick={() => convert(p.id)} disabled={converting === p.id} className="text-xs text-primary-600 hover:underline disabled:opacity-40">{converting === p.id ? 'Converting…' : 'Convert to Invoice'}</button>}
+               </Td>
              </tr>
-           ))}
+             );
+           })}
         </tbody>
       </Table>
     </div>

@@ -4320,3 +4320,17 @@ matterType is normalized to category per MatterKYCService):
   Distribution→Closing
 - generic (fallback). Each stage still maps to a fixed %; ALL_STAGES flat lookup
   resolves any stored value's label/% regardless of set. web tsc 0.
+
+## FINDING-PROFORMA-CONVERT-UI — FIXED (2026-07-02)
+Proformas page: added a per-row "Convert to Invoice" action wired to the existing
+POST /billing/proformas/:id/convert (body optional); gated off for already
+converted/cancelled proformas. web tsc 0.
+
+## FINDING-QUOTATION-VIEW — PARTIAL FIX (2026-07-02)
+Billing quotations "View" button was DEAD (no onClick). Wired it to a summary
+modal (number, client, matter, total, status, valid-until) + Convert-to-Invoice
+shortcut for ACCEPTED quotes. LIMITATION: shows summary only — line-item detail
+needs a backend GET /billing/quotations/:id (none exists; list has no lines).
+Logged FINDING-QUOTATION-DETAIL-API for the full detail endpoint. web tsc 0.
+
+## FINDING-QUOTATION-DETAIL-API — OPEN — no GET /billing/quotations/:id (only list); needed for full quotation detail (line items). Also billing quotation "Send" button is a dead no-op (no endpoint wired).
