@@ -3950,3 +3950,23 @@ Impact: LOW/MED — pages load (no crash) but the VAT summary + WHT report show 
 data. Fix direction: align FE params with API schema (send month range / from-to)
 OR relax the API validation to make them optional with sensible defaults. Recon
 only — not fixed (Option A). Needs UI confirmation of the empty state.
+
+### 10-procurement / 11-approvals / 12-write-guards — PASS (2026-07-02)
+- 10-procurement: dashboard + Purchase Requests/Orders/Vendor Register/Bills tabs (no 500).
+- 11-approvals: hub + requests table + Pending/All filter toggle.
+- 12-write-guards: SAFE rejected-writes (nothing persists) — New Invoice blocks
+  submit with no client, and with a client but no line item. Reached via SPA nav
+  (sidebar→Billing→Invoices tab→New Invoice); "New Invoice" only renders on the
+  Invoices tab (billing defaults to Quotations) — that was the nav fix. 2/2 green.
+
+## E2E full-suite serial run — environmental note (2026-07-02)
+Running all 22 tests serially in ONE 30.2-min session (even with --retries=2) →
+17 passed / 5 failed. The 5 (02-modules, 03-detail-links, 07-billing, 12×2) are
+LOAD-induced timeouts against the shared low-tier Render+Neon deployment, NOT
+defects — each passes in isolation. Standing guidance: run specs in small batches
+(or a dedicated/higher-tier test env), not one 22-test serial hammer. Report:
+Downloads/GlobalWakili_Phase2_E2E_Report_20260702.docx.
+
+## FINDING-TODO-008-E2E — OPEN — HIGH (2026-07-02, flagged)
+Document/email integration (TODO-008) remains untested end-to-end (separate from
+AUTH-001 email simulation). Not addressed this session; carried forward.
