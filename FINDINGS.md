@@ -3809,3 +3809,16 @@ undefined (reading 'findMany')`.
   reminders never fired. apps/api tsc exit 0.
 - Note (typing-hardening, separate): NotificationDbClient should expose these
   delegates so `(db as any)` can be dropped and TS catches future drift.
+
+### 03-detail-links.spec.ts — PASS (5/5, live vs production, 2026-07-02)
+Opens the DYNAMIC detail routes ([id]/[taskId]) + notification modal via REAL
+SPA navigation (clicking sidebar + in-table links). Green: Client, Matter,
+Task, Invoice details + Notification modal — all open with seeded data.
+KEY LEARNING: the "empty lists / links I couldn't open" alarm during triage was
+a TEST-HARNESS artifact — hard `page.goto()` to a deep route does NOT reliably
+fire the client data fetch, whereas clicking links (real user flow) works. The
+app itself is fine: DB is populated (demo-law-firm: 14 clients / 7 matters / 24
+invoices / 9 notifications), the API returns data (200), and every detail link
+opens. Playwright specs must navigate via clicks, not hard URL loads.
+(Billing default tab is Quotations → the invoice step clicks the Invoices tab
+first, then the row "View" button.)
