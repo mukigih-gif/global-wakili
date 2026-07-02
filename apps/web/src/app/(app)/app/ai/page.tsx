@@ -48,7 +48,7 @@ export default function AIPage() {
   const [researchQ, setResearchQ] = useState('');
 
   const loadArtifacts = () => {
-    api.get<{ data: AIArtifact[] }>('/ai/artifacts?limit=15')
+    api.get<{ data: AIArtifact[] }>('/ai/artifacts/search?limit=15')
       .then((r) => setArtifacts(r.data ?? []))
       .catch(() => setArtifacts([]))
       .finally(() => setLoading(false));

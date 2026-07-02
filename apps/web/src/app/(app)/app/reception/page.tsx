@@ -45,8 +45,8 @@ export default function ReceptionPage() {
     setLoading(true);
     setQuery('');
     if (tab === 'visitors' || tab === 'calls') {
-      const type = tab === 'visitors' ? 'VISITOR' : 'CALL';
-      api.get<{ data: LogEntry[] }>(`/reception/logs?type=${type}&limit=30`)
+      const type = tab === 'visitors' ? 'VISITOR' : 'CALL_LOG';
+      api.get<{ data: LogEntry[] }>(`/reception/search?type=${type}&limit=30`)
         .then((r) => setLogs(r.data ?? [])).catch(() => setLogs([]))
         .finally(() => setLoading(false));
     } else {

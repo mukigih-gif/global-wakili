@@ -61,7 +61,7 @@ export default function DocumentsPage() {
     if (query) params.set('search', query);
     if (type)  params.set('documentType', type);
     if (tab === 'contracts') params.set('documentType', 'CONTRACT');
-    const endpoint = `/documents?${params}&limit=100`;
+    const endpoint = `/documents/search?${params}&limit=100`;
     api.get<{ data: Document[] }>(endpoint)
       .then((r) => setDocuments(r.data ?? []))
       .catch(() => setDocuments([]))

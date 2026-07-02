@@ -4159,3 +4159,20 @@ the web app just calls the wrong path → 404 → silent empty UI. Distinct from
 ## FINDING-AUDIT-TASK-500 — OPEN — HIGH — PATCH /tasks/:id returns 500 (task update fails server-side).
 ## FINDING-SCOPE-MESSAGING — OPEN — messaging backend not built (no routes/mount); UI calls /messaging/threads → 404. Not a regression — never built.
 ## FINDING-SCOPE-TENDERS — OPEN — tenders HTTP surface not built (TenderService only, no routes/mount); UI 404. Not a regression — never built.
+
+## FINDING-AUDIT-PATHMISMATCH — FIXED (2026-07-02) — frontend now calls correct /search paths
+Verified each backend /search endpoint accepts the FE's params (limit/status; PENDING
+valid; validate() strips unknown keys) before editing. Changes:
+- ai: /ai/artifacts → /ai/artifacts/search
+- approvals: /approvals/requests → /approvals/search; approve/reject actions
+  /approvals/requests/:id/... → /approvals/:id/... (also mismatched)
+- documents: /documents → /documents/search
+- reporting: /reporting/runs → /reporting/runs/search
+- reception: /reception/logs → /reception/search; type 'CALL' → 'CALL_LOG' (enum fix)
+web tsc exit 0. Live re-audit pending Vercel deploy.
+RESIDUAL (logged, not path-fixes):
+- FINDING-DOC-TYPE-FILTER (LOW): documents /search has no documentType field; the FE
+  Contracts/type filter param is stripped → type filter won't apply server-side.
+- FINDING-SCOPE-RECEPTION-DOCS (MEDIUM): reception docs_in/docs_out tabs call
+  /reception/documents?direction= — NO backend GET exists (only POST /file-receipts).
+  File-receipt LIST endpoint not built. Tab will stay empty until backend adds it.

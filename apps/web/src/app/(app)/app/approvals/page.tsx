@@ -46,7 +46,7 @@ export default function ApprovalsPage() {
   const load = () => {
     setLoading(true);
     const q = filter === 'PENDING' ? '?status=PENDING&limit=50' : '?limit=50';
-    api.get<{ data: ApprovalRequest[] }>(`/approvals/requests${q}`)
+    api.get<{ data: ApprovalRequest[] }>(`/approvals/search${q}`)
       .then((r) => setRequests(r.data ?? []))
       .catch(() => setRequests([]))
       .finally(() => setLoading(false));
@@ -57,7 +57,7 @@ export default function ApprovalsPage() {
   const approve = async (id: string) => {
     setApproving(id);
     try {
-      await api.post(`/approvals/requests/${id}/approve`, { comment: 'Approved' });
+      await api.post(`/approvals/${id}/approve`, { comment: 'Approved' });
       setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: 'APPROVED' } : r));
     } catch { } finally { setApproving(null); }
   };
@@ -67,7 +67,7 @@ export default function ApprovalsPage() {
     if (!reason) return;
     setRejecting(id);
     try {
-      await api.post(`/approvals/requests/${id}/reject`, { comment: reason });
+      await api.post(`/approvals/${id}/reject`, { comment: reason });
       setRequests((prev) => prev.map((r) => r.id === id ? { ...r, status: 'REJECTED' } : r));
     } catch { } finally { setRejecting(null); }
   };

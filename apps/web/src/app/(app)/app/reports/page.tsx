@@ -82,7 +82,7 @@ export default function ReportsPage() {
   const [tab, setTab]       = useState<'reports' | 'runs' | 'bi'>('reports');
 
   useEffect(() => {
-    api.get<{ data: ReportRun[] }>('/reporting/runs?limit=20')
+    api.get<{ data: ReportRun[] }>('/reporting/runs/search?limit=20')
       .then((r) => setRuns(r.data ?? []))
       .catch(() => setRuns([]))
       .finally(() => setLoading(false));
