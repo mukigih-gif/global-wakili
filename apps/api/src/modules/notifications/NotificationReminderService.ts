@@ -82,17 +82,17 @@ export class NotificationReminderService {
 
     for (const days of HEARING_ADVANCE_DAYS) {
       const target = daysFromNow(days);
-      const hearings = await (db as any).hearing.findMany({
+      const hearings = await (db as any).courtHearing.findMany({
         where: {
           hearingDate: { gte: target, lte: endOfDay(target) },
           status: { in: ['SCHEDULED', 'ADJOURNED'] },
         },
-        include: { matter: { select: { id: true, title: true, tenantId: true, assignedUserId: true } } },
+        include: { matter: { select: { id: true, title: true, tenantId: true, leadAdvocateId: true } } },
         take: 200,
       }).catch(() => [] as any[]);
 
       for (const hearing of hearings) {
-        if (!hearing.matter?.tenantId || !hearing.matter?.assignedUserId) { skipped++; continue; }
+        if (!hearing.matter?.tenantId || !hearing.matter?.leadAdvocateId) { skipped++; continue; }
 
         const key = debounce(`hearing:${hearing.id}:${days}d`);
         try {
@@ -103,7 +103,7 @@ export class NotificationReminderService {
             entityType: 'HEARING',
             entityId: hearing.id,
             debounceKey: key,
-            recipients: [{ userId: hearing.matter.assignedUserId }],
+            recipients: [{ userId: hearing.matter.leadAdvocateId }],
             channels: ['SYSTEM_ALERT', 'EMAIL'],
             template: {
               systemTitle: `Hearing Reminder — ${days === 0 ? 'Today' : `${days} day${days > 1 ? 's' : ''}`}`,
@@ -133,7 +133,7 @@ export class NotificationReminderService {
         select: {
           id: true, invoiceNumber: true, balanceDue: true, dueDate: true,
           tenantId: true, clientId: true,
-          matter: { select: { assignedUserId: true } },
+          matter: { select: { leadAdvocateId: true } },
         },
         take: 200,
       }).catch(() => [] as any[]);
@@ -142,8 +142,8 @@ export class NotificationReminderService {
         if (!invoice.tenantId) { skipped++; continue; }
 
         const key = debounce(`invoice:${invoice.id}:${days}d`);
-        const recipients = invoice.matter?.assignedUserId
-          ? [{ userId: invoice.matter.assignedUserId }]
+        const recipients = invoice.matter?.leadAdvocateId
+          ? [{ userId: invoice.matter.leadAdvocateId }]
           : [];
         if (!recipients.length) { skipped++; continue; }
 
@@ -177,18 +177,18 @@ export class NotificationReminderService {
 
     for (const days of TASK_ADVANCE_DAYS) {
       const target = daysFromNow(days);
-      const tasks = await (db as any).task.findMany({
+      const tasks = await (db as any).matterTask.findMany({
         where: {
           dueDate: { gte: target, lte: endOfDay(target) },
-          status: { in: ['OPEN', 'IN_PROGRESS'] },
-          assigneeId: { not: null },
+          status: { in: ['TODO', 'IN_PROGRESS'] },
+          assignedTo: { not: null },
         },
-        select: { id: true, title: true, tenantId: true, assigneeId: true, dueDate: true },
+        select: { id: true, title: true, tenantId: true, assignedTo: true, dueDate: true },
         take: 200,
       }).catch(() => [] as any[]);
 
       for (const task of tasks) {
-        if (!task.tenantId || !task.assigneeId) { skipped++; continue; }
+        if (!task.tenantId || !task.assignedTo) { skipped++; continue; }
 
         const key = debounce(`task:${task.id}:${days}d`);
         try {
@@ -199,7 +199,7 @@ export class NotificationReminderService {
             entityType: 'TASK',
             entityId: task.id,
             debounceKey: key,
-            recipients: [{ userId: task.assigneeId }],
+            recipients: [{ userId: task.assignedTo }],
             channels: ['SYSTEM_ALERT'],
             template: {
               systemTitle: `Task Due Tomorrow: ${task.title}`,

@@ -3772,3 +3772,40 @@ and asserts each renders healthy (no /login redirect, authed `<aside>` shell
 present, no 500 "Something went wrong", no 404 "Page not found"). Result: 1
 passed (2.0m), PW EXIT 0 — ZERO broken modules/links. Fulfills the user's
 "ensure all modules and links are checked" request at runtime.
+
+---
+
+## FINDING-DEPLOY-001 — CLOSED (2026-07-02) — HIGH (deploy pipeline)
+**Render deploys failed at build with P1013 (invalid DATABASE_URL scheme).**
+`render.yaml` buildCommand ran `npx prisma migrate deploy` (added 9b1641b,
+never confirmed green). On Render the DB URL isn't sanitized the way the
+local `.env` path is (`prisma.config.ts` loadRootEnv strips wrapping quotes;
+Render has no `.env`), so a quoted/`sslmode=verify-full` value hit Prisma's
+strict parser → P1013 → every deploy red since 9b1641b. Live API was never
+down (last green deploy kept serving); frontend deploys via Vercel unaffected.
+- Fix (9d169f6): removed `migrate deploy` from BOTH services' buildCommand →
+  `npm install && npm run db:gen`. Migrations now a controlled step
+  (`npm run db:deploy`). Deploys go green immediately (schema already in sync,
+  INFRA-001). Verified post-deploy: API /ping 200, full-stack login 200,
+  frontend 200.
+- Follow-up (owner, non-blocking): de-quote Render DATABASE_URL + use
+  `sslmode=require` (direct host) so a future manual `db:deploy` runs clean.
+
+## FINDING-NOTIF-001 — CLOSED (2026-07-02) — MEDIUM
+**Notification Reminder Engine: wrong Prisma model/field names (hidden by
+`(db as any)`) → hearing & task reminders crash, invoice reminders silently
+no-op.** Surfaced live once the worker finally deployed (DEPLOY-001 fix
+shipped the code): `[REMINDER] Engine error Cannot read properties of
+undefined (reading 'findMany')`.
+- Root cause: `NotificationReminderService.ts` used `(db as any).hearing`
+  (model is `CourtHearing` → `courtHearing`) and `(db as any).task` (model is
+  `MatterTask` → `matterTask`) — undefined delegates throw *synchronously*, so
+  the `.catch(()=>[])` never fires. Plus field mismatches: `Matter.assignedUserId`
+  (→ `leadAdvocateId`), `MatterTask.assigneeId` (→ `assignedTo`), and TaskStatus
+  `'OPEN'` (→ `'TODO'`). The `(db as any)` cast is why tsc never caught any of it.
+- Fix: corrected delegates/fields/enum in engines remindHearings,
+  remindInvoiceDue, remindTaskDeadlines (remindCalendarEvents already correct).
+  Non-fatal previously (Promise.allSettled isolated it) but hearing/task/invoice
+  reminders never fired. apps/api tsc exit 0.
+- Note (typing-hardening, separate): NotificationDbClient should expose these
+  delegates so `(db as any)` can be dropped and TS catches future drift.
