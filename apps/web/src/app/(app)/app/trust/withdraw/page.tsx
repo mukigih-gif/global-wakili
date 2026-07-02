@@ -11,7 +11,7 @@ import Link from 'next/link';
 
 type TrustAccount = { id: string; accountName: string; accountNumber: string; currentBalance: string };
 type Client = { id: string; name: string };
-type Matter = { id: string; title: string; matterCode?: string };
+type Matter = { id: string; title: string; matterCode?: string; clientId?: string | null; client?: { id: string } | null };
 
 export default function TrustWithdrawPage() {
   const router = useRouter();
@@ -87,7 +87,7 @@ export default function TrustWithdrawPage() {
 
         <div>
           <label className="form-label">Client *</label>
-          <select required value={form.clientId} onChange={(e) => set('clientId', e.target.value)} className="form-select w-full">
+          <select required value={form.clientId} onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value, matterId: '' }))} className="form-select w-full">
             <option value="">Select client…</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -95,9 +95,9 @@ export default function TrustWithdrawPage() {
 
         <div>
           <label className="form-label">Linked Matter</label>
-          <select value={form.matterId} onChange={(e) => set('matterId', e.target.value)} className="form-select w-full">
-            <option value="">None — general</option>
-            {matters.map((m) => <option key={m.id} value={m.id}>{m.matterCode ?? m.id.slice(-6)} — {m.title}</option>)}
+          <select value={form.matterId} onChange={(e) => set('matterId', e.target.value)} disabled={!form.clientId} className="form-select w-full disabled:bg-gray-50">
+            <option value="">{form.clientId ? 'None — general' : 'Select a client first'}</option>
+            {matters.filter((m) => !form.clientId || (m.client?.id ?? m.clientId) === form.clientId).map((m) => <option key={m.id} value={m.id}>{m.matterCode ?? m.id.slice(-6)} — {m.title}</option>)}
           </select>
         </div>
 

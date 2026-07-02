@@ -4240,3 +4240,18 @@ Add the UI buttons (with confirm) to the documents list/row + archived filter.
 QUICK. No backend work.
 (Cloud-drive save/import = OneDrive/Google Drive = WIP-006, own session, needs
 Azure/Google OAuth creds — separate, larger.)
+
+## FINDING-CLIENT-MATTER-LINK — FIXED (2026-07-02) — localized via repro
+Repro (Playwright, New Invoice): billing/new WORKS (client→matter filters correctly:
+County=2, Grace=3, Acme=3; clients w/o matters=0 correctly). API layer intact
+(/matters returns clientId + client.id on every row; /matters?clientId filters).
+ROOT CAUSE localized to 5 OTHER forms whose matter dropdown showed ALL matters
+unfiltered by the selected client (billing/new was the only one that filtered):
+- billing/quotations/new: matters.map (no filter)
+- trust/deposit: matters.filter(m => !clientId || TRUE) — dead filter (|| true)
+- trust/withdraw, trust/transfer, trust/interest: matters.map (no filter)
+FIX: each now filters matters by (m.client?.id ?? m.clientId) === form.clientId
+(matching billing/new), resets matterId when client changes, and disables the
+matter select until a client is chosen ("Select a client first"). Matter type
+extended with clientId/client. web tsc exit 0. (calendar/new client field is for
+invitees, not matter-linked — left unchanged.)
