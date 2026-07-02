@@ -3927,3 +3927,26 @@ deploys via Render/Vercel, separate — so not an outage).
 ### 07-billing.spec.ts — PASS (2026-07-02)
 Billing sub-domains via SPA nav: proformas, retainers, payment reminders,
 billing notifications all load (authed shell + heading, no 500/404). Read-only.
+
+### 09-tax.spec.ts — PASS (2026-07-02, ACCOUNTANT login)
+Recon confirmed ALL tax sub-areas exist on ONE page (/app/tax, 5 tabs: VAT,
+Withholding Tax, eTIMS/KRA, Payroll Deductions, Tax Returns) → no missing-page
+FRONT finding. Tested as ACCOUNTANT (accounts@demo-law-firm.co.ke): VAT summary +
+VAT Adjustments (rows load, 2 in data), Withholding Tax, eTIMS/KRA all render, no
+500. Payroll Deductions intentionally not data-asserted — HR-gated, ACCOUNTANT
+gets 403 (correct RBAC, missingPermissions hr.view_employee).
+
+## FINDING-TAX-002 — OPEN — LOW/MEDIUM (2026-07-02, surfaced by 09-tax recon)
+**VAT monthly summary + WHT report likely render empty due to a FE/API param
+mismatch.** Live API recon (ACCOUNTANT token):
+- `GET /finance/tax/vat/monthly?year=2026` → 400 `month: Expected number, received nan`.
+  Frontend (tax/page.tsx:107) calls it with `?year=` only (no month) → same 400 →
+  VAT summary KPIs fall back to empty (caught client-side; no 500).
+- `GET /finance/tax/wht/report?limit=50` → 400 `from/to: Invalid date`.
+  Frontend (tax/page.tsx:119) calls `?limit=50` only (no from/to) → same 400 →
+  WHT report renders empty.
+- `GET /finance/tax/vat/adjustments` → 200 (works; 2 rows) — unaffected.
+Impact: LOW/MED — pages load (no crash) but the VAT summary + WHT report show no
+data. Fix direction: align FE params with API schema (send month range / from-to)
+OR relax the API validation to make them optional with sensible defaults. Recon
+only — not fixed (Option A). Needs UI confirmation of the empty state.
