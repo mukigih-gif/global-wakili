@@ -54,6 +54,34 @@ export default function DocumentsPage() {
   const [type, setType]           = useState('');
   const [tab, setTab]             = useState<Tab>('all');
   const [preview, setPreview]     = useState<Document | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [busyDownload, setBusyDownload] = useState<string | null>(null);
+
+  // Signed URLs are generated ON DEMAND via GET /:id/download (the /search list
+  // never presigns per row). Resolve on click for preview (inline) / download.
+  const resolveDocUrl = async (id: string, disposition: 'inline' | 'attachment') => {
+    const r = await api.get<{ url: string }>(`/documents/${id}/download?disposition=${disposition}`);
+    return r?.url ?? null;
+  };
+
+  const openPreview = async (d: Document) => {
+    setPreview(d);
+    setPreviewUrl(null);
+    setPreviewLoading(true);
+    try { setPreviewUrl(await resolveDocUrl(d.id, 'inline')); }
+    catch { setPreviewUrl(null); }
+    finally { setPreviewLoading(false); }
+  };
+
+  const downloadDoc = async (id: string) => {
+    setBusyDownload(id);
+    try {
+      const url = await resolveDocUrl(id, 'attachment');
+      if (url) { const a = document.createElement('a'); a.href = url; a.rel = 'noopener'; a.click(); }
+    } catch { /* surfaced via disabled state clearing */ }
+    finally { setBusyDownload(null); }
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -180,7 +208,7 @@ export default function DocumentsPage() {
                  <div className="flex items-center gap-2">
                    <span className="text-lg flex-shrink-0">{MIME_ICON[d.mimeType ?? ''] ?? '📁'}</span>
                    <div className="min-w-0">
-                     <button onClick={() => setPreview(d)} className="font-medium text-primary-700 hover:underline text-left truncate max-w-[180px] block">
+                     <button onClick={() => openPreview(d)} className="font-medium text-primary-700 hover:underline text-left truncate max-w-[180px] block">
                        {d.title}
                      </button>
                      {d.lastEditedAt && (
@@ -203,13 +231,8 @@ export default function DocumentsPage() {
                <Td className="text-xs text-gray-500">{formatDate(d.createdAt)}</Td>
                <Td>
                  <div className="flex items-center gap-1.5">
-                   <button onClick={() => setPreview(d)} className="p-1 text-gray-400 hover:text-primary-600" title="Preview"><Eye className="h-3.5 w-3.5" /></button>
-                   {d.signedUrl && (
-                     <a href={d.signedUrl} target="_blank" rel="noopener noreferrer" className="p-1 text-gray-400 hover:text-blue-600" title="Open in editor"><ExternalLink className="h-3.5 w-3.5" /></a>
-                   )}
-                   {d.signedUrl && (
-                     <a href={d.signedUrl} download className="p-1 text-gray-400 hover:text-green-600" title="Download"><Download className="h-3.5 w-3.5" /></a>
-                   )}
+                   <button onClick={() => openPreview(d)} className="p-1 text-gray-400 hover:text-primary-600" title="Preview"><Eye className="h-3.5 w-3.5" /></button>
+                   <button onClick={() => downloadDoc(d.id)} disabled={busyDownload === d.id} className="p-1 text-gray-400 hover:text-green-600 disabled:opacity-40" title="Download"><Download className="h-3.5 w-3.5" /></button>
                  </div>
                </Td>
              </tr>
@@ -227,40 +250,40 @@ export default function DocumentsPage() {
                 <p className="text-xs text-gray-500">{preview.documentType?.replace(/_/g,' ')} · v{preview.currentVersion ?? 1} · {formatDateTime(preview.createdAt)}</p>
               </div>
               <div className="flex items-center gap-2">
-                {preview.signedUrl && (
+                {previewUrl && (
                   <>
-                    <a href={preview.signedUrl} target="_blank" rel="noopener noreferrer"
+                    <a href={previewUrl} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1 text-xs text-primary-600 hover:underline">
-                      <ExternalLink className="h-3.5 w-3.5" /> Edit / Open
+                      <ExternalLink className="h-3.5 w-3.5" /> Open
                     </a>
-                    <a href={preview.signedUrl} download
-                      className="flex items-center gap-1 text-xs text-green-600 hover:underline">
+                    <button onClick={() => downloadDoc(preview.id)} disabled={busyDownload === preview.id}
+                      className="flex items-center gap-1 text-xs text-green-600 hover:underline disabled:opacity-40">
                       <Download className="h-3.5 w-3.5" /> Download
-                    </a>
+                    </button>
                   </>
                 )}
-                <button onClick={() => setPreview(null)} className="text-gray-400 hover:text-gray-600 ml-2">✕</button>
+                <button onClick={() => { setPreview(null); setPreviewUrl(null); }} className="text-gray-400 hover:text-gray-600 ml-2">✕</button>
               </div>
             </div>
             <div className="flex-1 overflow-auto p-4">
-              {preview.mimeType === 'application/pdf' && preview.signedUrl ? (
-                <iframe src={preview.signedUrl} className="w-full h-[70vh] rounded-lg border border-gray-200" title={preview.title} />
-              ) : preview.signedUrl ? (
+              {previewLoading ? (
+                <div className="flex items-center justify-center h-48 text-sm text-gray-400">Generating secure preview…</div>
+              ) : preview.mimeType === 'application/pdf' && previewUrl ? (
+                <iframe src={previewUrl} className="w-full h-[70vh] rounded-lg border border-gray-200" title={preview.title} />
+              ) : previewUrl ? (
                 <div className="flex flex-col items-center justify-center h-48 gap-4 text-gray-500">
                   <span className="text-5xl">{MIME_ICON[preview.mimeType ?? ''] ?? '📁'}</span>
                   <p className="text-sm">Preview not available for this file type.</p>
-                  <a href={preview.signedUrl} target="_blank" rel="noopener noreferrer">
-                    <Button size="sm" variant="secondary"><ExternalLink className="h-4 w-4" /> Open in Editor</Button>
+                  <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" variant="secondary"><ExternalLink className="h-4 w-4" /> Open</Button>
                   </a>
-                  <a href={preview.signedUrl} download>
-                    <Button size="sm"><Download className="h-4 w-4" /> Download</Button>
-                  </a>
+                  <Button size="sm" onClick={() => downloadDoc(preview.id)} loading={busyDownload === preview.id}><Download className="h-4 w-4" /> Download</Button>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center h-48 gap-3 text-gray-400">
                   <AlertCircle className="h-10 w-10 opacity-30" />
-                  <p className="text-sm">No file URL available for this document.</p>
-                  <p className="text-xs">Generate a signed URL from Settings → Documents to enable preview and download.</p>
+                  <p className="text-sm">This document has no stored file, or the secure link could not be generated.</p>
+                  <p className="text-xs">Re-upload the document or check document storage configuration.</p>
                 </div>
               )}
             </div>
