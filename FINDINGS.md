@@ -4212,3 +4212,19 @@ User report: "search works for some modules, not others." Root causes:
 (b) 400 param bugs still open: tax VAT (needs month), WHT (needs from/to),
     tasks/search validation (TAX-002 class). These search/report calls still fail
     until params aligned. Verify post-deploy which modules' search now work.
+
+## FINDING-DOC-CREATE-DRIVES — OPEN — feature gap (documents: no compose, no cloud drives)
+User note (2026-07-02): documents module has nowhere to save to OneDrive/other
+drives, or to create a document by typing. Verified (read-only):
+- documents/new is UPLOAD-ONLY (file input + description); no in-app editor/
+  compose ("type a document"), no template picker.
+- NO cloud-drive integration in FE or backend (grep: no OneDrive/Google Drive/
+  SharePoint/Graph document save/import anywhere).
+- Backend AI /drafting-assistant EXISTS but documents module doesn't use it.
+Ties to: WIP-006 (Microsoft Graph / Google Workspace = PARTIAL), WIP-003
+(document platform), WIP-005 (AI document assembly).
+SEVERITY: MEDIUM (feature gap, not a regression). NOT a quick fix — requires:
+(a) OAuth + Graph/Drive API integration for save/import (own session, external
+    creds), and/or (b) a rich-text/doc editor component + wire to /ai/drafting-
+    assistant for "type/generate a document". Recommend scoping as dedicated
+    work, not folded into a bug-fix pass.
