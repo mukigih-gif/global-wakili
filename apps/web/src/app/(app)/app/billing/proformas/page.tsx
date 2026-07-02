@@ -11,7 +11,7 @@ import { ArrowLeft, FileText, AlertCircle, Plus, X } from 'lucide-react';
 import Link from 'next/link';
 
 type Client = { id: string; name: string };
-type Matter = { id: string; title: string; matterCode?: string };
+type Matter = { id: string; title: string; matterCode?: string; clientId?: string | null; client?: { id: string } | null };
 type Proforma = { id: string; proformaNumber?: string; status?: string; total?: number; currency?: string; issueDate?: string | null; client?: { name?: string } | null };
 type Line = { description: string; quantity: string; unitPrice: string; taxRate: string };
 
@@ -80,14 +80,14 @@ export default function ProformasPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="form-label">Client *</label>
-              <select required value={head.clientId} onChange={(e) => setH('clientId', e.target.value)} className="form-select w-full">
+              <select required value={head.clientId} onChange={(e) => setHead((h) => ({ ...h, clientId: e.target.value, matterId: '' }))} className="form-select w-full">
                 <option value="">Select client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
               <label className="form-label">Matter</label>
-              <select value={head.matterId} onChange={(e) => setH('matterId', e.target.value)} className="form-select w-full">
-                <option value="">None</option>{matters.map((m) => <option key={m.id} value={m.id}>{m.matterCode ?? m.id.slice(-6)} — {m.title}</option>)}
+              <select value={head.matterId} onChange={(e) => setH('matterId', e.target.value)} disabled={!head.clientId} className="form-select w-full disabled:bg-gray-50">
+                <option value="">{head.clientId ? 'None' : 'Select a client first'}</option>{matters.filter((m) => !head.clientId || (m.client?.id ?? m.clientId) === head.clientId).map((m) => <option key={m.id} value={m.id}>{m.matterCode ?? m.id.slice(-6)} — {m.title}</option>)}
               </select>
             </div>
             <div>

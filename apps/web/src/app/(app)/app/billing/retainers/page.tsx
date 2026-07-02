@@ -11,7 +11,7 @@ import { ArrowLeft, Wallet, AlertCircle } from 'lucide-react';
 import Link from 'next/link';
 
 type Client = { id: string; name: string };
-type Matter = { id: string; title: string; matterCode?: string };
+type Matter = { id: string; title: string; matterCode?: string; clientId?: string | null; client?: { id: string } | null };
 type Retainer = { id: string; amount?: number; currency?: string; status?: string; reference?: string | null; receivedAt?: string | null; client?: { name?: string } | null };
 
 export default function RetainersPage() {
@@ -63,14 +63,14 @@ export default function RetainersPage() {
         <form onSubmit={submit} className="card p-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label className="form-label">Client *</label>
-            <select required value={form.clientId} onChange={(e) => set('clientId', e.target.value)} className="form-select w-full">
+            <select required value={form.clientId} onChange={(e) => setForm((f) => ({ ...f, clientId: e.target.value, matterId: '' }))} className="form-select w-full">
               <option value="">Select client…</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
             <label className="form-label">Matter</label>
-            <select value={form.matterId} onChange={(e) => set('matterId', e.target.value)} className="form-select w-full">
-              <option value="">None</option>{matters.map((m) => <option key={m.id} value={m.id}>{m.matterCode ?? m.id.slice(-6)} — {m.title}</option>)}
+            <select value={form.matterId} onChange={(e) => set('matterId', e.target.value)} disabled={!form.clientId} className="form-select w-full disabled:bg-gray-50">
+              <option value="">{form.clientId ? 'None' : 'Select a client first'}</option>{matters.filter((m) => !form.clientId || (m.client?.id ?? m.clientId) === form.clientId).map((m) => <option key={m.id} value={m.id}>{m.matterCode ?? m.id.slice(-6)} — {m.title}</option>)}
             </select>
           </div>
           <div>
